@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* Design tokens. Light by default, dark follows the OS setting. */
+:root {
+  --background: #fafafa;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --accent: #0f766e;
+  --accent-foreground: #ffffff;
+  --danger: #b91c1c;
+  --positive: #15803d;
+  --chart-1: #0f766e;
+  --chart-2: #d97706;
+  --chart-3: #4f46e5;
+  --chart-4: #db2777;
+  --chart-5: #0284c7;
+  --chart-6: #65a30d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b0b0d;
+    --foreground: #ececee;
+    --card: #16161a;
+    --muted: #a1a1aa;
+    --border: #2a2a31;
+    --accent: #2dd4bf;
+    --accent-foreground: #042f2e;
+    --danger: #f87171;
+    --positive: #4ade80;
+    --chart-1: #2dd4bf;
+    --chart-2: #fbbf24;
+    --chart-3: #818cf8;
+    --chart-4: #f472b6;
+    --chart-5: #38bdf8;
+    --chart-6: #a3e635;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-danger: var(--danger);
+  --color-positive: var(--positive);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
