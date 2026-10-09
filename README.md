@@ -4,7 +4,7 @@ Kasa is an AI agent (Google ADK + Gemini) that looks after a student's personal 
 shared-flat expenses. It reads receipts, saves expenses, splits bills, settles debts and answers
 money questions with charts.
 
-**Core rule:** the LLM decides *what* to do; plain Python does all the money math.
+The one rule: the LLM decides *what* to do, and plain Python does all the money math.
 Amounts are stored as integer minor units (kuruş/cents), never floats.
 
 ## Architecture
@@ -153,11 +153,11 @@ Firebase Auth replaces the `X-User-Id` dev header in a later sprint (`backend/ap
 
 ## Sprint 1 checklist
 
-- [x] Receipt photo → receipt agent reads it (image sent as an inline Part) → `save_expense` tool → expense saved
+- [x] A receipt photo goes to the receipt agent as an inline image, and its `save_expense` tool saves the expense
 - [x] Expense list plus a manual add form
 - [x] One house with members, equal split (the remainder is spread so shares always sum to the total)
 - [x] House balances and greedy settle-up transfers
-- [x] One question → report agent → guarded SQL → chart spec rendered with recharts
+- [x] A question goes to the report agent, which runs guarded SQL and returns a chart spec that recharts draws
 - [x] Dockerfiles for Cloud Run (backend and frontend)
 - [x] pytest: money math, SQL guard, API happy paths, and ADK wiring with a scripted fake LLM
 - [ ] Try live Gemini calls with a real key (receipt accuracy, routing quality)
