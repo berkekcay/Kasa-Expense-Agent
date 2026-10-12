@@ -38,8 +38,12 @@ Amounts are stored as integer minor units (kuruş/cents), never floats.
 
 Guardrails:
 - Report SQL is parsed with sqlglot. Only one plain `SELECT` is allowed, and only over
-  `my_expenses` and `my_expense_items`. Those names are injected as CTEs filtered to the
-  current user, and a row limit is applied.
+  `my_expenses`, `my_expense_items`, `my_house_shares`, `my_budgets` and `my_subscriptions`.
+  Those names are injected as CTEs filtered to the current user, and a row limit is applied.
+  A second agent, the checker, reads each query next to the user's question and can send it
+  back for a fix before it runs.
+- Emails and bank statements only ever create inbox items. Nothing becomes an expense until
+  the user approves it, and text inside an email cannot approve anything.
 - Users only see their own data, enforced three times: service queries, scoped report CTEs
   and SQL Server RLS (created by the Alembic migrations in `backend/alembic/versions/`).
 - Receipt and email content is treated as data, never as instructions. This is written into

@@ -18,6 +18,9 @@ personal expenses of the last ~2 years and stores the result.
 4. Of the valid chains the shortest period wins (a weekly charge also forms a monthly
    chain when every fourth charge is picked), then the most recent and longest chain.
 
+Expenses in habit categories (groceries, food, transport, shopping) are skipped: a monthly
+Migros run or transit top-up is regular but not a subscription.
+
 Persistence: one row per user and merchant_key (upsert). Amount and currency are the
 newest charge's base-currency amount. next_expected_date = last charge + one period
 (months keep the day of month, clamped to the month's end), moved forward by whole periods
@@ -258,6 +261,10 @@ def next_charge(last: dt.date, period: str, today: dt.date) -> dt.date:
 
 LOOKBACK_DAYS = 800
 
+# Monthly groceries, coffee or a transit card top-up repeat out of habit, not because of a
+# contract, so expenses in these categories are not treated as subscription candidates.
+HABIT_CATEGORIES = frozenset({"groceries", "food", "transport", "shopping"})
+
 
 def _charges_by_key(db: Session, user_id: str, since: dt.date) -> dict[str, list[tuple[Charge, Expense]]]:
     rows = db.scalars(
@@ -267,6 +274,8 @@ def _charges_by_key(db: Session, user_id: str, since: dt.date) -> dict[str, list
     )
     groups: dict[str, list[tuple[Charge, Expense]]] = defaultdict(list)
     for e in rows:
+        if e.category in HABIT_CATEGORIES:
+            continue
         key = merchant_key(e.merchant)
         if not key:
             continue

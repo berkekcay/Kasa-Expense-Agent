@@ -28,7 +28,7 @@ from app.db.models import (
     HouseMember,
     Settlement,
 )
-from app.services import settlement, splits
+from app.services import budgets, settlement, splits
 from app.services.errors import Conflict, Forbidden, InvalidInput, NotFound
 from app.services.expenses import ExpenseInput, build_expense, ensure_user, finalize_expense
 from app.services.money import MoneyError, format_minor, normalize_currency, to_minor
@@ -121,7 +121,8 @@ def _prepare_house_expense(
         data.currency = house.currency
 
     expense = build_expense(payer, data, source=source)
-    warnings = finalize_expense(db, expense, base_currency=house.currency)
+    # Budgets are checked in add_split_expense after the shares exist.
+    warnings = finalize_expense(db, expense, base_currency=house.currency, check_budgets=False)
     if expense.currency != house.currency:
         raise InvalidInput(f"house currency is {house.currency}; could not convert from {expense.currency}")
     expense.house_id = house.id
@@ -223,6 +224,7 @@ def add_split_expense(
 
     expense.split_type = split_type
     expense.shares = [ExpenseShare(user_id=u, amount_minor=a) for u, a in shares.items()]
+    warnings += budgets.warnings_for_new_expense(db, expense)
     db.add(expense)
     db.commit()
     return expense, warnings

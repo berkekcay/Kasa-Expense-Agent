@@ -117,7 +117,9 @@ def build_expense(
     )
 
 
-def finalize_expense(db: Session, expense: Expense, *, base_currency: str | None = None) -> list[str]:
+def finalize_expense(
+    db: Session, expense: Expense, *, base_currency: str | None = None, check_budgets: bool = True
+) -> list[str]:
     """MONEY hook. Call on every new Expense after `build_expense()` and before shares are
     computed or anything is committed. Returns human-readable warnings for the user.
 
@@ -128,15 +130,16 @@ def finalize_expense(db: Session, expense: Expense, *, base_currency: str | None
     2. `budgets.warnings_for_new_expense`: budget alerts that this expense would trigger (the
        expense is not in the DB yet; the budget check counts it itself).
 
-    Implemented by track MONEY in `services/fx.py` and `services/budgets.py`; this function
-    itself should not need to change.
+    House expenses pass `check_budgets=False` and call `budgets.warnings_for_new_expense`
+    themselves once the shares are set, so the payer's alert counts only their own share.
     """
     from app.config import get_settings
     from app.services import budgets, fx  # imported late: both import this module
 
     base = normalize_currency(base_currency or get_settings().base_currency)
     warnings = fx.apply_base_currency(db, expense, base)
-    warnings += budgets.warnings_for_new_expense(db, expense)
+    if check_budgets:
+        warnings += budgets.warnings_for_new_expense(db, expense)
     return warnings
 
 

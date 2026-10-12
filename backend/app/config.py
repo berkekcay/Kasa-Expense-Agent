@@ -69,7 +69,10 @@ class Settings(BaseSettings):
     token_encryption_key: str = ""
 
     # --- Gmail sync -------------------------------------------------------------------------
-    gmail_query: str = "newer_than:30d (fatura OR makbuz OR dekont OR sipariş OR receipt OR invoice OR order)"
+    gmail_query: str = (
+        "newer_than:30d -category:social subject:(sipariş OR siparis OR order OR fatura OR invoice"
+        ' OR makbuz OR receipt OR dekont OR harcama OR "kartınızdan" OR "e-arşiv" OR ödeme)'
+    )
     gmail_sync_max_messages: int = 50
     # Pub/Sub topic Gmail publishes to (projects/<project>/topics/<topic>) and the push
     # subscription's OIDC settings, checked on POST /internal/gmail/push.

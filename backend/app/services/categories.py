@@ -82,6 +82,16 @@ def _fold(value: str) -> str:
 _LOOKUP: dict[str, str] = {_fold(c): c for c in CATEGORIES} | {_fold(k): v for k, v in _SYNONYMS.items()}
 
 
+def fold_text(value: str) -> str:
+    """Public alias of the folding used for lookups (Turkish-aware lowercase, ASCII)."""
+    return _fold(value)
+
+
+def is_known_category(raw: str) -> bool:
+    """True when `raw` is a category or a known synonym (so it won't fall back to "other")."""
+    return _fold(raw) in _LOOKUP
+
+
 def normalize_category(raw: str | None) -> str | None:
     """Map free text to a category from CATEGORIES.
 

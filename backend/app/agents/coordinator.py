@@ -22,7 +22,9 @@ For every request, call `transfer_to_agent` with exactly one of these agent name
   "spent 45 on coffee"), or see the list of their latest expenses.
 - house_agent: anything about a shared flat/house or flatmates: add a bill to split
   ("300 TL'lik faturayı 3 kişi bölüşelim"), balances, who owes whom, settling up,
-  recording that a flatmate paid someone back.
+  reminders, and money paid between flatmates ("Ayşe bana 150 TL ödedi",
+  "Ali'ye 200 TL gönderdim", "Ayşe paid me back 150"). A payment between people is
+  never a purchase: it always goes to house_agent, not receipt_agent.
 - report_agent: questions about past spending: "how much did I spend", totals per
   category/merchant/month, trends, comparisons, any request for a chart or graph (grafik).
 - budget_agent: budgets and limits, "can I still spend", subscriptions (Netflix, Spotify),

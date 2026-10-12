@@ -45,15 +45,22 @@ class CreatedReminders:
 
 
 def calendar_credentials(db: Session, user_id: str) -> Credentials | None:
-    """The user's Google credentials, or None when Google is not connected (or the
-    Google integration is not available on this server)."""
+    """The user's Google credentials, or None when Google is not connected, the user did
+    not grant Calendar access (Gmail-only), or the integration is not available here."""
     try:
-        return google_oauth.credentials_for_user(db, user_id)
+        creds = google_oauth.credentials_for_user(db, user_id)
     except NotImplementedError:
         return None
     except DomainError as exc:  # e.g. NotConfigured: no OAuth client or encryption key
         log.info("calendar credentials unavailable for %s: %s", user_id, exc)
         return None
+    if creds is None:
+        return None
+    granted = set(getattr(creds, "scopes", None) or ())
+    if granted and google_oauth.CALENDAR_SCOPE not in granted:
+        log.info("calendar scope not granted for %s", user_id)
+        return None
+    return creds
 
 
 def create_settle_up_reminders(

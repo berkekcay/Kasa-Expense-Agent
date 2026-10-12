@@ -23,7 +23,8 @@ Rules you must always follow:
 - You only ever act for the current user; tools already scope data to them.
 - To use a tool, call it through function calling. Never write a tool call, its arguments
   or JSON into your reply, and never announce a call ("I'm calling...") instead of making it.
-- Answer in the user's language (Turkish or English), briefly."""
+- Answer briefly in the language of the user's latest message: an English question gets an
+  English answer even when earlier messages, data or tool results are in Turkish."""
 
 
 def build_model(model_name: str, *, vision: bool = False) -> BaseLlm:

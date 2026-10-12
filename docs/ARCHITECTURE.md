@@ -120,13 +120,21 @@ for RLS, and creates the user row on first sight. The router calls a service; a
 ```
 expense = build_expense(user_id, data, source=..., external_ref=...)   # validate, minor units, category
 warnings = finalize_expense(db, expense, base_currency=...)            # MONEY hook: FX, then budgets
-# house expenses: set house_id and shares now, on the converted total
 db.add(expense); db.commit()
 ```
 
 `add_expense(db, user_id, data, source=..., external_ref=...) -> SavedExpense(expense, warnings)`
-does this for personal expenses and raises `Conflict` for a duplicate import. Houses use
-`houses._prepare_house_expense`, which runs the same hook.
+does this for personal expenses and raises `Conflict` for a duplicate import. House expenses
+call `finalize_expense(..., check_budgets=False)` so only FX runs, split the converted total
+into shares, and then call `budgets.warnings_for_new_expense`, so the payer's budget alert
+counts their own share and not the whole bill.
+
+**Report questions.** The report agent writes one SELECT over the user-scoped relations and
+calls `run_report(sql, question, ...)`. The tool runs the static guard first (sqlglot: one
+SELECT, allowed relations only, no system objects, LIMIT clamped), then the checker agent,
+which compares the SQL with the question and calls `submit_verdict(approve|revise, ...)`.
+On `revise` the reason goes back to the report agent, at most twice per turn. If the checker
+model fails or times out, the query runs on the static guard alone and the result says so.
 
 **Chat.** `POST /chat` calls `runtime.run_agent("chat", user_id, parts, session_id)`. The
 coordinator calls `transfer_to_agent` (receipt, house, report, budget or inbox agent). The

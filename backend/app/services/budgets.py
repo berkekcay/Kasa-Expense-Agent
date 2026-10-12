@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.models import Budget, Expense, ExpenseShare
 from app.services import clock, fx
-from app.services.categories import _LOOKUP, CATEGORIES, _fold, normalize_category
+from app.services.categories import CATEGORIES, fold_text, is_known_category, normalize_category
 from app.services.errors import DomainError, InvalidInput, NotFound
 from app.services.expenses import ensure_user
 from app.services.money import MoneyError, to_minor
@@ -139,9 +139,9 @@ def budget_category(raw: str | None) -> str | None:
 
     Unlike expenses (where unknown text becomes "other"), an unknown budget category is an
     error: a budget silently set on "other" would never warn about what the user meant."""
-    if raw is None or _fold(raw) in OVERALL_WORDS:
+    if raw is None or fold_text(raw) in OVERALL_WORDS:
         return None
-    if _fold(raw) not in _LOOKUP:
+    if not is_known_category(raw):
         raise InvalidInput(f"unknown category {raw!r}; use one of: {', '.join(CATEGORIES)} (empty = overall)")
     return normalize_category(raw)
 
