@@ -3,8 +3,10 @@ and `splits`.
 
 Access rule: only members of a house can read or change anything about it.
 
-Done in the foundation: equal split through the MONEY hook, recorded settlements that
-reduce balances. Track HOUSE implements `add_split_expense` (percent / exact / items).
+Expenses: `add_split_expense` handles every split type (equal, percent, exact, items)
+through the MONEY hook. Payments: `record_settlement` (overpayment is refused unless
+asked for), `list_settlements`, `delete_settlement` (creator only). `house_balances`
+includes every recorded payment.
 """
 
 from __future__ import annotations
@@ -16,11 +18,20 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Expense, ExpenseItem, ExpenseShare, House, HouseMember, Settlement
-from app.services import settlement
-from app.services.errors import Forbidden, InvalidInput, NotFound
+from app.db.models import (
+    SPLIT_TYPES,
+    Expense,
+    ExpenseItem,
+    ExpenseItemAssignee,
+    ExpenseShare,
+    House,
+    HouseMember,
+    Settlement,
+)
+from app.services import settlement, splits
+from app.services.errors import Conflict, Forbidden, InvalidInput, NotFound
 from app.services.expenses import ExpenseInput, build_expense, ensure_user, finalize_expense
-from app.services.money import MoneyError, normalize_currency, to_minor
+from app.services.money import MoneyError, format_minor, normalize_currency, to_minor
 
 
 @dataclass
@@ -129,17 +140,16 @@ def add_equal_split_expense(
 ) -> Expense:
     """Record a house expense paid by `paid_by` (default: caller), split equally between
     `split_between` (default: all members, in join order)."""
-    _house, expense, participants, _warnings = _prepare_house_expense(
-        db, user_id, house_id, data, paid_by, split_between, source
+    expense, _warnings = add_split_expense(
+        db,
+        user_id,
+        house_id,
+        data,
+        split_type="equal",
+        paid_by=paid_by,
+        participants=split_between,
+        source=source,
     )
-    try:
-        shares = settlement.equal_split(expense.total_minor, participants)
-    except ValueError as exc:
-        raise InvalidInput(str(exc)) from exc
-    expense.split_type = "equal"
-    expense.shares = [ExpenseShare(user_id=u, amount_minor=a) for u, a in shares.items()]
-    db.add(expense)
-    db.commit()
     return expense
 
 
@@ -157,19 +167,111 @@ def add_split_expense(
     item_assignees: Sequence[Sequence[str]] | None = None,
     source: str = "manual",
 ) -> tuple[Expense, list[str]]:
-    """TRACK HOUSE: record a house expense with any split type. Returns (expense, warnings).
+    """Record a house expense with any split type. Returns (expense, warnings).
 
-    - "equal":   like add_equal_split_expense, between `participants` (default all members).
+    - "equal":   between `participants` (default all members, in join order).
     - "percent": `percents` maps user_id -> percent (strings like "33.5"); must sum to 100.
+                 The people sharing are the keys of `percents`.
     - "exact":   `exact_amounts` maps user_id -> amount in major units; must sum to the total.
+                 The people sharing are the keys of `exact_amounts`.
     - "items":   `data.items` are the receipt lines; `item_assignees[i]` lists who shares
-                 line i (empty = all `participants`). Stored as ExpenseItemAssignee rows.
-    Use `_prepare_house_expense` first (it runs the MONEY hook), then `splits.*` for the
-    math, then set `expense.split_type` and `expense.shares`. When the expense was
-    converted from another currency, percent/items splits apply to the converted total and
-    exact amounts must be given in the house currency.
+                 line i (empty = all `participants`, default all members). Every line gets
+                 ExpenseItemAssignee rows for the people who actually share it.
+    The payer and everyone sharing must be house members (Forbidden otherwise). The MONEY
+    hook runs first; percent and items splits apply to the converted total, and exact
+    amounts must be given in the house currency. Warnings come from the hook plus a note
+    when the item lines do not add up to the total.
     """
-    raise NotImplementedError("add_split_expense: track HOUSE")
+    if split_type not in SPLIT_TYPES:
+        raise InvalidInput(f"unknown split type {split_type!r}; use one of {', '.join(SPLIT_TYPES)}")
+    people, exact_minor = _split_people(split_type, participants, percents, exact_amounts)
+    if split_type == "items":
+        _check_item_input(data, item_assignees)
+
+    house, expense, people, warnings = _prepare_house_expense(
+        db, user_id, house_id, data, paid_by, people, source
+    )
+    members = member_ids(house)
+    try:
+        if split_type == "equal":
+            shares = settlement.equal_split(expense.total_minor, people)
+        elif split_type == "percent":
+            shares = splits.percent_split(expense.total_minor, percents or {})
+        elif split_type == "exact":
+            shares = splits.exact_split(expense.total_minor, exact_minor)
+        else:
+            assignees = [list(a) for a in item_assignees] if item_assignees else [[] for _ in expense.items]
+            outsiders = sorted({u for who in assignees for u in who if u not in members})
+            if outsiders:
+                raise Forbidden(f"not members of this house: {', '.join(outsiders)}")
+            shares = splits.items_split(
+                expense.total_minor,
+                [(item.amount_minor, who) for item, who in zip(expense.items, assignees, strict=True)],
+                people,
+            )
+            for item, who in zip(expense.items, assignees, strict=True):
+                item.assignees = [ExpenseItemAssignee(user_id=u) for u in (who or people)]
+            items_total = sum(item.amount_minor for item in expense.items)
+            if items_total != expense.total_minor:
+                warnings.append(
+                    f"items add up to {format_minor(items_total)} but the total is "
+                    f"{format_minor(expense.total_minor)}; the difference was spread in "
+                    "proportion to each person's items"
+                )
+    except ValueError as exc:
+        raise InvalidInput(str(exc)) from exc
+
+    expense.split_type = split_type
+    expense.shares = [ExpenseShare(user_id=u, amount_minor=a) for u, a in shares.items()]
+    db.add(expense)
+    db.commit()
+    return expense, warnings
+
+
+def _split_people(
+    split_type: str,
+    participants: Sequence[str] | None,
+    percents: Mapping[str, Decimal | str] | None,
+    exact_amounts: Mapping[str, Decimal | str] | None,
+) -> tuple[list[str] | None, dict[str, int]]:
+    """Who shares the expense, checked before anything runs. Returns (people, exact_minor).
+
+    `people` is None when it should default to every member.
+    """
+    exact_minor: dict[str, int] = {}
+    if split_type in ("equal", "items"):
+        people = list(participants) if participants else None
+        if people is not None and len(set(people)) != len(people):
+            raise InvalidInput("participants must be unique")
+        return people, exact_minor
+    mapping = percents if split_type == "percent" else exact_amounts
+    if not mapping:
+        what = "percents" if split_type == "percent" else "exact_amounts"
+        raise InvalidInput(f"a {split_type} split needs {what} (user_id -> value)")
+    people = list(mapping)
+    if participants and set(participants) != set(people):
+        raise InvalidInput(f"participants do not match the people in the {split_type} split")
+    try:
+        if split_type == "percent":
+            splits.check_percents(mapping)
+        else:
+            for user, amount in mapping.items():
+                try:
+                    exact_minor[user] = to_minor(amount)
+                except MoneyError as exc:
+                    raise InvalidInput(f"amount for {user}: {exc}") from exc
+    except ValueError as exc:
+        raise InvalidInput(str(exc)) from exc
+    return people, exact_minor
+
+
+def _check_item_input(data: ExpenseInput, item_assignees: Sequence[Sequence[str]] | None) -> None:
+    if not data.items:
+        raise InvalidInput("an items split needs the receipt lines (items)")
+    if item_assignees is not None and len(item_assignees) != len(data.items):
+        raise InvalidInput(
+            f"item_assignees has {len(item_assignees)} entries but there are {len(data.items)} items"
+        )
 
 
 def list_house_expenses(db: Session, user_id: str, house_id: int) -> list[Expense]:
@@ -195,8 +297,17 @@ def record_settlement(
     to_user: str,
     amount: Decimal | str,
     note: str | None = None,
+    allow_overpayment: bool = False,
 ) -> Settlement:
-    """Record that `from_user` paid `to_user` back. Any member may record it."""
+    """Record that `from_user` paid `to_user` back. Any member may record it.
+
+    Overpayment rule: by default a payment may not be larger than what `from_user` owes
+    (their negative net balance) nor larger than what `to_user` is owed (their positive
+    net balance). So a payment never turns a debtor into a creditor or the other way
+    round, and a typo like 2000 instead of 200 is caught. The Conflict error names the
+    largest amount that fits. Pass `allow_overpayment=True` for a deliberate advance or
+    a loan between flatmates; balances then simply go past zero.
+    """
     house = get_house(db, user_id, house_id)
     members = member_ids(house)
     outsiders = [u for u in (from_user, to_user) if u not in members]
@@ -210,6 +321,24 @@ def record_settlement(
         raise InvalidInput(str(exc)) from exc
     if amount_minor <= 0:
         raise InvalidInput("amount must be positive")
+    if not allow_overpayment:
+        balances = house_balances(db, user_id, house_id).balances
+        owes = max(0, -balances.get(from_user, 0))
+        owed = max(0, balances.get(to_user, 0))
+        limit = min(owes, owed)
+        if amount_minor > limit:
+            if limit == 0:
+                reason = (
+                    f"{from_user} owes nothing right now"
+                    if owes == 0
+                    else f"{to_user} is not owed anything right now"
+                )
+            else:
+                reason = f"at most {format_minor(limit)} {house.currency} is open between them"
+            raise Conflict(
+                f"payment of {format_minor(amount_minor)} {house.currency} from {from_user} to "
+                f"{to_user} is more than the debt: {reason}"
+            )
     row = Settlement(
         house_id=house.id,
         from_user=from_user,
@@ -222,6 +351,18 @@ def record_settlement(
     db.add(row)
     db.commit()
     return row
+
+
+def delete_settlement(db: Session, user_id: str, house_id: int, settlement_id: int) -> None:
+    """Undo a recorded payment. Only the member who recorded it may delete it."""
+    get_house(db, user_id, house_id)  # membership check
+    row = db.get(Settlement, settlement_id)
+    if row is None or row.house_id != house_id:
+        raise NotFound(f"payment {settlement_id} not found")
+    if row.created_by != user_id:
+        raise Forbidden("only the person who recorded a payment can delete it")
+    db.delete(row)
+    db.commit()
 
 
 def list_settlements(db: Session, user_id: str, house_id: int) -> list[Settlement]:
