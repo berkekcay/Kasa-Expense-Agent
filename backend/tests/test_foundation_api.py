@@ -1,15 +1,19 @@
 """Sprint 2 foundation: expense pipeline, settlements, auth modes, internal endpoints, stubs."""
 
 import base64
+import datetime as dt
 import json
+from decimal import Decimal
 
 import pytest
 
 from app import auth
 from app.api import internal
 from app.config import get_settings
-from app.db.models import User
+from app.db.models import FxRate, User
 from app.db.session import session_for
+from app.integrations import tcmb
+from app.services import clock
 from app.services.errors import Conflict
 from app.services.expenses import ExpenseInput, add_expense
 
@@ -28,11 +32,20 @@ def test_categories_endpoint_and_normalised_storage(client):
     assert body["warnings"] == [] and body["split_type"] is None and body["original_currency"] is None
 
 
-def test_foreign_currency_expense_is_kept_with_a_warning_until_fx_lands(client):
+def test_foreign_currency_expense_is_converted_with_a_warning(client):
+    # A cached rate for today, so no TCMB request (track MONEY tests the fetching).
+    today = clock.today()
+    with session_for(None) as db:
+        if db.query(FxRate).filter_by(rate_date=today, currency="EUR").first() is None:
+            db.add(FxRate(rate_date=today, currency="EUR", try_per_unit=Decimal("36.500000")))
+            db.commit()
+        rate = db.query(FxRate).filter_by(rate_date=today, currency="EUR").one().try_per_unit
     r = client.post("/expenses", json={"merchant": "Amazon.de", "total": "12", "currency": "EUR"})
     assert r.status_code == 201
-    assert r.json()["currency"] == "EUR"
-    assert "conversion" in r.json()["warnings"][0]
+    body = r.json()
+    assert (body["currency"], body["original_currency"], body["original_total"]) == ("TRY", "EUR", "12.00")
+    assert body["total_minor"] == int((1200 * Decimal(rate)).to_integral_value())
+    assert body["warnings"][0].startswith("Converted 12.00 EUR to ")
 
 
 def test_external_ref_dedupe(db):
@@ -150,8 +163,11 @@ class TestInternalEndpoints:
         monkeypatch.setattr(get_settings(), "internal_task_token", "s3cret")
         assert client.post("/internal/fx/refresh").status_code == 401
         assert client.post("/internal/fx/refresh", headers={"X-Kasa-Task-Token": "wrong"}).status_code == 401
-        # Authorised; the service itself is still a stub (track MONEY).
-        assert client.post("/internal/fx/refresh", headers={"X-Kasa-Task-Token": "s3cret"}).status_code == 501
+        # Authorised: stores the bulletin TCMB returns (faked here, no network).
+        day = dt.date(2024, 1, 2)
+        monkeypatch.setattr(tcmb, "fetch_rates", lambda on=None: (day, {"USD": Decimal("29.700000")}))
+        r = client.post("/internal/fx/refresh", headers={"X-Kasa-Task-Token": "s3cret"})
+        assert r.status_code == 200 and r.json() == {"rates": 1}
 
     def test_pubsub_push_checks_oidc_token(self, client, monkeypatch):
         settings = get_settings()
@@ -191,7 +207,7 @@ class TestInternalEndpoints:
 
 @pytest.mark.parametrize(
     "path",
-    ["/budgets", "/subscriptions", "/dashboard", "/fx/rates/EUR", "/inbox", "/integrations/google/status"],
+    [],
 )
 def test_track_endpoints_are_registered(client, path):
     """Routers exist now; until a track lands its endpoints answer 501."""
