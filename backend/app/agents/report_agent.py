@@ -1,36 +1,72 @@
-"""Report agent (owner: track REPORT): answers money questions with read-only SQL + a chart."""
+"""Report agent (owner: track REPORT): answers money questions with checked, read-only SQL
+and a chart. Every query goes through the static guard and the SQL checker
+(`checker_agent`) inside `run_report` before it runs."""
 
 from google.adk.agents import Agent
+from google.adk.agents.readonly_context import ReadonlyContext
 
-from app.agents.common import GUARDRAILS, chat_model, with_today
-from app.agents.tools.report_tools import run_report
-from app.services.reports import RELATIONS_DOC
+from app.agents.checker_agent import dates_line, month_facts
+from app.agents.common import GUARDRAILS, chat_model
+from app.agents.tools.report_tools import MAX_CHECKER_REVISIONS, run_report
+from app.services.reports import relations_doc
+
+INSTRUCTION = """\
+You are Kasa's report agent. You answer questions about the user's own spending, house
+shares, budgets and subscriptions by calling `run_report` with ONE SQL SELECT.
+
+Write standard SQLite-style SQL (use LIMIT, never TOP; no date functions: use the month
+columns). The {dialect} database gets a translated copy. You may only use:
+
+{relations}
+
+How to work:
+- Always call `run_report`, with `sql` and `question` (the user's question in their words
+  plus the exact months you used, e.g. "kategoriye göre bu ay (2026-10)").
+- Aggregate in SQL (SUM, COUNT, AVG, GROUP BY, ORDER BY). Never add numbers yourself.
+- Charts: bar to compare categories or merchants, line for a trend over months (x =
+  expense_month, ordered), pie for shares of one total (few slices). chart_type "table" (no
+  chart) for plain lists, and leave it empty for a single number. x and y are result
+  column names, e.g. x="category", y="total_minor".
+- status "revise": a reviewer found a mistake. Fix the SQL as its reason says and call
+  `run_report` again (it allows {retries} revisions). status "rejected" or "error": fix
+  the SQL and try again, at most twice.
+- You can only read. Never try to change, delete or add data; say you can only read.
+- You only see the current user's data. For another person's personal spending, say you
+  cannot see it (house shares of the user are fine).
+
+Reading the result: the tool has already converted money to TL. A column total_minor comes
+back as "total" with a value like "5650.00", which means 5650.00 TL. Copy that number as it
+is (5650.00 TL or 5.650,00 TL); never divide or multiply it, never move the decimal point.
+
+Language: reply in the language of the user's LAST message. An English question gets an
+English answer, even though category names, merchants and these notes contain Turkish.
+A Turkish question gets a Turkish answer.
+
+Answer in one to three sentences, quoting only numbers the tool returned, with the currency
+(TL for TRY). If the result is empty, say there is no matching spending. Do not invent data
+that is not in the result.
+
+{guardrails}"""
 
 
 def build_report_agent(sql_dialect: str) -> Agent:
-    month_hint = "strftime('%Y-%m', 'now')" if sql_dialect == "sqlite" else "CONVERT(CHAR(7), GETDATE(), 126)"
-    instruction = f"""\
-You are Kasa's report agent. You answer questions about the user's spending.
+    def instruction(_ctx: ReadonlyContext) -> str:
+        facts = month_facts()
+        text = INSTRUCTION.format(
+            dialect="SQL Server" if sql_dialect == "tsql" else "SQLite",
+            relations=relations_doc(facts["this_month"], facts["first_month"]),
+            retries=MAX_CHECKER_REVISIONS,
+            guardrails=GUARDRAILS,
+        )
+        return f"{text}\n\n{dates_line(facts)}"
 
-Write ONE {sql_dialect} SELECT statement and call `run_report`. You may only use:
-{RELATIONS_DOC}
-
-- Aggregate in SQL (SUM, COUNT, AVG, GROUP BY). Group by month with expense_month.
-  "This month" means expense_month = {month_hint} (or the YYYY-MM of today's date below).
-- Pick a chart when it helps: bar for categories/merchants, line for trends over months,
-  pie for shares of a whole. Pass the x and y column names of your result.
-- If the tool rejects the query, fix it and try again (at most twice).
-- Summarise the result in one or two sentences using the numbers the tool returned.
-  Mention the currency; do not invent data that is not in the result.
-
-{GUARDRAILS}"""
     return Agent(
         name="report_agent",
         model=chat_model(),
         description=(
             "Answers questions about past spending: totals, per category or merchant, trends over "
-            "months, 'how much did I spend', and draws charts (grafik)."
+            "months, my share of the flat's bills, 'how much did I spend', and draws charts (grafik)."
         ),
-        instruction=with_today(instruction),
+        instruction=instruction,
         tools=[run_report],
     )
