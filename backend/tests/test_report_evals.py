@@ -48,7 +48,7 @@ CORRECT_SQL = {
         "expense_month BETWEEN '2026-05' AND '2026-10'",
         "GROUP BY expense_month ORDER BY expense_month",
     ),
-    "report-netflix-total-en": "SELECT SUM(total_minor) AS total_minor FROM my_expenses WHERE merchant = 'Netflix'",
+    "report-netflix-total-en": "SELECT SUM(amount_minor) AS total_minor FROM my_spending WHERE merchant = 'Netflix'",
     "report-transport-tr": _all_spending(
         "amount_minor", "category = 'transport' AND expense_month = '2026-10'"
     ),

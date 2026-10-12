@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from google.genai import types
 
 from app.agents import runtime
+from app.agents.language import reply_language_note
 from app.auth import DB, CurrentUser
 from app.config import get_settings
 from app.schemas.agents import ChartSpec, ChatIn, ChatOut, ReceiptOut
@@ -61,7 +62,8 @@ async def upload_receipt(file: UploadFile, db: DB, user_id: CurrentUser) -> Rece
 async def chat(body: ChatIn, user_id: CurrentUser) -> ChatOut:
     """One message -> coordinator -> specialist agent. Returns text and, if the report agent
     produced one, a chart spec for the frontend."""
-    run = await runtime.run_agent("chat", user_id, [types.Part(text=body.message)], body.session_id)
+    parts = [types.Part(text=body.message), types.Part(text=reply_language_note(body.message))]
+    run = await runtime.run_agent("chat", user_id, parts, body.session_id)
     report = run.last_tool_result("run_report")
     chart = ChartSpec(**report["chart"]) if report and report.get("chart") else None
     return ChatOut(session_id=run.session_id, text=run.text or "(no answer)", chart=chart, agent=run.agent)

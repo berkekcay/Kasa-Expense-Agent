@@ -199,7 +199,8 @@ class TestMoneyColumns:
             seeded,
             "SELECT SUM(total_minor), AVG(total_minor) AS avg_total, "
             "SUM(CASE WHEN category = 'food' THEN total_minor ELSE 0 END) AS food, COUNT(*) AS n "
-            "FROM my_expenses WHERE merchant IN ('Kahve Dünyası', 'Yemeksepeti') AND expense_month = '2026-10'",
+            "FROM my_expenses WHERE house_id IS NULL AND merchant IN ('Kahve Dünyası', 'Yemeksepeti') "
+            "AND expense_month = '2026-10'",
         )
         assert result["columns"] == ["total", "avg_total", "food", "n"]
         assert result["rows"] == [{"total": "335.50", "avg_total": "167.75", "food": "335.50", "n": 2}]

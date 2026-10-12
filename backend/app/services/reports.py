@@ -1,7 +1,7 @@
 """Guarded read-only SQL for the Report agent (text-to-SQL) + chart specs.
 
-The model writes one SELECT against virtual relations (`my_expenses`, `my_expense_items`,
-`my_house_shares`, `my_budgets`, `my_subscriptions`). We parse it with sqlglot and reject
+The model writes one SELECT against virtual relations (`my_spending`, `my_expenses`,
+`my_expense_items`, `my_house_shares`, `my_budgets`, `my_subscriptions`). We parse it with sqlglot and reject
 anything that is not a single, plain SELECT over those relations. Then the relations are
 injected as CTEs filtered to the current user, so even a "valid" query can only ever see
 that user's rows. On SQL Server, RLS filters a third time.
@@ -45,6 +45,22 @@ _DIALECTS: dict[str, dict[str, str]] = {
 }
 
 _RELATION_TEMPLATES: dict[str, str] = {
+    # What the user actually spent: personal purchases at full price plus only their share
+    # of house bills. Totals over this relation can never count a shared bill twice.
+    "my_spending": (
+        "SELECT e.id AS expense_id, e.expense_date, {month_e} AS expense_month, e.merchant, "
+        "e.category, e.total_minor AS amount_minor, 'personal' AS kind, "
+        "CAST(NULL AS INTEGER) AS house_id, CAST(NULL AS VARCHAR(100)) AS house_name, e.source, "
+        "CASE WHEN e.subscription_id IS NULL THEN 0 ELSE 1 END AS is_subscription "
+        "FROM {t}expenses AS e WHERE e.owner_id = :kasa_user_id AND e.house_id IS NULL "
+        "UNION ALL "
+        "SELECT e.id, e.expense_date, {month_e}, e.merchant, e.category, sh.amount_minor, "
+        "'house', e.house_id, h.name, e.source, 0 "
+        "FROM {t}expense_shares AS sh "
+        "JOIN {t}expenses AS e ON e.id = sh.expense_id "
+        "JOIN {t}houses AS h ON h.id = e.house_id "
+        "WHERE sh.user_id = :kasa_user_id"
+    ),
     "my_expenses": (
         "SELECT e.id, e.merchant, e.expense_date, {month_e} AS expense_month, e.category, "
         "e.currency, e.total_minor, e.source, e.house_id, e.split_type, e.original_currency, "
@@ -106,7 +122,14 @@ no date functions needed). Flags are 1 or 0.
 category is always one of: {", ".join(CATEGORIES)} (market = groceries, kira = rent,
 fatura = utilities, ulaşım = transport, yemek/kafe = food).
 
-my_expenses: every purchase the user paid, one row each.
+my_spending: what the user spent, ready to sum. Personal purchases at full price plus only
+  the user's share of shared-flat bills, so nothing is counted twice. All in TRY.
+  expense_id, expense_date, expense_month, merchant, category, amount_minor,
+  kind ('personal' or 'house'), house_id, house_name (NULL for personal), source,
+  is_subscription (1/0)
+my_expenses: every purchase the user paid, one row each, at the full amount. House bills the
+  user paid for everyone are here in full, so do not SUM total_minor here for "how much did
+  I spend"; use my_spending.
   id, merchant, expense_date, expense_month, category, currency, total_minor,
   source (manual|receipt|statement|email), house_id (NULL = personal purchase),
   split_type (NULL = personal, else equal|percent|exact|items),
@@ -126,35 +149,24 @@ my_subscriptions: recurring charges. id, name, amount_minor, currency,
 
 Which relation:
 - "How much did I spend" in total, per category, per merchant or per month, with no other
-  qualifier, means ALL of the user's spending: personal purchases (my_expenses WHERE
-  house_id IS NULL) plus the user's share of house bills (my_house_shares.my_share_minor),
-  combined with UNION ALL (examples 1, 2 and 4). House bills the user paid for everyone are
-  also in my_expenses (house_id set); never count those whole.
+  qualifier: SUM(amount_minor) from my_spending (examples 1, 2 and 4).
 - Only personal purchases when the user says so (kişisel, personal, ev hariç, not counting
-  the flat): my_expenses WHERE house_id IS NULL (example 5).
-- Only the flat, house, rent or shared bills (ev, kira, ev faturası): SUM(my_share_minor)
-  from my_house_shares, never the whole bill (example 3).
+  the flat): my_spending WHERE kind = 'personal' (example 5).
+- Only the flat, house, rent or shared bills (ev, kira, ev faturası): my_spending WHERE
+  kind = 'house', or my_house_shares for bill details (example 3).
+- Lists of purchases, receipts, sources or currencies: my_expenses and my_expense_items.
 
 Examples:
-1. SELECT category, SUM(amount_minor) AS total_minor FROM (
-     SELECT category, total_minor AS amount_minor FROM my_expenses WHERE house_id IS NULL AND expense_month = '{this_month}'
-     UNION ALL
-     SELECT category, my_share_minor FROM my_house_shares WHERE expense_month = '{this_month}') AS t
-   GROUP BY category ORDER BY total_minor DESC
-2. SELECT expense_month, SUM(amount_minor) AS total_minor FROM (
-     SELECT expense_month, total_minor AS amount_minor FROM my_expenses
-     WHERE house_id IS NULL AND expense_month BETWEEN '{first_month}' AND '{this_month}'
-     UNION ALL
-     SELECT expense_month, my_share_minor FROM my_house_shares
-     WHERE expense_month BETWEEN '{first_month}' AND '{this_month}') AS t
+1. SELECT category, SUM(amount_minor) AS total_minor FROM my_spending
+   WHERE expense_month = '{this_month}' GROUP BY category ORDER BY total_minor DESC
+2. SELECT expense_month, SUM(amount_minor) AS total_minor FROM my_spending
+   WHERE expense_month BETWEEN '{first_month}' AND '{this_month}'
    GROUP BY expense_month ORDER BY expense_month
-3. SELECT SUM(my_share_minor) AS my_share_minor FROM my_house_shares WHERE expense_month = '{this_month}'
-4. SELECT SUM(amount_minor) AS amount_minor FROM (
-     SELECT total_minor AS amount_minor FROM my_expenses WHERE house_id IS NULL AND expense_month = '{this_month}'
-     UNION ALL
-     SELECT my_share_minor FROM my_house_shares WHERE expense_month = '{this_month}') AS t
-5. SELECT SUM(total_minor) AS total_minor FROM my_expenses
-   WHERE house_id IS NULL AND expense_month = '{this_month}'"""
+3. SELECT SUM(amount_minor) AS total_minor FROM my_spending
+   WHERE kind = 'house' AND expense_month = '{this_month}'
+4. SELECT SUM(amount_minor) AS total_minor FROM my_spending WHERE expense_month = '{this_month}'
+5. SELECT SUM(amount_minor) AS total_minor FROM my_spending
+   WHERE kind = 'personal' AND expense_month = '{this_month}'"""
 
 
 RELATIONS_DOC = relations_doc()
@@ -218,6 +230,40 @@ def validate_report_sql(sql: str, dialect: str = MODEL_DIALECT) -> exp.Query:
         if name not in ALLOWED_RELATIONS and name not in cte_names:
             raise UnsafeQuery(f"unknown relation {table.name!r}; use {', '.join(sorted(ALLOWED_RELATIONS))}")
     return query
+
+
+class DoubleCounting(UnsafeQuery):
+    """Safe SQL that would give a wrong money total; the model is asked to rewrite it."""
+
+
+def paid_house_bills(db: Session, user_id: str) -> bool:
+    """Whether my_expenses holds any house bill this user paid (the double-count risk)."""
+    row = db.execute(
+        text("SELECT 1 FROM expenses WHERE owner_id = :u AND house_id IS NOT NULL"), {"u": user_id}
+    ).first()
+    return row is not None
+
+
+def check_double_counting(query: exp.Query, *, has_house_bills: bool = True) -> None:
+    """Reject SUM/AVG over my_expenses.total_minor when the query never looks at house_id.
+
+    my_expenses holds house bills the user paid for everyone at the full amount, so such a
+    total silently adds the whole bill on top of the user's share. A query that mentions
+    house_id (to exclude or group by it) is trusted to have thought about it, and users who
+    never paid a house bill cannot hit the problem.
+    """
+    if not has_house_bills:
+        return
+    if not any(t.name.lower() == "my_expenses" for t in query.find_all(exp.Table)):
+        return
+    if any(c.name.lower() == "house_id" for c in query.find_all(exp.Column)):
+        return
+    for agg in query.find_all(exp.Sum, exp.Avg):
+        if any(c.name.lower() == "total_minor" for c in agg.find_all(exp.Column)):
+            raise DoubleCounting(
+                "my_expenses.total_minor includes whole house bills the user paid for everyone; "
+                "for spending totals use SUM(amount_minor) FROM my_spending instead"
+            )
 
 
 def _func_name(node: exp.Expression) -> str:
@@ -338,6 +384,7 @@ def run_report_query(db: Session, user_id: str, sql: str, row_limit: int = 200) 
     """Validate, scope and execute. Returns JSON-safe rows; `*_minor` columns are converted
     to exact major-unit strings (e.g. total_minor 12345 -> total "123.45")."""
     query = validate_report_sql(sql, MODEL_DIALECT)
+    check_double_counting(query, has_house_bills=paid_house_bills(db, user_id))
     final_sql = build_scoped_sql(query, sql_dialect(db), row_limit + 1)  # +1 detects truncation
     result = db.execute(text(final_sql), {"kasa_user_id": user_id})
     raw_columns = list(result.keys())

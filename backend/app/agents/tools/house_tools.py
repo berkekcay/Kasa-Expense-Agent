@@ -121,6 +121,20 @@ def _saved(expense: Expense, warnings: list[str]) -> dict:
     return result
 
 
+def _pick_house(db: Session, user_id: str, house_id: int) -> int:
+    """The house the tool should act on. Models sometimes pass 0 or a guess instead of an id
+    from list_my_houses; when the user is in exactly one house, that house is meant."""
+    houses = house_service.list_houses(db, user_id)
+    if any(h.id == house_id for h in houses):
+        return house_id
+    if len(houses) == 1:
+        return houses[0].id
+    if not houses:
+        raise InvalidInput("you are not in any house yet; create one on the House page")
+    names = ", ".join(f"{h.id}: {h.name}" for h in houses)
+    raise InvalidInput(f"which house? use one of these ids: {names}")
+
+
 def _transfers(db: Session, user_id: str, house_id: int) -> list[dict]:
     result = house_service.house_balances(db, user_id, house_id)
     return [
@@ -170,6 +184,7 @@ def add_house_expense_equal_split(
     """
     try:
         with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
             house = house_service.get_house(db, user_id, house_id)
             expense, warnings = house_service.add_split_expense(
                 db,
@@ -216,6 +231,7 @@ def add_house_expense_percent_split(
     """
     try:
         with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
             house = house_service.get_house(db, user_id, house_id)
             mapping = _unique_map([(_resolve(house, p.user, user_id), p.percent) for p in percents])
             expense, warnings = house_service.add_split_expense(
@@ -259,6 +275,7 @@ def add_house_expense_exact_split(
     """
     try:
         with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
             house = house_service.get_house(db, user_id, house_id)
             mapping = _unique_map([(_resolve(house, a.user, user_id), a.amount) for a in amounts])
             expense, warnings = house_service.add_split_expense(
@@ -307,6 +324,7 @@ def add_house_expense_item_split(
     """
     try:
         with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
             house = house_service.get_house(db, user_id, house_id)
             assignees = [_resolve_all(house, i.assignees, user_id) or [] for i in items]
             expense, warnings = house_service.add_split_expense(
@@ -339,6 +357,7 @@ def get_house_balances(house_id: int, tool_context: ToolContext) -> dict:
     """
     try:
         with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
             result = house_service.house_balances(db, user_id, house_id)
     except DomainError as exc:
         return error(exc)
@@ -374,6 +393,7 @@ def record_payment(
     """
     try:
         with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
             house = house_service.get_house(db, user_id, house_id)
             row = house_service.record_settlement(
                 db,
@@ -406,6 +426,7 @@ def undo_payment(house_id: int, payment_id: int, tool_context: ToolContext) -> d
     """
     try:
         with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
             house_service.delete_settlement(db, user_id, house_id, payment_id)
             return {
                 "status": "deleted",
@@ -434,6 +455,7 @@ def create_settle_up_reminders(
     try:
         due = dt.date.fromisoformat(due_date) if due_date else clock.today() + dt.timedelta(days=7)
         with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
             result = reminder_service.create_settle_up_reminders(
                 db, user_id, house_id, due_date=due, add_to_calendar=add_to_calendar
             )

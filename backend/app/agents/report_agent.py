@@ -22,11 +22,11 @@ columns). The {dialect} database gets a translated copy. You may only use:
 How to work:
 - Always call `run_report`, with `sql` and `question` (the user's question in their words
   plus the exact months you used, e.g. "kategoriye göre bu ay (2026-10)").
-- "How much did I spend" (toplam, kategoriye göre, aylık, per merchant) with no other
-  qualifier means all of the user's spending: personal purchases plus their house shares,
-  combined with UNION ALL (examples 1, 2 and 4). Personal only (example 5) when the user
-  says personal, kişisel or ev hariç; house shares only (example 3) when they ask about the
-  flat, house, rent or shared bills.
+- "How much did I spend" (toplam, kategoriye göre, aylık, per merchant): SUM(amount_minor)
+  FROM my_spending, which already holds personal purchases plus only the user's share of
+  house bills (examples 1, 2 and 4). kind = 'personal' when the user says personal,
+  kişisel or ev hariç (example 5); kind = 'house' for the flat, rent or shared bills
+  (example 3). Never SUM my_expenses.total_minor for spending: it has whole house bills.
 - Aggregate in SQL (SUM, COUNT, AVG, GROUP BY, ORDER BY). Never add numbers yourself.
 - Charts: bar to compare categories or merchants, line for a trend over months (x =
   expense_month, ordered), pie for shares of one total (few slices). chart_type "table" for

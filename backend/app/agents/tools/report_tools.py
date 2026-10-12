@@ -33,7 +33,9 @@ NO_CHART = ("", "none")
 def _user_message(tool_context: ToolContext) -> str:
     content = getattr(tool_context, "user_content", None)
     parts = content.parts if content and content.parts else []
-    return "\n".join(p.text for p in parts if getattr(p, "text", None))
+    # The API appends a "(Kasa: reply in ...)" note; the checker only needs the question.
+    texts = [p.text for p in parts if getattr(p, "text", None) and not p.text.startswith("(Kasa:")]
+    return "\n".join(texts)
 
 
 async def _check(question: str, sql: str, canonical: str, tool_context: ToolContext) -> dict[str, Any]:
@@ -78,8 +80,8 @@ async def run_report(
     status "rejected" means the SQL broke a safety rule: rewrite it.
 
     Args:
-      sql: A single SELECT statement over my_expenses, my_expense_items, my_house_shares,
-        my_budgets or my_subscriptions.
+      sql: A single SELECT statement over my_spending, my_expenses, my_expense_items,
+        my_house_shares, my_budgets or my_subscriptions.
       question: The user's question in their words, with the time range, e.g.
         "how much did I spend per category this month (2026-10)".
       chart_type: "bar", "line" or "pie" for a chart; "table" to show the rows as a table
@@ -93,6 +95,8 @@ async def run_report(
     chart_type = (chart_type or "").strip().lower()
     try:
         query = reports.validate_report_sql(sql)
+        with tool_db(tool_context) as (db, user_id):  # before the checker: saves an LLM call
+            reports.check_double_counting(query, has_house_bills=reports.paid_house_bills(db, user_id))
     except reports.UnsafeQuery as exc:
         return {"status": "rejected", "error": str(exc)}
 

@@ -19,7 +19,8 @@ GOOD_SQL = (
     "SELECT category, SUM(total_minor) AS total_minor FROM my_expenses "
     "WHERE house_id IS NULL AND expense_month = '2026-10' GROUP BY category ORDER BY category"
 )
-BAD_SQL = "SELECT category, SUM(total_minor) AS total FROM my_expenses GROUP BY category"
+# Passes the static rules but answers the wrong question (all time instead of this month).
+BAD_SQL = "SELECT category, SUM(amount_minor) AS total FROM my_spending GROUP BY category"
 
 
 def _reply(part: types.Part) -> LlmResponse:
