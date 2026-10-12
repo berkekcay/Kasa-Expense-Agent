@@ -23,7 +23,8 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, { ...init, headers });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new ApiError(0, `Cannot reach the API at ${API_URL}. Is the backend running?`);
   }
   if (!res.ok) {

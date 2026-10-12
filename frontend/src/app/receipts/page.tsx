@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Receipt" };
 export default function ReceiptsPage() {
   return (
     <>
-      <PageHeader title="Scan a receipt" subtitle="Take or upload a photo; Kasa reads it and saves the expense." />
+      <PageHeader title="Scan a receipt" subtitle="Take or upload a photo. Kasa reads it and saves the expense." />
       <ReceiptUpload />
     </>
   );

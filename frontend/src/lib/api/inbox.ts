@@ -12,6 +12,7 @@ export type ParsedExpense = {
 };
 
 export type InboxStatus = "pending" | "approved" | "rejected" | "failed" | "ignored";
+export type InboxFilter = InboxStatus | "all";
 
 export type InboxItem = {
   id: number;
@@ -29,11 +30,19 @@ export type InboxItem = {
   decided_at: string | null;
 };
 
+export type InboxBulkResult = {
+  results: { item_id: number; status: string; expense_id: number | null; warnings: string[]; error: string | null }[];
+  succeeded: number;
+  failed: number;
+};
+
 export const inboxApi = {
-  list: (status: InboxStatus | null = "pending") => request<InboxItem[]>(`/inbox${query({ status })}`),
+  list: (status: InboxFilter = "pending", limit = 200) => request<InboxItem[]>(`/inbox${query({ status, limit })}`),
   get: (id: number) => request<InboxItem>(`/inbox/${id}`),
   edit: (id: number, parsed: ParsedExpense) => request<InboxItem>(`/inbox/${id}`, patch(parsed)),
   approve: (id: number, parsed?: ParsedExpense) =>
     request<{ item: InboxItem; expense: Expense }>(`/inbox/${id}/approve`, post({ parsed: parsed ?? null })),
   reject: (id: number) => request<InboxItem>(`/inbox/${id}/reject`, { method: "POST" }),
+  approveMany: (ids: number[]) => request<InboxBulkResult>("/inbox/approve", post({ ids })),
+  rejectMany: (ids: number[]) => request<InboxBulkResult>("/inbox/reject", post({ ids })),
 };

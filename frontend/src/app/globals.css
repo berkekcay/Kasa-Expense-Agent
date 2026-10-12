@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* Design tokens. Light by default, dark follows the OS setting. */
+/* Design tokens. Light by default, dark follows the OS setting.
+   Chart series colours are the dataviz reference palette (validated for colour-vision
+   deficiency against these card surfaces in both modes). Use them in fixed slot order. */
 :root {
   --background: #fafafa;
   --foreground: #18181b;
@@ -11,12 +13,25 @@
   --accent-foreground: #ffffff;
   --danger: #b91c1c;
   --positive: #15803d;
-  --chart-1: #0f766e;
-  --chart-2: #d97706;
-  --chart-3: #4f46e5;
-  --chart-4: #db2777;
-  --chart-5: #0284c7;
-  --chart-6: #65a30d;
+  --warning-text: #92400e;
+
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+  --series-1-track: #cde2fb;
+
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --axis-text: #71717a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,12 +45,21 @@
     --accent-foreground: #042f2e;
     --danger: #f87171;
     --positive: #4ade80;
-    --chart-1: #2dd4bf;
-    --chart-2: #fbbf24;
-    --chart-3: #818cf8;
-    --chart-4: #f472b6;
-    --chart-5: #38bdf8;
-    --chart-6: #a3e635;
+    --warning-text: #fbbf24;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --series-1-track: #1c3557;
+
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --axis-text: #a1a1aa;
   }
 }
 
@@ -49,6 +73,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-danger: var(--danger);
   --color-positive: var(--positive);
+  --color-warning: var(--warning-text);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -59,4 +84,18 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+/* One visible focus style for every interactive element (keyboard users). */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Recharts draws its own focus rectangle on the svg wrapper; the outline above is enough. */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
 }

@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "House" };
 export default function HousesPage() {
   return (
     <>
-      <PageHeader title="House" subtitle="Shared flat bills, split equally, settled with as few transfers as possible." />
+      <PageHeader title="House" subtitle="Split shared bills your way and settle up with as few transfers as possible." />
       <HouseView />
     </>
   );

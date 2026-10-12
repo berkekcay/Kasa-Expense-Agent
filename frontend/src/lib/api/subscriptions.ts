@@ -18,5 +18,6 @@ export const subscriptionsApi = {
   list: (includeDismissed = false) =>
     request<Subscription[]>(`/subscriptions${query({ include_dismissed: includeDismissed })}`),
   detect: () => request<Subscription[]>("/subscriptions/detect", { method: "POST" }),
+  upcoming: (withinDays = 30) => request<Subscription[]>(`/subscriptions/upcoming${query({ within_days: withinDays })}`),
   dismiss: (id: number) => request<Subscription>(`/subscriptions/${id}/dismiss`, { method: "POST" }),
 };

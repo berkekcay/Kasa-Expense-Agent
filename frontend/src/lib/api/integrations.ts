@@ -6,6 +6,8 @@ export type GoogleStatus = {
   connected: boolean;
   google_email: string | null;
   scopes: string[];
+  gmail_access: boolean;
+  calendar_access: boolean;
   gmail_watch_expires_at: string | null;
 };
 
