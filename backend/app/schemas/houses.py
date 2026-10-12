@@ -113,6 +113,7 @@ class HouseOut(BaseModel):
     id: int
     name: str
     currency: str
+    created_by: str = Field(description="the creator; only they can remove other members")
     members: list[MemberOut]
 
     @classmethod
@@ -121,6 +122,7 @@ class HouseOut(BaseModel):
             id=h.id,
             name=h.name,
             currency=h.currency,
+            created_by=h.created_by,
             members=[MemberOut(user_id=m.user_id, display_name=m.user.display_name) for m in h.members],
         )
 
@@ -232,9 +234,17 @@ class ReminderOut(BaseModel):
     calendar_event_id: str | None
     created_by: str
     created_at: dt.datetime | None
+    cancel_reason: Literal["user", "outdated"] | None = Field(
+        default=None,
+        description='why it was cancelled: "user" by its creator, "outdated" replaced after the balances changed',
+    )
+    outdated: bool = Field(
+        default=False,
+        description="scheduled, but no longer matches a suggested transfer; creating reminders again updates it",
+    )
 
     @classmethod
-    def from_model(cls, r: Reminder) -> ReminderOut:
+    def from_model(cls, r: Reminder, *, outdated: bool = False) -> ReminderOut:
         return cls(
             id=r.id,
             house_id=r.house_id,
@@ -248,6 +258,8 @@ class ReminderOut(BaseModel):
             calendar_event_id=r.calendar_event_id,
             created_by=r.created_by,
             created_at=r.created_at,
+            cancel_reason=r.cancel_reason,
+            outdated=outdated,
         )
 
 
@@ -255,6 +267,9 @@ class RemindersCreatedOut(BaseModel):
     reminders: list[ReminderOut]
     calendar_connected: bool = Field(description="true when the caller's Google Calendar was used")
     warnings: list[str] = []
+    cancelled: list[ReminderOut] = Field(
+        default=[], description="scheduled reminders that no longer matched the balances and were cancelled"
+    )
 
     @classmethod
     def from_result(cls, r: CreatedReminders) -> RemindersCreatedOut:
@@ -262,4 +277,5 @@ class RemindersCreatedOut(BaseModel):
             reminders=[ReminderOut.from_model(x) for x in r.reminders],
             calendar_connected=r.calendar_connected,
             warnings=r.warnings,
+            cancelled=[ReminderOut.from_model(x) for x in r.cancelled],
         )

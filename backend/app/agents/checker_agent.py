@@ -92,8 +92,12 @@ correctly. It may only use these relations:
 {relations}
 
 Check, in this order:
-1. Relation: personal spending is my_expenses WHERE house_id IS NULL. The flat, house, rent
-   or shared bills use my_house_shares and my_share_minor (not bill_total_minor).
+1. Relation: "how much did I spend" (total, per category, merchant or month) with no other
+   qualifier means personal purchases (my_expenses WHERE house_id IS NULL) plus house
+   shares (my_house_shares.my_share_minor) combined with UNION ALL. Personal only
+   (my_expenses WHERE house_id IS NULL) only when the question says personal, kişisel or
+   leaves the flat out. The flat, house, rent or shared bills use my_house_shares and
+   my_share_minor (not bill_total_minor). Whole house bills from my_expenses are wrong.
 2. Filters: the time range the question asks for (see the dates below; no month filter
    means all time), category values from the list, merchant names (LIKE is fine).
 3. Aggregation: SUM of the _minor column for totals, COUNT for "how many", GROUP BY what

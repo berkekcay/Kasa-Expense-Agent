@@ -25,6 +25,7 @@ from app.api import (
     integrations,
     internal,
     subscriptions,
+    users,
 )
 from app.config import get_settings
 from app.db.session import init_db
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Total-Count"],  # GET /expenses paging
     )
 
     @app.exception_handler(DomainError)
@@ -69,6 +71,7 @@ def create_app() -> FastAPI:
         }
 
     for module in (
+        users,
         expenses,
         houses,
         agents,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { firebaseEnabled, signInWithGoogle, signOut } from "@/lib/auth";
+import { useMe } from "@/lib/hooks";
 import { switchUser, useAuthUser, useUserId } from "@/lib/user";
 
 const LINKS = [
@@ -76,10 +77,24 @@ export function Nav() {
           className={`${open ? "flex" : "hidden"} w-full flex-col gap-3 pb-2 xl:flex xl:w-auto xl:flex-1 xl:flex-row xl:items-center xl:pb-0`}
         >
           {links}
-          <div className="xl:ml-auto">{firebaseEnabled ? <AccountMenu /> : <DevUserSwitcher />}</div>
+          <div className="flex flex-wrap items-center gap-3 xl:ml-auto">
+            <MyName />
+            {firebaseEnabled ? <AccountMenu /> : <DevUserSwitcher />}
+          </div>
         </div>
       </div>
     </nav>
+  );
+}
+
+/** The Kasa display name (set in Settings), linked to where it can be changed. */
+function MyName() {
+  const me = useMe();
+  if (!me.data) return null;
+  return (
+    <Link href="/settings" className="max-w-40 truncate text-sm font-medium hover:underline" title="Change your name in Settings">
+      {me.data.display_name}
+    </Link>
   );
 }
 
@@ -100,7 +115,7 @@ export function AccountMenu() {
     <div className="flex flex-wrap items-center gap-2 text-sm">
       {user ? (
         <>
-          <span className="text-muted">{user.displayName ?? user.email}</span>
+          <span className="text-muted">{user.email ?? user.displayName}</span>
           <button
             type="button"
             onClick={() => run(signOut)}

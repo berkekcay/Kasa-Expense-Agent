@@ -6,6 +6,7 @@ export type House = {
   id: number;
   name: string;
   currency: string;
+  created_by: string; // only the creator can remove other members
   members: { user_id: string; display_name: string }[];
 };
 
@@ -84,16 +85,29 @@ export type Reminder = {
   calendar_event_id: string | null;
   created_by: string;
   created_at: string | null;
+  cancel_reason: "user" | "outdated" | null; // outdated: replaced after the balances changed
+  outdated: boolean; // scheduled, but no longer matches a suggested transfer
 };
 
-export type RemindersCreated = { reminders: Reminder[]; calendar_connected: boolean; warnings: string[] };
+export type RemindersCreated = {
+  reminders: Reminder[];
+  calendar_connected: boolean;
+  warnings: string[];
+  cancelled: Reminder[]; // outdated reminders this call replaced
+};
 
 export const housesApi = {
   listHouses: () => request<House[]>("/houses"),
   createHouse: (name: string, currency = "TRY") => request<House>("/houses", post({ name, currency })),
   addMember: (houseId: number, userId: string, displayName?: string) =>
     request<House>(`/houses/${houseId}/members`, post({ user_id: userId, display_name: displayName || null })),
+  /** Leave (userId is you) or, as the creator, remove someone. Needs a zero balance. */
+  removeMember: (houseId: number, userId: string) =>
+    request<void>(`/houses/${houseId}/members/${encodeURIComponent(userId)}`, del),
   listHouseExpenses: (houseId: number) => request<Expense[]>(`/houses/${houseId}/expenses`),
+  /** Payer only. Shares and item assignees go with it. */
+  deleteHouseExpense: (houseId: number, expenseId: number) =>
+    request<void>(`/houses/${houseId}/expenses/${expenseId}`, del),
   addHouseExpense: (houseId: number, body: NewHouseExpense) =>
     request<Expense>(`/houses/${houseId}/expenses`, post(body)),
   addSplitExpense: (houseId: number, body: SplitExpense) =>

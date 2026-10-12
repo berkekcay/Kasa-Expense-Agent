@@ -27,7 +27,7 @@ MAX_CHECKER_REVISIONS = 2
 # Per-turn bookkeeping. "temp:" state is dropped when the turn ends; the invocation id
 # guards against it ever leaking into the next turn.
 _STATE_KEY = "temp:report_checker"
-NO_CHART = ("", "none", "table")
+NO_CHART = ("", "none")
 
 
 def _user_message(tool_context: ToolContext) -> str:
@@ -82,10 +82,13 @@ async def run_report(
         my_budgets or my_subscriptions.
       question: The user's question in their words, with the time range, e.g.
         "how much did I spend per category this month (2026-10)".
-      chart_type: "bar", "line" or "pie"; "table" or empty for no chart.
+      chart_type: "bar", "line" or "pie" for a chart; "table" to show the rows as a table
+        (lists, several columns); empty for a single number.
       x: Result column for the x axis / pie labels (e.g. "category" or "expense_month").
-      y: Numeric result column for values (e.g. "total_minor" or "total").
-      title: Short chart title.
+        Not needed for "table".
+      y: Numeric result column for values (e.g. "total_minor" or "total"). Not needed for
+        "table".
+      title: Short chart or table title.
     """
     chart_type = (chart_type or "").strip().lower()
     try:

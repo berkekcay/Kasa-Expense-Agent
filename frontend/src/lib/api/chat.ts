@@ -6,6 +6,7 @@ export type ChartSpec = {
   title: string;
   x: string;
   y: string;
+  columns?: string[]; // table: the result columns in order
   data: Record<string, string | number | boolean | null>[];
 };
 

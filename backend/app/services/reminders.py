@@ -10,6 +10,11 @@ Rules:
 - Only house members can create, list or update reminders.
 - Running it again does not duplicate: a transfer that already has a scheduled reminder
   with the same people and amount keeps that reminder (and its event).
+- Running it again also cleans up: a scheduled reminder whose (from, to, amount) is no
+  longer a suggested transfer is cancelled with cancel_reason "outdated" (its calendar
+  event is deleted the same way a manual cancel does). Problems become warnings; a
+  reminder whose event could not be deleted stays scheduled so nothing is left orphaned.
+  `outdated_reminder_ids` marks such reminders in lists before that happens.
 - Calendar problems never lose a reminder: it is saved with calendar_event_id=None and a
   warning says why.
 - Any member can mark a reminder done or scheduled again. Only its creator can cancel it,
@@ -42,6 +47,10 @@ class CreatedReminders:
     reminders: list[Reminder]
     calendar_connected: bool
     warnings: list[str] = field(default_factory=list)
+    cancelled: list[Reminder] = field(default_factory=list)  # outdated ones this call cancelled
+
+
+TransferKey = tuple[str, str, int]  # (from_user, to_user, amount_minor)
 
 
 def calendar_credentials(db: Session, user_id: str) -> Credentials | None:
@@ -69,20 +78,34 @@ def create_settle_up_reminders(
     """One reminder per current settle-up transfer (`houses.house_balances`). Members only.
 
     Returns the reminders (existing matching ones included, in transfer order), whether a
-    Google account was used, and warnings. Calendar failures do not lose the reminder: it
-    is saved with calendar_event_id=None.
+    Google account was used, warnings, and the outdated reminders this call cancelled.
+    Calendar failures do not lose a reminder: it is saved with calendar_event_id=None.
     """
     if due_date < clock.today():
         raise InvalidInput("due date is in the past")
     result = houses.house_balances(db, user_id, house_id)
     house = result.house
-    if not result.transfers:
-        return CreatedReminders(reminders=[], calendar_connected=False, warnings=["everyone is settled up"])
+    current = {(t.from_user, t.to_user, t.amount_minor) for t in result.transfers}
 
     open_rows = list(
-        db.scalars(select(Reminder).where(Reminder.house_id == house.id, Reminder.status == "scheduled"))
+        db.scalars(
+            select(Reminder)
+            .where(Reminder.house_id == house.id, Reminder.status == "scheduled")
+            .order_by(Reminder.id)
+        )
     )
-    existing = {(r.from_user, r.to_user, r.amount_minor): r for r in open_rows}
+    warnings: list[str] = []
+    cancelled = _cancel_outdated(db, user_id, [r for r in open_rows if _key(r) not in current], warnings)
+    if not result.transfers:
+        db.commit()
+        return CreatedReminders(
+            reminders=[],
+            calendar_connected=False,
+            warnings=["everyone is settled up", *warnings],
+            cancelled=cancelled,
+        )
+
+    existing = {_key(r): r for r in open_rows if r.status == "scheduled"}
     reminders: list[Reminder] = []
     new_rows: list[Reminder] = []
     for t in result.transfers:
@@ -102,7 +125,6 @@ def create_settle_up_reminders(
             new_rows.append(row)
         reminders.append(row)
 
-    warnings: list[str] = []
     creds = calendar_credentials(db, user_id) if add_to_calendar and new_rows else None
     if add_to_calendar and new_rows and creds is None:
         warnings.append(NOT_CONNECTED)
@@ -125,7 +147,68 @@ def create_settle_up_reminders(
                 log.warning("calendar event for reminder failed: %s", exc)
                 warnings.append(f"calendar event for {row.from_user} -> {row.to_user} failed: {exc}")
     db.commit()
-    return CreatedReminders(reminders=reminders, calendar_connected=creds is not None, warnings=warnings)
+    return CreatedReminders(
+        reminders=reminders, calendar_connected=creds is not None, warnings=warnings, cancelled=cancelled
+    )
+
+
+def _key(row: Reminder) -> TransferKey:
+    return (row.from_user, row.to_user, row.amount_minor)
+
+
+def _cancel_outdated(db: Session, user_id: str, rows: list[Reminder], warnings: list[str]) -> list[Reminder]:
+    """Cancel scheduled reminders that no longer match a suggested transfer. Collects
+    warnings instead of raising; a row whose event could not be deleted stays scheduled."""
+    cancelled: list[Reminder] = []
+    for row in rows:
+        try:
+            note = _cancel(db, row, user_id, reason="outdated")
+        except UpstreamError as exc:
+            log.warning("could not delete the calendar event of outdated reminder %s: %s", row.id, exc)
+            warnings.append(
+                f"old reminder {row.from_user} -> {row.to_user} {format_minor(row.amount_minor)} "
+                f"{row.currency} stays scheduled: its calendar event could not be deleted ({exc})"
+            )
+            continue
+        if note:
+            warnings.append(note)
+        cancelled.append(row)
+    return cancelled
+
+
+def _cancel(db: Session, row: Reminder, user_id: str, *, reason: str) -> str | None:
+    """Cancel one reminder and delete its calendar event (the shared cancel path).
+
+    The event lives on the creator's calendar, so only the creator's Google account can
+    delete it. If Google is no longer connected the event cannot be reached and the reminder
+    is cancelled anyway. If the Calendar API fails, UpstreamError is raised and nothing
+    changes. Returns a note when someone else's event had to stay.
+    """
+    note = None
+    if row.calendar_event_id:
+        if row.created_by == user_id:
+            creds = calendar_credentials(db, user_id)
+            if creds is not None:
+                google_calendar.delete_event(creds, row.calendar_event_id)
+            row.calendar_event_id = None
+        else:
+            note = (
+                f"old reminder {row.from_user} -> {row.to_user} was cancelled; its event stays on "
+                f"the Google Calendar of {row.created_by} until they delete it"
+            )
+    row.status = "cancelled"
+    row.cancel_reason = reason
+    return note
+
+
+def outdated_reminder_ids(db: Session, user_id: str, house_id: int, rows: list[Reminder]) -> set[int]:
+    """Ids of scheduled reminders whose (from, to, amount) is not a current suggested
+    transfer, so a list can show them as out of date. Members only."""
+    if not any(r.status == "scheduled" for r in rows):
+        return set()
+    transfers = houses.house_balances(db, user_id, house_id).transfers
+    current = {(t.from_user, t.to_user, t.amount_minor) for t in transfers}
+    return {r.id for r in rows if r.status == "scheduled" and _key(r) not in current}
 
 
 def list_reminders(db: Session, user_id: str, house_id: int, status: str | None = None) -> list[Reminder]:
@@ -163,12 +246,9 @@ def set_reminder_status(
     if status == "cancelled":
         if row.created_by != user_id:
             raise Forbidden("only the person who created a reminder can cancel it")
-        if row.calendar_event_id:
-            creds = calendar_credentials(db, user_id)
-            if creds is not None:
-                google_calendar.delete_event(creds, row.calendar_event_id)
-            row.calendar_event_id = None
-    row.status = status
+        _cancel(db, row, user_id, reason="user")
+    else:
+        row.status = status
     db.commit()
     return row
 

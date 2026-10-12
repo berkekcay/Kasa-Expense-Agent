@@ -47,7 +47,7 @@ function ChartTooltip({ active, payload, name }: { active?: boolean; payload?: {
 }
 
 export function DataTable({ spec }: { spec: ChartSpec }) {
-  const columns = Array.from(new Set(spec.data.flatMap((r) => Object.keys(r))));
+  const columns = spec.columns?.length ? spec.columns : Array.from(new Set(spec.data.flatMap((r) => Object.keys(r))));
   return (
     <div className="max-h-80 overflow-auto rounded-lg border border-border">
       <table className="w-full text-left text-sm">

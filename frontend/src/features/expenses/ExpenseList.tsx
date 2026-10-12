@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Expense } from "@/lib/api";
 import { capitalize, formatDate, formatMoney } from "@/lib/format";
 import { Badge, Money } from "@/components/ui";
@@ -31,17 +32,22 @@ export function ConversionNote({ e }: { e: Expense }) {
 /**
  * Expense rows that stack on phones and stay one line on wider screens.
  * `memberName` turns user ids into display names for house expenses.
+ * `actions` adds buttons under a row; `extra` shows something below it (an edit form).
  */
 export function ExpenseList({
   expenses,
   empty,
   memberName,
   showSource = true,
+  actions,
+  extra,
 }: {
   expenses: Expense[];
   empty: string;
   memberName?: (userId: string) => string;
   showSource?: boolean;
+  actions?: (e: Expense) => ReactNode;
+  extra?: (e: Expense) => ReactNode;
 }) {
   if (expenses.length === 0) return <p className="text-sm text-muted">{empty}</p>;
   const name = memberName ?? ((id: string) => id);
@@ -70,6 +76,8 @@ export function ExpenseList({
                 <ConversionNote e={e} />
               </div>
             </div>
+            {actions && <div className="mt-1.5 flex flex-wrap items-center gap-2">{actions(e)}</div>}
+            {extra?.(e)}
             {hasDetail && (
               <details className="mt-1.5">
                 <summary className="cursor-pointer text-xs text-muted hover:text-foreground">

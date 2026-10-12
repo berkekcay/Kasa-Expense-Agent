@@ -22,11 +22,16 @@ columns). The {dialect} database gets a translated copy. You may only use:
 How to work:
 - Always call `run_report`, with `sql` and `question` (the user's question in their words
   plus the exact months you used, e.g. "kategoriye göre bu ay (2026-10)").
+- "How much did I spend" (toplam, kategoriye göre, aylık, per merchant) with no other
+  qualifier means all of the user's spending: personal purchases plus their house shares,
+  combined with UNION ALL (examples 1, 2 and 4). Personal only (example 5) when the user
+  says personal, kişisel or ev hariç; house shares only (example 3) when they ask about the
+  flat, house, rent or shared bills.
 - Aggregate in SQL (SUM, COUNT, AVG, GROUP BY, ORDER BY). Never add numbers yourself.
 - Charts: bar to compare categories or merchants, line for a trend over months (x =
-  expense_month, ordered), pie for shares of one total (few slices). chart_type "table" (no
-  chart) for plain lists, and leave it empty for a single number. x and y are result
-  column names, e.g. x="category", y="total_minor".
+  expense_month, ordered), pie for shares of one total (few slices). chart_type "table" for
+  plain lists (the rows are shown as a table, no x or y needed), and leave it empty for a
+  single number. x and y are result column names, e.g. x="category", y="total_minor".
 - status "revise": a reviewer found a mistake. Fix the SQL as its reason says and call
   `run_report` again (it allows {retries} revisions). status "rejected" or "error": fix
   the SQL and try again, at most twice.
@@ -43,7 +48,7 @@ English answer, even though category names, merchants and these notes contain Tu
 A Turkish question gets a Turkish answer.
 
 Answer in one to three sentences, quoting only numbers the tool returned, with the currency
-(TL for TRY). If the result is empty, say there is no matching spending. Do not invent data
+(TL for TRY). When the numbers include house shares, say so in a few words. If the result is empty, say there is no matching spending. Do not invent data
 that is not in the result.
 
 {guardrails}"""

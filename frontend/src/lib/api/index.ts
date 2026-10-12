@@ -12,6 +12,7 @@ import { housesApi } from "./houses";
 import { importsApi } from "./imports";
 import { inboxApi } from "./inbox";
 import { integrationsApi } from "./integrations";
+import { meApi } from "./me";
 import { receiptsApi } from "./receipts";
 import { subscriptionsApi } from "./subscriptions";
 
@@ -25,6 +26,7 @@ export * from "./houses";
 export * from "./imports";
 export * from "./inbox";
 export * from "./integrations";
+export * from "./me";
 export * from "./receipts";
 export * from "./subscriptions";
 
@@ -41,4 +43,5 @@ export const api = {
   inbox: inboxApi,
   imports: importsApi,
   integrations: integrationsApi,
+  me: meApi,
 };

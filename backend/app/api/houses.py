@@ -1,7 +1,8 @@
 """Houses (owner: track HOUSE): members, split expenses, balances, payments, reminders.
 
-Validation problems come back as 422 (bad input), 403 (someone is not a member), 404
-(house or row not visible to the caller) or 409 (a payment larger than the open debt).
+Validation problems come back as 422 (bad input), 403 (someone is not a member, or not
+allowed to do this), 404 (house or row not visible to the caller) or 409 (a payment larger
+than the open debt, a member who still has a balance, the last member leaving).
 """
 
 from typing import Annotated
@@ -94,6 +95,18 @@ def add_member(house_id: int, body: MemberIn, db: DB, user_id: CurrentUser) -> H
     return HouseOut.from_model(house)
 
 
+@router.delete("/{house_id}/members/{member_id}", status_code=204)
+def remove_member(house_id: int, member_id: str, db: DB, user_id: CurrentUser) -> Response:
+    """Leave the house (`member_id` is you) or, as the house creator, remove someone.
+
+    Only when that person's balance in the house is exactly zero: otherwise 409 names the
+    amount to settle first. The last member cannot leave (409). Past shares and payments stay
+    for history. Removing someone else as a non-creator answers 403.
+    """
+    house_service.remove_member(db, user_id, house_id, member_id)
+    return Response(status_code=204)
+
+
 @router.get("/{house_id}/expenses", response_model=list[ExpenseOut])
 def list_house_expenses(house_id: int, db: DB, user_id: CurrentUser) -> list[ExpenseOut]:
     """House expenses, newest first, with `split_type`, `shares` and per-item `assignees`."""
@@ -168,6 +181,17 @@ def add_split_expense(
     return ExpenseOut.from_model(expense, warnings)
 
 
+@router.delete("/{house_id}/expenses/{expense_id}", status_code=204)
+def delete_house_expense(house_id: int, expense_id: int, db: DB, user_id: CurrentUser) -> Response:
+    """Delete a shared expense with its shares and per-item assignees; balances follow.
+
+    Only the member who paid it can delete it (403 otherwise). 409 when someone who shares it
+    has left the house.
+    """
+    house_service.delete_house_expense(db, user_id, house_id, expense_id)
+    return Response(status_code=204)
+
+
 @router.get("/{house_id}/balances", response_model=BalancesOut)
 def get_balances(house_id: int, db: DB, user_id: CurrentUser) -> BalancesOut:
     """Net balance per member plus the settle-up transfers (recorded payments included)."""
@@ -216,7 +240,9 @@ def create_reminders(
     With a connected Google account each new reminder also becomes an all-day event on the
     caller's calendar, with the two flatmates invited by email. Without one, the reminders
     are saved in Kasa only and a warning says so. Existing scheduled reminders for the same
-    transfer are reused, not duplicated.
+    transfer are reused, not duplicated. Scheduled reminders that no longer match a
+    suggested transfer are cancelled (`cancelled` in the response, `cancel_reason`
+    "outdated"), with their calendar events deleted; problems come back as warnings.
     """
     result = reminder_service.create_settle_up_reminders(
         db, user_id, house_id, due_date=body.due_date, add_to_calendar=body.add_to_calendar
@@ -231,8 +257,15 @@ def list_reminders(
     user_id: CurrentUser,
     status: Annotated[str | None, Query(description="scheduled, done or cancelled")] = None,
 ) -> list[ReminderOut]:
-    """Reminders of the house, earliest due first."""
-    return [ReminderOut.from_model(r) for r in reminder_service.list_reminders(db, user_id, house_id, status)]
+    """Reminders of the house, earliest due first.
+
+    `outdated` is true for a scheduled reminder that no longer matches a suggested transfer
+    (the balances changed); creating reminders again cancels it with `cancel_reason`
+    "outdated" and makes the new one.
+    """
+    rows = reminder_service.list_reminders(db, user_id, house_id, status)
+    outdated = reminder_service.outdated_reminder_ids(db, user_id, house_id, rows)
+    return [ReminderOut.from_model(r, outdated=r.id in outdated) for r in rows]
 
 
 @router.patch("/{house_id}/reminders/{reminder_id}", response_model=ReminderOut)

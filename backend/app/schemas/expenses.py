@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import datetime as dt
 from decimal import Decimal
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.models import Expense
 from app.schemas.common import Amount, money_str
@@ -26,6 +27,33 @@ class ExpenseIn(BaseModel):
     category: str | None = Field(default=None, max_length=50)
     note: str | None = Field(default=None, max_length=500)
     items: list[ItemIn] = []
+
+
+AMOUNT_FIELDS = ("total", "currency", "items", "amount", "total_minor", "shares")
+
+
+class ExpenseUpdateIn(BaseModel):
+    """Fields of an expense that can change. Send only the ones to change; `note` or
+    `category` set to null clears it. Amounts, currency and items cannot change: to fix an
+    amount, delete the expense and add it again."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    merchant: str | None = Field(default=None, min_length=1, max_length=200)
+    category: str | None = Field(default=None, max_length=50, description="null clears it")
+    expense_date: dt.date | None = None
+    note: str | None = Field(default=None, max_length=500, description="null or empty clears it")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_amounts(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            amounts = sorted(k for k in data if k in AMOUNT_FIELDS)
+            if amounts:
+                raise ValueError(
+                    f"{', '.join(amounts)} cannot be changed; delete the expense and add it again"
+                )
+        return data
 
 
 class ItemOut(BaseModel):

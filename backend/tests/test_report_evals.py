@@ -17,26 +17,43 @@ CASES = {c.id: c for c in load_cases()}
 
 # A correct query for every report case: run through the real relations, the result must
 # score as a pass against the expected SQL over the base tables.
+
+
+def _all_spending(columns: str, where: str, tail: str = "") -> str:
+    """The default for "how much did I spend": personal purchases plus my house shares."""
+    personal = columns.replace("amount_minor", "total_minor AS amount_minor")
+    shares = columns.replace("amount_minor", "my_share_minor")
+    return (
+        f"SELECT {columns.replace('amount_minor', 'SUM(amount_minor) AS total_minor')} FROM ("
+        f"SELECT {personal} FROM my_expenses WHERE house_id IS NULL AND {where} UNION ALL "
+        f"SELECT {shares} FROM my_house_shares WHERE {where}) AS t {tail}"
+    ).strip()
+
+
 CORRECT_SQL = {
-    "report-category-chart-tr": (
-        "SELECT category, SUM(total_minor) AS total_minor FROM my_expenses "
-        "WHERE house_id IS NULL AND expense_month = '2026-10' GROUP BY category"
+    "report-category-chart-tr": _all_spending(
+        "category, amount_minor", "expense_month = '2026-10'", "GROUP BY category"
     ),
-    "report-groceries-last-month-en": (
-        "SELECT SUM(total_minor) AS total_minor FROM my_expenses "
-        "WHERE house_id IS NULL AND category = 'groceries' AND expense_month = '2026-09'"
+    "report-category-total-tr": _all_spending(
+        "category, amount_minor", "expense_month = '2026-10'", "GROUP BY category ORDER BY total_minor DESC"
+    ),
+    "report-groceries-last-month-en": _all_spending(
+        "amount_minor", "category = 'groceries' AND expense_month = '2026-09'"
     ),
     "report-flat-share-en": (
         "SELECT SUM(my_share_minor) AS my_share_minor FROM my_house_shares WHERE expense_month = '2026-10'"
     ),
-    "report-monthly-trend-tr": (
-        "SELECT expense_month, SUM(total_minor) AS total_minor FROM my_expenses WHERE house_id IS NULL "
-        "AND expense_month BETWEEN '2026-05' AND '2026-10' GROUP BY expense_month ORDER BY expense_month"
+    "report-monthly-trend-tr": _all_spending(
+        "expense_month, amount_minor",
+        "expense_month BETWEEN '2026-05' AND '2026-10'",
+        "GROUP BY expense_month ORDER BY expense_month",
     ),
     "report-netflix-total-en": "SELECT SUM(total_minor) AS total_minor FROM my_expenses WHERE merchant = 'Netflix'",
-    "report-transport-tr": (
-        "SELECT SUM(total_minor) AS spent FROM my_expenses "
-        "WHERE house_id IS NULL AND category = 'transport' AND expense_month = '2026-10'"
+    "report-transport-tr": _all_spending(
+        "amount_minor", "category = 'transport' AND expense_month = '2026-10'"
+    ),
+    "report-personal-only-en": (
+        "SELECT SUM(total_minor) AS spent FROM my_expenses WHERE house_id IS NULL AND expense_month = '2026-10'"
     ),
 }
 
@@ -62,7 +79,7 @@ def _report(rows, chart=None) -> dict:
 class TestCases:
     def test_case_file_shape(self):
         cases = load_cases()
-        assert 12 <= len(cases) <= 15
+        assert 12 <= len(cases) <= 20
         assert len({c.id for c in cases}) == len(cases)
         kinds = {c.kind for c in cases}
         assert kinds == {"routing", "report", "refusal"}
@@ -89,16 +106,24 @@ class TestSeed:
         assert _facts(CASES["report-groceries-last-month-en"], seeded).expected_value == Decimal("1188.15")
         assert _facts(CASES["report-netflix-total-en"], seeded).expected_value == Decimal("1379.94")
         assert _facts(CASES["report-transport-tr"], seeded).expected_value == Decimal("400.00")
+        # "How much did I spend" counts my house shares too: rent 15000/3, utilities
+        # (900 + 450)/3 and the shared groceries 600/3 come on top of the personal purchases.
         pairs = dict(_facts(CASES["report-category-chart-tr"], seeded).expected_pairs)
         assert pairs == {
             "entertainment": Decimal("360.00"),
             "food": Decimal("335.50"),
-            "groceries": Decimal("1163.15"),
+            "groceries": Decimal("1363.15"),
+            "rent": Decimal("5000.00"),
             "subscriptions": Decimal("229.99"),
             "transport": Decimal("400.00"),
+            "utilities": Decimal("450.00"),
         }
-        trend = _facts(CASES["report-monthly-trend-tr"], seeded).expected_pairs
-        assert [m for m, _ in trend] == ["2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]
+        assert dict(_facts(CASES["report-category-total-tr"], seeded).expected_pairs) == pairs
+        assert _facts(CASES["report-personal-only-en"], seeded).expected_value == Decimal("2488.64")
+        trend = dict(_facts(CASES["report-monthly-trend-tr"], seeded).expected_pairs)
+        assert list(trend) == ["2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]
+        assert trend["2026-10"] == Decimal("2488.64") + Decimal("5650.00")
+        assert trend["2026-09"] == Decimal("3213.04") + Decimal("5400.00")  # rent 5000 + gas 400
 
     def test_seed_is_deterministic(self, db):
         a, b = f"det-a-{uuid.uuid4().hex[:6]}", f"det-b-{uuid.uuid4().hex[:6]}"
@@ -129,6 +154,19 @@ class TestSeed:
         )
         checks, notes = score(case, turn, facts)
         assert all(checks.values()), (checks, notes)
+
+    def test_personal_only_answer_fails_the_default_category_case(self, db, seeded):
+        case = CASES["report-category-total-tr"]
+        personal = run_report_query(
+            db,
+            seeded,
+            "SELECT category, SUM(total_minor) AS total_minor FROM my_expenses "
+            "WHERE house_id IS NULL AND expense_month = '2026-10' GROUP BY category",
+        )
+        turn = ChatTurn(text="ok", agents=["report_agent"], tool_calls=[("run_report", {})],
+                        tool_results=[("run_report", {**personal, "status": "ok"})])  # fmt: skip
+        checks, _notes = score(case, turn, _facts(case, seeded))
+        assert checks["pairs"] is False
 
     def test_whole_bill_fails_the_flat_case(self, db, seeded):
         case = CASES["report-flat-share-en"]

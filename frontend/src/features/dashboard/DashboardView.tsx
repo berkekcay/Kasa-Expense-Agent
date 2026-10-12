@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useState } from "react";
 import { api, type Dashboard } from "@/lib/api";
-import { useApi } from "@/lib/hooks";
+import { useApi, useDataVersion } from "@/lib/hooks";
 import { capitalize, formatDate, formatMonth, monthParam } from "@/lib/format";
 import { BudgetMeter, CategoryBars, TrendChart } from "@/components/charts";
 import { Async, Badge, Card, Empty, Field, Money } from "@/components/ui";
 
 export function DashboardView() {
   const [month, setMonth] = useState(""); // "" = this month (the API's default)
-  const dash = useApi(() => api.dashboard.get(monthParam(month)), [month]);
+  const changed = useDataVersion("expenses"); // reload after an expense is added, edited or deleted
+  const dash = useApi(() => api.dashboard.get(monthParam(month)), [month, changed]);
 
   return (
     <div className="flex flex-col gap-6">

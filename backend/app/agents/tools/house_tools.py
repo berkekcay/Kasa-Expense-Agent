@@ -452,6 +452,7 @@ def create_settle_up_reminders(
                     }
                     for r in result.reminders
                 ],
+                "outdated_reminders_cancelled": len(result.cancelled),
                 "warnings": result.warnings,
             }
     except (DomainError, ValueError) as exc:

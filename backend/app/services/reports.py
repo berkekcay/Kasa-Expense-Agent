@@ -125,23 +125,36 @@ my_subscriptions: recurring charges. id, name, amount_minor, currency,
   period (weekly|monthly|yearly), last_charge_date, next_expected_date, status (active|dismissed)
 
 Which relation:
-- "How much did I spend", per category, merchant or month: my_expenses WHERE house_id IS NULL.
-  House bills the user paid for everyone are also in my_expenses; leave them out.
-- The flat, house, rent or shared bills (ev, kira, ev faturası): SUM(my_share_minor) from
-  my_house_shares, never the whole bill.
-- Everything including the user's house shares: example 4.
+- "How much did I spend" in total, per category, per merchant or per month, with no other
+  qualifier, means ALL of the user's spending: personal purchases (my_expenses WHERE
+  house_id IS NULL) plus the user's share of house bills (my_house_shares.my_share_minor),
+  combined with UNION ALL (examples 1, 2 and 4). House bills the user paid for everyone are
+  also in my_expenses (house_id set); never count those whole.
+- Only personal purchases when the user says so (kişisel, personal, ev hariç, not counting
+  the flat): my_expenses WHERE house_id IS NULL (example 5).
+- Only the flat, house, rent or shared bills (ev, kira, ev faturası): SUM(my_share_minor)
+  from my_house_shares, never the whole bill (example 3).
 
 Examples:
-1. SELECT category, SUM(total_minor) AS total_minor FROM my_expenses
-   WHERE house_id IS NULL AND expense_month = '{this_month}' GROUP BY category ORDER BY total_minor DESC
-2. SELECT expense_month, SUM(total_minor) AS total_minor FROM my_expenses
-   WHERE house_id IS NULL AND expense_month BETWEEN '{first_month}' AND '{this_month}'
+1. SELECT category, SUM(amount_minor) AS total_minor FROM (
+     SELECT category, total_minor AS amount_minor FROM my_expenses WHERE house_id IS NULL AND expense_month = '{this_month}'
+     UNION ALL
+     SELECT category, my_share_minor FROM my_house_shares WHERE expense_month = '{this_month}') AS t
+   GROUP BY category ORDER BY total_minor DESC
+2. SELECT expense_month, SUM(amount_minor) AS total_minor FROM (
+     SELECT expense_month, total_minor AS amount_minor FROM my_expenses
+     WHERE house_id IS NULL AND expense_month BETWEEN '{first_month}' AND '{this_month}'
+     UNION ALL
+     SELECT expense_month, my_share_minor FROM my_house_shares
+     WHERE expense_month BETWEEN '{first_month}' AND '{this_month}') AS t
    GROUP BY expense_month ORDER BY expense_month
 3. SELECT SUM(my_share_minor) AS my_share_minor FROM my_house_shares WHERE expense_month = '{this_month}'
 4. SELECT SUM(amount_minor) AS amount_minor FROM (
      SELECT total_minor AS amount_minor FROM my_expenses WHERE house_id IS NULL AND expense_month = '{this_month}'
      UNION ALL
-     SELECT my_share_minor FROM my_house_shares WHERE expense_month = '{this_month}') AS t"""
+     SELECT my_share_minor FROM my_house_shares WHERE expense_month = '{this_month}') AS t
+5. SELECT SUM(total_minor) AS total_minor FROM my_expenses
+   WHERE house_id IS NULL AND expense_month = '{this_month}'"""
 
 
 RELATIONS_DOC = relations_doc()
@@ -360,10 +373,21 @@ def _jsonable(column: str, value: Any) -> Any:
     return value
 
 
+def build_table(report: dict[str, Any], title: str = "") -> dict[str, Any]:
+    """Table spec for list answers: {type: "table", title, columns, data}. The rows are kept
+    as returned (money stays an exact decimal string; nothing becomes a float)."""
+    columns = list(report["columns"])
+    data = [{c: row.get(c) for c in columns} for row in report["rows"]]
+    return {"type": "table", "title": title, "x": "", "y": "", "columns": columns, "data": data}
+
+
 def build_chart(report: dict[str, Any], chart_type: str, x: str, y: str, title: str = "") -> dict[str, Any]:
-    """Chart spec the frontend renders with recharts: {type, title, x, y, data}."""
+    """Chart spec the frontend renders with recharts: {type, title, x, y, data}.
+    chart_type "table" gives `build_table` instead (x and y are not needed)."""
+    if chart_type == "table":
+        return build_table(report, title)
     if chart_type not in CHART_TYPES:
-        raise ValueError("chart_type must be bar, line or pie")
+        raise ValueError("chart_type must be bar, line, pie or table")
     x, y = _display_name(x), _display_name(y)
     for col in (x, y):
         if col not in report["columns"]:

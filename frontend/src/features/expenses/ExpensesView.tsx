@@ -1,36 +1,129 @@
 "use client";
 
-import { type FormEvent, useMemo, useState } from "react";
-import { api, type Expense } from "@/lib/api";
+import Link from "next/link";
+import { type FormEvent, useState } from "react";
+import { api, type Expense, type ExpenseChanges, type ExpenseFilters } from "@/lib/api";
 import { CATEGORIES } from "@/lib/categories";
 import { capitalize, normalizeAmount } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
+import { dataChanged, useApi } from "@/lib/hooks";
 import { useUserId } from "@/lib/user";
+import { useToast } from "@/components/Toast";
 import { Alert, Async, Button, Card, ErrorText, Field, SelectField, errorMessage } from "@/components/ui";
 import { ExpenseList } from "./ExpenseList";
 
 export const CURRENCIES = ["TRY", "USD", "EUR", "GBP"] as const;
 const SOURCES = ["manual", "receipt", "statement", "email"] as const;
-const LIMIT = 500;
+const SCOPES = [
+  { value: "all", label: "Personal and house" },
+  { value: "personal", label: "Personal only" },
+  { value: "house", label: "House bills I paid" },
+] as const;
+const PAGE = 50;
+
+type Scope = NonNullable<ExpenseFilters["scope"]>;
 
 export function ExpensesView() {
   const userId = useUserId();
-  const list = useApi(() => api.listExpenses(LIMIT), []);
+  const notify = useToast();
   const [month, setMonth] = useState("");
   const [category, setCategory] = useState("");
-  const [source, setSource] = useState("");
+  const [source, setSource] = useState<ExpenseFilters["source"]>("");
+  const [scope, setScope] = useState<Scope>("all");
+  const filters: ExpenseFilters = { month, category, source, scope };
+  const first = useApi(() => api.listExpensePage({ ...filters, limit: PAGE }), [month, category, source, scope]);
 
-  const filtered = useMemo(
-    () =>
-      (list.data ?? []).filter(
-        (e) =>
-          (!month || e.expense_date.startsWith(month)) &&
-          (!category || (category === "none" ? e.category === null : e.category === category)) &&
-          (!source || e.source === source),
-      ),
-    [list.data, month, category, source],
-  );
-  const filtering = Boolean(month || category || source);
+  // Pages after the first, kept for the current filters only.
+  const filterKey = JSON.stringify([userId, month, category, source, scope]);
+  const [more, setMore] = useState<{ key: string; items: Expense[] }>({ key: "", items: [] });
+  const extra = more.key === filterKey ? more.items : [];
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+
+  const filtering = Boolean(month || category || source || scope !== "all");
+
+  async function loadMore() {
+    if (!first.data) return;
+    setLoadingMore(true);
+    try {
+      const page = await api.listExpensePage({ ...filters, limit: PAGE, offset: first.data.items.length + extra.length });
+      setMore({ key: filterKey, items: [...extra, ...page.items] });
+      first.setData((p) => p && { ...p, total: page.total });
+    } catch (err) {
+      notify(errorMessage(err), "error");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  function replaceRow(updated: Expense) {
+    const swap = (rows: Expense[]) => rows.map((e) => (e.id === updated.id ? updated : e));
+    first.setData((p) => p && { ...p, items: swap(p.items) });
+    setMore((m) => ({ ...m, items: swap(m.items) }));
+  }
+
+  async function remove(e: Expense) {
+    setBusy(e.id);
+    try {
+      await api.deleteExpense(e.id);
+      const drop = (rows: Expense[]) => rows.filter((x) => x.id !== e.id);
+      first.setData((p) => p && { items: drop(p.items), total: Math.max(0, p.total - 1) });
+      setMore((m) => ({ ...m, items: drop(m.items) }));
+      setConfirmDelete(null);
+      notify(`Deleted ${e.merchant}.`, "success");
+      dataChanged("expenses");
+    } catch (err) {
+      notify(errorMessage(err), "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function rowActions(e: Expense) {
+    if (editing === e.id) return null;
+    if (confirmDelete === e.id) {
+      return (
+        <>
+          <span className="text-xs text-muted">Delete {e.merchant} for good?</span>
+          <Button size="sm" variant="danger" onClick={() => remove(e)} disabled={busy === e.id}>
+            {busy === e.id ? "Deleting" : "Delete expense"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(null)}>
+            Keep
+          </Button>
+        </>
+      );
+    }
+    return (
+      <>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setEditing(e.id);
+            setConfirmDelete(null);
+          }}
+          aria-label={`Edit ${e.merchant}`}
+        >
+          Edit
+        </Button>
+        {e.house_id === null ? (
+          <Button size="sm" variant="subtle" onClick={() => setConfirmDelete(e.id)} aria-label={`Delete ${e.merchant}`}>
+            Delete
+          </Button>
+        ) : (
+          <span className="text-xs text-muted">
+            Shared bill: delete it on the{" "}
+            <Link href="/houses" className="text-accent underline">
+              House page
+            </Link>
+            .
+          </span>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1fr_340px]">
@@ -46,11 +139,23 @@ export function ExpensesView() {
             ))}
             <option value="none">No category</option>
           </SelectField>
-          <SelectField label="Source" value={source} onChange={(e) => setSource(e.target.value)} className="w-36">
+          <SelectField
+            label="Source"
+            value={source}
+            onChange={(e) => setSource(e.target.value as ExpenseFilters["source"])}
+            className="w-36"
+          >
             <option value="">All sources</option>
             {SOURCES.map((s) => (
               <option key={s} value={s}>
                 {capitalize(s)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Show" value={scope} onChange={(e) => setScope(e.target.value as Scope)} className="w-48">
+            {SCOPES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
               </option>
             ))}
           </SelectField>
@@ -61,6 +166,7 @@ export function ExpensesView() {
                 setMonth("");
                 setCategory("");
                 setSource("");
+                setScope("all");
               }}
             >
               Clear filters
@@ -69,26 +175,130 @@ export function ExpensesView() {
         </div>
 
         <Card title="Expenses">
-          <Async {...list} label="Loading expenses">
-            {(all) => (
-              <>
-                <p className="mb-3 text-sm text-muted" aria-live="polite">
-                  {filtering ? `${filtered.length} of ${all.length} expenses match.` : `${all.length} expenses.`}
-                  {all.length >= LIMIT && ` Showing the newest ${LIMIT}.`}
-                </p>
-                <ExpenseList
-                  expenses={filtered}
-                  memberName={(id) => (id === userId ? "you" : id)}
-                  empty={filtering ? "Nothing matches these filters." : "No expenses yet. Add one or scan a receipt."}
-                />
-              </>
-            )}
+          <Async {...first} label="Loading expenses">
+            {(page) => {
+              const rows = [...page.items, ...extra];
+              return (
+                <>
+                  <p className="mb-3 text-sm text-muted" aria-live="polite">
+                    {page.total === 0
+                      ? ""
+                      : rows.length < page.total
+                        ? `Showing ${rows.length} of ${page.total} expenses.`
+                        : `${page.total} ${page.total === 1 ? "expense" : "expenses"}.`}
+                  </p>
+                  <ExpenseList
+                    expenses={rows}
+                    memberName={(id) => (id === userId ? "you" : id)}
+                    empty={filtering ? "Nothing matches these filters." : "No expenses yet. Add one or scan a receipt."}
+                    actions={rowActions}
+                    extra={(e) =>
+                      editing === e.id && (
+                        <EditExpense
+                          expense={e}
+                          onCancel={() => setEditing(null)}
+                          onSaved={(updated) => {
+                            replaceRow(updated);
+                            setEditing(null);
+                            notify(`Saved ${updated.merchant}.`, "success");
+                            dataChanged("expenses");
+                          }}
+                        />
+                      )
+                    }
+                  />
+                  {rows.length < page.total && (
+                    <Button variant="ghost" className="mt-4" onClick={loadMore} disabled={loadingMore}>
+                      {loadingMore ? "Loading" : "Load more"}
+                    </Button>
+                  )}
+                </>
+              );
+            }}
           </Async>
         </Card>
       </div>
 
-      <AddExpense onSaved={list.reload} />
+      <AddExpense
+        onSaved={() => {
+          setMore({ key: "", items: [] });
+          first.reload();
+          dataChanged("expenses");
+        }}
+      />
     </div>
+  );
+}
+
+function EditExpense({
+  expense,
+  onSaved,
+  onCancel,
+}: {
+  expense: Expense;
+  onSaved: (e: Expense) => void;
+  onCancel: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const d = new FormData(e.currentTarget);
+    const changes: ExpenseChanges = {};
+    const merchant = String(d.get("merchant") ?? "").trim();
+    const date = String(d.get("expense_date") ?? "");
+    const category = String(d.get("category") ?? "") || null;
+    const note = String(d.get("note") ?? "").trim() || null;
+    if (merchant !== expense.merchant) changes.merchant = merchant;
+    if (date && date !== expense.expense_date) changes.expense_date = date;
+    if (category !== expense.category) changes.category = category;
+    if (note !== (expense.note ?? null)) changes.note = note;
+    if (Object.keys(changes).length === 0) {
+      onCancel();
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await api.updateExpense(expense.id, changes));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      aria-label={`Edit ${expense.merchant}`}
+      className="mt-2 flex flex-col gap-3 rounded-lg border border-border p-3"
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Merchant" name="merchant" required maxLength={200} defaultValue={expense.merchant} />
+        <Field label="Date" name="expense_date" type="date" required defaultValue={expense.expense_date} />
+        <SelectField label="Category" name="category" defaultValue={expense.category ?? ""}>
+          <option value="">No category</option>
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {capitalize(c)}
+            </option>
+          ))}
+        </SelectField>
+        <Field label="Note" name="note" maxLength={500} defaultValue={expense.note ?? ""} />
+      </div>
+      <p className="text-xs text-muted">The amount cannot be edited. To fix it, delete the expense and add it again.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" size="sm" disabled={saving}>
+          {saving ? "Saving" : "Save changes"}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      <ErrorText error={error} />
+    </form>
   );
 }
 

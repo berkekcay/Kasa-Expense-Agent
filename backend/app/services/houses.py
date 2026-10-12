@@ -4,7 +4,9 @@ and `splits`.
 Access rule: only members of a house can read or change anything about it.
 
 Expenses: `add_split_expense` handles every split type (equal, percent, exact, items)
-through the MONEY hook. Payments: `record_settlement` (overpayment is refused unless
+through the MONEY hook; `delete_house_expense` (payer only) removes one with its shares.
+Members: `add_member`, `remove_member` (leave, or the creator removes someone; only with a
+zero balance, and never the last member). Payments: `record_settlement` (overpayment is refused unless
 asked for), `list_settlements`, `delete_settlement` (creator only). `house_balances`
 includes every recorded payment.
 """
@@ -94,6 +96,36 @@ def add_member(
     db.commit()
     db.expire(house)
     return get_house(db, user_id, house_id)
+
+
+def remove_member(db: Session, user_id: str, house_id: int, member_id: str) -> None:
+    """Leave a house (member_id == user_id) or, as the house creator, remove someone.
+
+    Only when that person's balance in the house is exactly zero (Conflict with the amount
+    otherwise), and never the last member (Conflict). Their past shares and payments stay
+    for history; balances keep counting them, so they stay zero.
+    """
+    house = get_house(db, user_id, house_id)
+    members = member_ids(house)
+    if member_id not in members:
+        raise NotFound(f"{member_id} is not a member of this house")
+    if member_id != user_id and house.created_by != user_id:
+        raise Forbidden("only the person who created the house can remove other members")
+    if len(members) == 1:
+        raise Conflict("the last member cannot leave the house")
+    balance = house_balances(db, user_id, house_id).balances.get(member_id, 0)
+    if balance != 0:
+        amount = f"{format_minor(abs(balance))} {house.currency}"
+        if member_id == user_id:
+            state = "are owed" if balance > 0 else "owe"
+            raise Conflict(f"you {state} {amount} in this house; settle up to zero before leaving")
+        name = next(m.user.display_name for m in house.members if m.user_id == member_id)
+        state = "is owed" if balance > 0 else "owes"
+        raise Conflict(f"{name} {state} {amount} in this house; settle up to zero before removing them")
+    row = next(m for m in house.members if m.user_id == member_id)
+    house.members.remove(row)
+    db.delete(row)
+    db.commit()
 
 
 def _prepare_house_expense(
@@ -290,6 +322,35 @@ def list_house_expenses(db: Session, user_id: str, house_id: int) -> list[Expens
     return list(db.scalars(stmt))
 
 
+def delete_house_expense(db: Session, user_id: str, house_id: int, expense_id: int) -> None:
+    """Delete a house expense with its shares, items and item assignees. Balances follow.
+
+    Only the member who paid it (`owner_id`; expenses do not store who entered them) may
+    delete it (Forbidden otherwise). Refused (Conflict) when someone who shares it has left
+    the house, because that would change the balance of a person who is no longer there.
+    """
+    house = get_house(db, user_id, house_id)  # membership check
+    expense = db.scalars(
+        select(Expense)
+        .where(Expense.id == expense_id, Expense.house_id == house_id)
+        .options(
+            selectinload(Expense.items).selectinload(ExpenseItem.assignees),
+            selectinload(Expense.shares),
+        )
+    ).first()
+    if expense is None:
+        raise NotFound(f"expense {expense_id} not found in this house")
+    if expense.owner_id != user_id:
+        raise Forbidden("only the member who paid an expense can delete it")
+    members = set(member_ids(house))
+    involved = {s.user_id for s in expense.shares} | {a.user_id for i in expense.items for a in i.assignees}
+    gone = sorted(involved - members)
+    if gone:
+        raise Conflict(f"{', '.join(gone)} left the house; deleting this expense would change their balance")
+    db.delete(expense)
+    db.commit()
+
+
 def record_settlement(
     db: Session,
     user_id: str,
@@ -356,13 +417,17 @@ def record_settlement(
 
 
 def delete_settlement(db: Session, user_id: str, house_id: int, settlement_id: int) -> None:
-    """Undo a recorded payment. Only the member who recorded it may delete it."""
-    get_house(db, user_id, house_id)  # membership check
+    """Undo a recorded payment. Only the member who recorded it may delete it, and not when
+    one of the two people has left the house."""
+    house = get_house(db, user_id, house_id)  # membership check
     row = db.get(Settlement, settlement_id)
     if row is None or row.house_id != house_id:
         raise NotFound(f"payment {settlement_id} not found")
     if row.created_by != user_id:
         raise Forbidden("only the person who recorded a payment can delete it")
+    gone = sorted({row.from_user, row.to_user} - set(member_ids(house)))
+    if gone:
+        raise Conflict(f"{', '.join(gone)} left the house; deleting this payment would change their balance")
     db.delete(row)
     db.commit()
 
@@ -387,4 +452,7 @@ def house_balances(db: Session, user_id: str, house_id: int) -> HouseBalances:
         members=member_ids(house),
         settlements=((p.from_user, p.to_user, p.amount_minor) for p in payments),
     )
+    members = set(member_ids(house))
+    # People who left (always with a zero balance) are not shown.
+    balances = {u: b for u, b in balances.items() if u in members or b != 0}
     return HouseBalances(house=house, balances=balances, transfers=settlement.settle_up(balances))

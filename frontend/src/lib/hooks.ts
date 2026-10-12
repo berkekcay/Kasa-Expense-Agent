@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { useUserId } from "@/lib/user";
 
@@ -81,4 +82,39 @@ export function useElapsed(running: boolean): number {
     };
   }, [running]);
   return running && startedAt !== null ? elapsed : 0;
+}
+
+// --- Data changed signal ---------------------------------------------------------------------
+// Pages stay mounted (hidden) across navigations, so a view that shows data another page
+// changes puts `useDataVersion(topic)` in its useApi deps and reloads when it moves.
+
+export type DataTopic = "expenses" | "profile";
+const versions = new Map<DataTopic, number>();
+const versionListeners = new Set<() => void>();
+
+function subscribeVersions(listener: () => void) {
+  versionListeners.add(listener);
+  return () => {
+    versionListeners.delete(listener);
+  };
+}
+
+/** Call after saving, editing or deleting so other views reload. */
+export function dataChanged(topic: DataTopic): void {
+  versions.set(topic, (versions.get(topic) ?? 0) + 1);
+  for (const listener of versionListeners) listener();
+}
+
+export function useDataVersion(topic: DataTopic): number {
+  return useSyncExternalStore(
+    subscribeVersions,
+    () => versions.get(topic) ?? 0,
+    () => 0,
+  );
+}
+
+/** The signed-in user's Kasa profile (display name); reloads after `dataChanged("profile")`. */
+export function useMe() {
+  const version = useDataVersion("profile");
+  return useApi(() => api.me.get(), [version]);
 }

@@ -45,7 +45,7 @@ frontend/src/
 
 | Track | Backend files | Frontend files |
 | --- | --- | --- |
-| Shared (done) | `main.py`, `config.py`, `auth.py`, `db/*`, `alembic/*`, `agents/common.py`, `agents/runtime.py`, `agents/coordinator.py`, `api/internal.py`, `api/expenses.py`, `api/agents.py`, `services/expenses.py`, `services/categories.py`, `services/crypto.py`, `services/clock.py`, `schemas/__init__.py`, `schemas/common.py`, `schemas/expenses.py`, `schemas/agents.py` | `lib/api/client.ts`, `lib/api/index.ts`, `lib/auth.ts`, `components/Nav.tsx` |
+| Shared (done) | `main.py`, `config.py`, `auth.py`, `db/*`, `alembic/*`, `agents/common.py`, `agents/runtime.py`, `agents/coordinator.py`, `api/internal.py`, `api/expenses.py`, `api/users.py`, `api/agents.py`, `services/expenses.py`, `services/users.py`, `services/categories.py`, `services/crypto.py`, `services/clock.py`, `schemas/__init__.py`, `schemas/common.py`, `schemas/expenses.py`, `schemas/users.py`, `schemas/agents.py` | `lib/api/client.ts`, `lib/api/index.ts`, `lib/api/expenses.ts`, `lib/api/me.ts`, `lib/auth.ts`, `lib/hooks.ts`, `components/Nav.tsx`, `features/expenses` |
 | HOUSE | `services/splits.py`, `services/houses.py`, `services/reminders.py`, `integrations/google_calendar.py`, `api/houses.py`, `schemas/houses.py`, `agents/house_agent.py`, `agents/tools/house_tools.py` | `features/houses`, `lib/api/houses.ts` |
 | MONEY | `services/fx.py`, `integrations/tcmb.py`, `services/budgets.py`, `services/subscriptions.py`, `services/dashboard.py`, `api/budgets.py`, `api/subscriptions.py`, `api/dashboard.py`, `api/fx.py`, `schemas/budgets.py`, `schemas/subscriptions.py`, `schemas/dashboard.py`, `schemas/fx.py`, `agents/budget_agent.py`, `agents/tools/budget_tools.py` | `features/dashboard`, `features/budgets`, `features/subscriptions`, `lib/api/{budgets,subscriptions,dashboard,fx}.ts` |
 | INGEST | `integrations/google_oauth.py`, `integrations/gmail.py`, `services/inbox.py`, `services/gmail_sync.py`, `services/statements.py`, `api/integrations.py`, `api/inbox.py`, `api/imports.py`, `schemas/inbox.py`, `schemas/imports.py`, `schemas/integrations.py`, `agents/email_agent.py`, `agents/statement_agent.py`, `agents/tools/inbox_tools.py` | `features/inbox`, `features/imports`, `features/settings`, `lib/api/{inbox,imports,integrations}.ts` |
@@ -85,7 +85,7 @@ All money columns are BIGINT minor units. User ids are strings (Firebase uids). 
 | `inbox_items` | an expense candidate from Gmail or a statement, waiting for approve/reject; `parsed_json` is `services.inbox.ParsedExpense` |
 | `google_accounts` | the user's Google connection; refresh token Fernet-encrypted |
 | `subscriptions` | recurring charges found in expenses |
-| `reminders` | settle-up reminders, optionally a Google Calendar event |
+| `reminders` | settle-up reminders, optionally a Google Calendar event. `cancel_reason` is `user` (cancelled by its creator) or `outdated` (the balances changed and creating reminders again replaced it) |
 
 Row-level security on SQL Server (created by the migrations): expenses are visible to the
 payer and house members; items, shares and item assignees follow their expense; houses,
@@ -101,8 +101,9 @@ inbox items only to their owner; `google_accounts` to its owner or a background 
    Server (drop and recreate `security.kasa_policy`, as `0002_sprints_2_4.py` does).
 4. `pytest tests/test_migrations.py` checks that migrations and models match.
 
-Revisions so far: `0001_sprint1_baseline` (Sprint 1 tables + RLS) and `0002_sprints_2_4`
-(everything above). Print the SQL Server DDL without a server:
+Revisions so far: `0001_sprint1_baseline` (Sprint 1 tables + RLS), `0002_sprints_2_4`
+(everything above) and `0003_reminder_cancel_reason` (one nullable column; the RLS policy
+is unchanged). Print the SQL Server DDL without a server:
 
 ```bash
 alembic -x url="mssql+pyodbc://u:p@host/kasa?driver=ODBC+Driver+18+for+SQL+Server" upgrade head --sql
@@ -129,12 +130,26 @@ call `finalize_expense(..., check_budgets=False)` so only FX runs, split the con
 into shares, and then call `budgets.warnings_for_new_expense`, so the payer's budget alert
 counts their own share and not the whole bill.
 
+**Editing and deleting.** `PATCH /expenses/{id}` changes merchant, category, date or note of
+your own expense; amounts never change (delete and add again). `DELETE /expenses/{id}` is for
+personal expenses; a house expense answers 409 and is deleted with
+`DELETE /houses/{id}/expenses/{expense_id}` by the member who paid it, so balances stay
+right. `GET /expenses` takes `month`, `category`, `source`, `scope`, `limit` and `offset` and
+puts the match count in `X-Total-Count` (exposed through CORS). A member leaves, or the
+house creator removes someone, with `DELETE /houses/{id}/members/{user_id}`, only at a zero
+balance; past shares stay. Creating reminders again cancels scheduled ones that no longer
+match a suggested transfer (`cancel_reason` "outdated").
+
 **Report questions.** The report agent writes one SELECT over the user-scoped relations and
 calls `run_report(sql, question, ...)`. The tool runs the static guard first (sqlglot: one
 SELECT, allowed relations only, no system objects, LIMIT clamped), then the checker agent,
 which compares the SQL with the question and calls `submit_verdict(approve|revise, ...)`.
 On `revise` the reason goes back to the report agent, at most twice per turn. If the checker
 model fails or times out, the query runs on the static guard alone and the result says so.
+"How much did I spend" with no other qualifier means personal expenses plus the user's house
+shares (UNION ALL), the same definition the dashboard and budgets use. Personal only or house
+only when the user says so. `chart_type` "table" returns the rows as a table spec
+(`columns` and `data`).
 
 **Chat.** `POST /chat` calls `runtime.run_agent("chat", user_id, parts, session_id)`. The
 coordinator calls `transfer_to_agent` (receipt, house, report, budget or inbox agent). The

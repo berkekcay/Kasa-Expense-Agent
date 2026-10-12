@@ -15,6 +15,22 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await send(path, init);
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+/** A list plus the X-Total-Count header (the number of matching rows on the server). */
+export type Page<T> = { items: T[]; total: number };
+
+export async function requestPage<T>(path: string, init: RequestInit = {}): Promise<Page<T>> {
+  const res = await send(path, init);
+  const items = (await res.json()) as T[];
+  const header = Number(res.headers.get("X-Total-Count"));
+  return { items, total: Number.isFinite(header) && res.headers.has("X-Total-Count") ? header : items.length };
+}
+
+async function send(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   const auth = await authHeader();
   if (auth) headers.set(auth[0], auth[1]);
@@ -38,8 +54,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
     }
     throw new ApiError(res.status, message);
   }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  return res;
 }
 
 export const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });

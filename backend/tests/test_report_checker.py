@@ -12,6 +12,7 @@ from app.agents import checker_agent, common, runtime
 from app.agents.checker_agent import Verdict, parse_verdict_text, review_sql
 from app.agents.tools import report_tools
 from app.config import get_settings
+from app.schemas.agents import ChartSpec
 from evals.seed import seed_demo_data
 
 GOOD_SQL = (
@@ -203,10 +204,17 @@ class TestRunReportLoop:
         again = self.run(ctx, GOOD_SQL, question="by category", chart_type="pie", x="category", y="total")
         assert again["chart"]["type"] == "pie" and len(asked) == 1
 
-    def test_table_means_no_chart_and_bad_columns_keep_the_rows(self, scripted_review, seeded_user):
+    def test_table_carries_the_rows_and_bad_columns_keep_the_rows(self, scripted_review, seeded_user):
         ctx = StubContext(seeded_user)
-        table = self.run(ctx, GOOD_SQL, question="q", chart_type="table")
-        assert table["status"] == "ok" and table["chart"] is None
+        table = self.run(ctx, GOOD_SQL, question="q", chart_type="table", title="By category")
+        assert table["status"] == "ok" and "chart_error" not in table
+        chart = table["chart"]
+        assert chart["type"] == "table" and chart["title"] == "By category"
+        assert chart["columns"] == table["columns"] and chart["data"] == table["rows"]
+        assert ChartSpec(**chart).type == "table"  # what POST /chat returns
+        assert {r["category"]: r["total"] for r in chart["data"]}["groceries"] == "1163.15"  # exact strings
+        none = self.run(ctx, GOOD_SQL, question="q", chart_type="")
+        assert none["chart"] is None
         bad = self.run(ctx, GOOD_SQL, question="q", chart_type="bar", x="category", y="nope")
         assert bad["status"] == "ok" and bad["chart"] is None and "nope" in bad["chart_error"]
         assert len(bad["rows"]) == 5

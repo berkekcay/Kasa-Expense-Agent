@@ -126,6 +126,8 @@ export function RemindersPanel({
                 ? "No reminders were needed."
                 : `${created.reminders.length} ${created.reminders.length === 1 ? "reminder is" : "reminders are"} set.`}
               {created.calendar_connected && " They are on your Google Calendar."}
+              {created.cancelled.length > 0 &&
+                ` ${created.cancelled.length} old ${created.cancelled.length === 1 ? "reminder was" : "reminders were"} updated because the balances changed.`}
             </Alert>
           )}
           {created?.warnings.map((w) => (
@@ -152,10 +154,19 @@ export function RemindersPanel({
                       <strong className="font-medium">{r.to_user === me ? "you" : name(r.to_user)}</strong>{" "}
                       <Money amount={r.amount} currency={r.currency} className="font-semibold" />
                     </span>
-                    <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
-                    {r.calendar_event_id && <Badge>In calendar</Badge>}
+                    {r.cancel_reason === "outdated" ? (
+                      <Badge>Updated</Badge>
+                    ) : (
+                      <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                    )}
+                    {r.outdated && <Badge tone="warning">Out of date</Badge>}
+                    {r.calendar_event_id && r.status !== "cancelled" && <Badge>In calendar</Badge>}
                   </p>
-                  <p className="text-muted">Due {formatDate(r.due_date)}</p>
+                  <p className="text-muted">
+                    Due {formatDate(r.due_date)}
+                    {r.cancel_reason === "outdated" && ". Replaced after the balances changed."}
+                    {r.outdated && ". The balances changed; create reminders again to update it."}
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {r.status === "scheduled" && (

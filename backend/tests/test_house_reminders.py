@@ -285,3 +285,102 @@ class TestReminderApi:
             client.post(f"/houses/{house_id}/reminders", json={"due_date": past}, headers=h).status_code
             == 422
         )
+
+
+def keys(rows) -> list[tuple[str, str, int]]:
+    return sorted((r.from_user, r.to_user, r.amount_minor) for r in rows)
+
+
+class TestOutdatedReminders:
+    """Creating reminders again cancels the scheduled ones the balances no longer support."""
+
+    def test_changed_amount_replaces_the_reminder_and_deletes_its_event(self, db, calendar, connected):
+        house_id, me, ali, ayse = make_debts(db, "ro")
+        first = reminders.create_settle_up_reminders(db, me, house_id, due_date=DUE)
+        old_ali = next(r for r in first.reminders if r.from_user == ali)
+        old_event = old_ali.calendar_event_id
+        houses.record_settlement(db, me, house_id, from_user=ali, to_user=me, amount="40")
+
+        assert reminders.outdated_reminder_ids(
+            db, me, house_id, reminders.list_reminders(db, me, house_id)
+        ) == {old_ali.id}
+        again = reminders.create_settle_up_reminders(db, me, house_id, due_date=DUE)
+        assert keys(again.reminders) == [(ali, me, 6000), (ayse, me, 10000)]
+        assert [r.id for r in again.cancelled] == [old_ali.id] and again.warnings == []
+        db.refresh(old_ali)
+        assert old_ali.status == "cancelled" and old_ali.cancel_reason == "outdated"
+        assert old_ali.calendar_event_id is None
+        deletes = [c for c in calendar.calls if c.method == "DELETE"]
+        assert len(deletes) == 1 and deletes[0].url.path.endswith(f"/events/{old_event}")
+        # Ayşe's reminder still matches and is kept; one new event for Ali's new amount.
+        assert len([c for c in calendar.calls if c.method == "POST"]) == 3
+        rows = reminders.list_reminders(db, me, house_id)
+        assert reminders.outdated_reminder_ids(db, me, house_id, rows) == set()
+        assert keys(r for r in rows if r.status == "scheduled") == [(ali, me, 6000), (ayse, me, 10000)]
+
+    def test_calendar_error_keeps_the_old_reminder_with_a_warning(self, db, monkeypatch, connected):
+        fake = FakeCalendar(delete_status=500)
+        monkeypatch.setattr(google_calendar, "_new_client", fake.client)
+        house_id, me, ali, _ayse = make_debts(db, "rw")
+        first = reminders.create_settle_up_reminders(db, me, house_id, due_date=DUE)
+        old_ali = next(r for r in first.reminders if r.from_user == ali)
+        houses.record_settlement(db, me, house_id, from_user=ali, to_user=me, amount="40")
+
+        again = reminders.create_settle_up_reminders(db, me, house_id, due_date=DUE)
+        assert again.cancelled == []
+        assert len(again.warnings) == 1 and "stays scheduled" in again.warnings[0]
+        db.refresh(old_ali)
+        assert old_ali.status == "scheduled" and old_ali.calendar_event_id is not None
+        assert (ali, me, 6000) in keys(again.reminders)  # the new amount is still reminded
+
+    def test_someone_elses_event_stays_and_is_named(self, db, calendar, connected):
+        house_id, me, ali, ayse = make_debts(db, "rx2")
+        first = reminders.create_settle_up_reminders(db, me, house_id, due_date=DUE)
+        old_ayse = next(r for r in first.reminders if r.from_user == ayse)
+        houses.record_settlement(db, ali, house_id, from_user=ayse, to_user=me, amount="100")
+
+        again = reminders.create_settle_up_reminders(db, ali, house_id, due_date=DUE)
+        assert [r.id for r in again.cancelled] == [old_ayse.id]
+        assert any(me in w and "Google Calendar" in w for w in again.warnings)
+        assert not [c for c in calendar.calls if c.method == "DELETE"]
+        db.refresh(old_ayse)
+        assert old_ayse.status == "cancelled" and old_ayse.cancel_reason == "outdated"
+
+    def test_settled_house_cancels_everything_scheduled(self, db, calendar, monkeypatch):
+        monkeypatch.setattr(google_oauth, "credentials_for_user", lambda _db, _uid: None)
+        house_id, me, ali, ayse = make_debts(db, "rz")
+        reminders.create_settle_up_reminders(db, me, house_id, due_date=DUE)
+        houses.record_settlement(db, me, house_id, from_user=ali, to_user=me, amount="100")
+        houses.record_settlement(db, me, house_id, from_user=ayse, to_user=me, amount="100")
+        result = reminders.create_settle_up_reminders(db, me, house_id, due_date=DUE)
+        assert result.reminders == [] and len(result.cancelled) == 2
+        assert result.warnings == ["everyone is settled up"]
+        assert reminders.list_reminders(db, me, house_id, status="scheduled") == []
+
+    def test_manual_cancel_says_user(self, db, calendar, connected):
+        house_id, me, *_ = make_debts(db, "rm2")
+        row = reminders.create_settle_up_reminders(db, me, house_id, due_date=DUE).reminders[0]
+        assert reminders.set_reminder_status(db, me, row.id, "cancelled").cancel_reason == "user"
+
+    def test_api_shows_outdated_then_updated(self, client, calendar, monkeypatch):
+        monkeypatch.setattr(google_oauth, "credentials_for_user", lambda _db, _uid: None)
+        h = {"X-User-Id": "rapi-me"}
+        house_id = client.post("/houses", json={"name": "Api flat"}, headers=h).json()["id"]
+        client.post(f"/houses/{house_id}/members", json={"user_id": "rapi-ali"}, headers=h)
+        client.post(f"/houses/{house_id}/expenses", json={"merchant": "Kira", "total": "50"}, headers=h)
+        url = f"/houses/{house_id}/reminders"
+        [old] = client.post(url, json={"due_date": DUE.isoformat()}, headers=h).json()["reminders"]
+        assert old["outdated"] is False and old["cancel_reason"] is None
+
+        client.post(f"/houses/{house_id}/expenses", json={"merchant": "Su", "total": "10"}, headers=h)
+        [listed] = client.get(url, headers=h).json()
+        assert listed["id"] == old["id"] and listed["outdated"] is True
+
+        body = client.post(url, json={"due_date": DUE.isoformat()}, headers=h).json()
+        assert [c["id"] for c in body["cancelled"]] == [old["id"]]
+        assert body["cancelled"][0]["cancel_reason"] == "outdated"
+        assert [r["amount"] for r in body["reminders"]] == ["30.00"]
+        by_id = {r["id"]: r for r in client.get(url, headers=h).json()}
+        assert by_id[old["id"]]["status"] == "cancelled" and by_id[old["id"]]["cancel_reason"] == "outdated"
+        assert by_id[old["id"]]["outdated"] is False
+        assert all(not r["outdated"] for r in by_id.values())

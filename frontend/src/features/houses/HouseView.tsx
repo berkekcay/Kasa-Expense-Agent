@@ -1,8 +1,8 @@
 "use client";
 
 import { type FormEvent, type KeyboardEvent, useState } from "react";
-import { api, type House } from "@/lib/api";
-import { useApi } from "@/lib/hooks";
+import { api, type Expense, type House } from "@/lib/api";
+import { dataChanged, useApi } from "@/lib/hooks";
 import { useUserId } from "@/lib/user";
 import { useToast } from "@/components/Toast";
 import { Async, Button, Card, Empty, ErrorText, Field, SelectField, errorMessage } from "@/components/ui";
@@ -189,7 +189,7 @@ function HouseDetail({ house, me, onHouseChanged }: { house: House; me: string; 
         )}
         {tab === "expenses" && (
           <Async {...expenses} label="Loading expenses">
-            {(rows) => <ExpenseList expenses={rows} empty="No shared expenses yet." memberName={(id) => (id === me ? "you" : name(id))} />}
+            {(rows) => <HouseExpenses house={house} rows={rows} me={me} name={name} onChanged={refresh} />}
           </Async>
         )}
         {tab === "payments" && (
@@ -212,9 +212,76 @@ function HouseDetail({ house, me, onHouseChanged }: { house: House; me: string; 
             )}
           </Async>
         )}
-        {tab === "members" && <Members house={house} me={me} onChanged={onHouseChanged} />}
+        {tab === "members" && (
+          <Members
+            house={house}
+            me={me}
+            onChanged={() => {
+              onHouseChanged();
+              refresh();
+            }}
+          />
+        )}
       </div>
     </Card>
+  );
+}
+
+function HouseExpenses({
+  house,
+  rows,
+  me,
+  name,
+  onChanged,
+}: {
+  house: House;
+  rows: Expense[];
+  me: string;
+  name: (id: string) => string;
+  onChanged: () => void;
+}) {
+  const notify = useToast();
+  const [confirm, setConfirm] = useState<number | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+
+  async function remove(e: Expense) {
+    setBusy(e.id);
+    try {
+      await api.deleteHouseExpense(house.id, e.id);
+      notify(`Deleted ${e.merchant}. Balances are updated.`, "success");
+      setConfirm(null);
+      onChanged();
+      dataChanged("expenses");
+    } catch (err) {
+      notify(errorMessage(err), "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <ExpenseList
+      expenses={rows}
+      empty="No shared expenses yet."
+      memberName={(id) => (id === me ? "you" : name(id))}
+      actions={(e) =>
+        e.owner_id !== me ? null : confirm === e.id ? (
+          <>
+            <span className="text-xs text-muted">Delete it for everyone? Balances change.</span>
+            <Button size="sm" variant="danger" onClick={() => remove(e)} disabled={busy === e.id}>
+              {busy === e.id ? "Deleting" : "Delete expense"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>
+              Keep
+            </Button>
+          </>
+        ) : (
+          <Button size="sm" variant="subtle" onClick={() => setConfirm(e.id)} aria-label={`Delete ${e.merchant}`}>
+            Delete
+          </Button>
+        )
+      }
+    />
   );
 }
 
@@ -222,6 +289,11 @@ function Members({ house, me, onChanged }: { house: House; me: string; onChanged
   const notify = useToast();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const creator = house.created_by === me;
+  const last = house.members.length === 1;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -242,19 +314,75 @@ function Members({ house, me, onChanged }: { house: House; me: string; onChanged
     }
   }
 
+  async function remove(userId: string, displayName: string) {
+    setBusy(userId);
+    setRemoveError(null);
+    try {
+      await api.removeMember(house.id, userId);
+      notify(userId === me ? `You left ${house.name}.` : `Removed ${displayName} from ${house.name}.`, "success");
+      setConfirm(null);
+      onChanged();
+      dataChanged("expenses");
+    } catch (err) {
+      setRemoveError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      <ul className="flex flex-col divide-y divide-border text-sm">
-        {house.members.map((m) => (
-          <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span className="font-medium">
-              {m.display_name}
-              {m.user_id === me && <span className="font-normal text-muted"> (you)</span>}
-            </span>
-            <span className="text-muted">{m.user_id}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="flex flex-col gap-2">
+        <ul className="flex flex-col divide-y divide-border text-sm">
+          {house.members.map((m) => {
+            const you = m.user_id === me;
+            const canAct = you ? !last : creator;
+            return (
+              <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="min-w-0">
+                  <span className="font-medium">
+                    {m.display_name}
+                    {you && <span className="font-normal text-muted"> (you)</span>}
+                  </span>
+                  <span className="block text-muted">
+                    {m.user_id}
+                    {m.user_id === house.created_by && " · created the house"}
+                  </span>
+                </span>
+                {canAct &&
+                  (confirm === m.user_id ? (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" variant="danger" onClick={() => remove(m.user_id, m.display_name)} disabled={busy !== null}>
+                        {busy === m.user_id ? "Working" : you ? "Leave house" : `Remove ${m.display_name}`}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>
+                        {you ? "Stay" : "Keep"}
+                      </Button>
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => {
+                        setConfirm(m.user_id);
+                        setRemoveError(null);
+                      }}
+                    >
+                      {you ? "Leave" : "Remove"}
+                    </Button>
+                  ))}
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-xs text-muted">
+          {last
+            ? "You are the only member, so you cannot leave."
+            : "Someone can leave only when their balance here is zero. Their past shares stay in the history."}
+          {creator && !last && " As the creator, you can remove a flatmate whose balance is zero."}
+        </p>
+        <ErrorText error={removeError} />
+      </div>
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <h3 className="text-sm font-medium">Add a flatmate</h3>
         <div className="grid gap-3 sm:grid-cols-2">

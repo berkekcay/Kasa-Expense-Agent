@@ -1,15 +1,15 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { api, type GoogleStatus, type SyncResult } from "@/lib/api";
 import { firebaseEnabled } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
+import { dataChanged, useApi, useMe } from "@/lib/hooks";
 import { useAuthUser, useUserId } from "@/lib/user";
 import { AccountMenu, DevUserSwitcher } from "@/components/Nav";
 import { useToast } from "@/components/Toast";
-import { Alert, Async, Badge, Button, Card, Spinner, errorMessage } from "@/components/ui";
+import { Alert, Async, Badge, Button, Card, ErrorText, Field, Spinner, errorMessage } from "@/components/ui";
 
 const OAUTH_ERRORS: Record<string, string> = {
   denied: "You cancelled the Google sign-in, so nothing was connected.",
@@ -25,6 +25,7 @@ export function SettingsView() {
       <OAuthReturn />
       <GoogleCard />
       <div className="flex flex-col gap-6">
+        <ProfileCard />
         <AccountCard />
         <GmailExplainer />
       </div>
@@ -191,6 +192,57 @@ function GoogleCard() {
             </div>
           )
         }
+      </Async>
+    </Card>
+  );
+}
+
+function ProfileCard() {
+  const me = useMe();
+  const notify = useToast();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const name = String(new FormData(e.currentTarget).get("display_name") ?? "").trim();
+    if (!name) {
+      setError("Enter a name.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await api.me.setDisplayName(name);
+      notify(`Your name is now ${saved.display_name}.`, "success");
+      dataChanged("profile");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card title="Your name">
+      <Async {...me} label="Loading your profile">
+        {(profile) => (
+          <form key={profile.display_name} onSubmit={onSubmit} className="flex flex-col gap-3">
+            <Field
+              label="Display name"
+              name="display_name"
+              required
+              maxLength={100}
+              defaultValue={profile.display_name}
+              autoComplete="name"
+              hint="Flatmates see this name in houses, balances and reminders."
+            />
+            <Button type="submit" variant="ghost" disabled={saving} className="self-start">
+              {saving ? "Saving" : "Save name"}
+            </Button>
+            <ErrorText error={error} />
+          </form>
+        )}
       </Async>
     </Card>
   );

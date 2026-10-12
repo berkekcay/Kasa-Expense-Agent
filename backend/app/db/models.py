@@ -55,6 +55,9 @@ INBOX_STATUSES = ("pending", "approved", "rejected", "failed", "ignored")
 SUBSCRIPTION_PERIODS = ("weekly", "monthly", "yearly")
 SUBSCRIPTION_STATUSES = ("active", "dismissed")
 REMINDER_STATUSES = ("scheduled", "done", "cancelled")
+# Why a reminder was cancelled: by its creator, or because the balances changed and a new
+# set of reminders replaced it ("outdated").
+REMINDER_CANCEL_REASONS = ("user", "outdated")
 
 
 class Base(DeclarativeBase):
@@ -344,3 +347,4 @@ class Reminder(Base):
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(20), default="scheduled", server_default="scheduled")
     created_at: Mapped[dt.datetime] = _now()
+    cancel_reason: Mapped[str | None] = mapped_column(String(20))  # REMINDER_CANCEL_REASONS

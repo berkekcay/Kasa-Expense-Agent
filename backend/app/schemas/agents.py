@@ -16,10 +16,15 @@ class ReceiptOut(BaseModel):
 
 
 class ChartSpec(BaseModel):
-    type: Literal["bar", "line", "pie"]
+    """What the chat shows under an answer. bar/line/pie: `x` and `y` name the columns of
+    `data` to draw (y is a number). table: `columns` in order and `data` is every result row
+    as it came back (money as exact decimal strings); `x` and `y` are empty."""
+
+    type: Literal["bar", "line", "pie", "table"]
     title: str = ""
-    x: str
-    y: str
+    x: str = ""
+    y: str = ""
+    columns: list[str] = []
     data: list[dict[str, Any]]
 
 

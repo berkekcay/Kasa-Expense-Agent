@@ -2,6 +2,7 @@ import datetime as dt
 
 import pytest
 
+from app.schemas.agents import ChartSpec
 from app.services import reports
 from app.services.expenses import ExpenseInput, ItemInput, create_expense
 from app.services.reports import UnsafeQuery, build_chart, run_report_query, validate_report_sql
@@ -132,3 +133,23 @@ class TestRunReport:
         result = run_report_query(db, "test-user", "SELECT merchant FROM my_expenses")
         with pytest.raises(ValueError):
             build_chart(result, "pie", "merchant", "nope")
+
+    def test_table_keeps_columns_order_and_exact_money(self, db):
+        create_expense(
+            db, "table-user", ExpenseInput("Kitapçı", "12.34", dt.date(2026, 1, 2), category="education")
+        )
+        result = run_report_query(
+            db, "table-user", "SELECT merchant, expense_date, total_minor FROM my_expenses ORDER BY merchant"
+        )
+        table = build_chart(result, "table", "", "", "Purchases")
+        assert table == {
+            "type": "table",
+            "title": "Purchases",
+            "x": "",
+            "y": "",
+            "columns": ["merchant", "expense_date", "total"],
+            "data": [{"merchant": "Kitapçı", "expense_date": "2026-01-02", "total": "12.34"}],
+        }
+        assert ChartSpec(**table).columns == ["merchant", "expense_date", "total"]
+        with pytest.raises(ValueError, match="bar, line, pie or table"):
+            build_chart(result, "donut", "merchant", "total")

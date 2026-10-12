@@ -15,15 +15,16 @@ How every expense gets created (receipt, manual, house, email, statement):
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import EXPENSE_SOURCES, Expense, ExpenseItem, User
 from app.services import clock
-from app.services.categories import normalize_category
+from app.services.categories import CATEGORIES, normalize_category
 from app.services.errors import Conflict, InvalidInput, NotFound
 from app.services.money import MoneyError, normalize_currency, to_minor
 
@@ -178,15 +179,84 @@ def create_expense(db: Session, user_id: str, data: ExpenseInput, *, source: str
     return add_expense(db, user_id, data, source=source).expense
 
 
-def list_expenses(db: Session, user_id: str, *, limit: int = 100) -> list[Expense]:
+EXPENSE_SCOPES = ("all", "personal", "house")
+MAX_PAGE = 500
+UNCATEGORISED = "none"  # `category` filter value for expenses without a category
+
+
+@dataclass
+class ExpenseFilters:
+    """Filters for `list_expenses`. Every field is optional; the default is all of the
+    user's own expenses (personal ones and house bills they paid), newest first."""
+
+    month: str | None = None  # "YYYY-MM"
+    category: str | None = None  # one of CATEGORIES, or "none" for uncategorised
+    source: str | None = None  # one of EXPENSE_SOURCES
+    scope: str = "all"  # all | personal (house_id IS NULL) | house (house bills I paid)
+
+
+def _month_range(month: str) -> tuple[dt.date, dt.date]:
+    """ "YYYY-MM" -> [first day, first day of the next month)."""
+    try:
+        if not re.fullmatch(r"\d{4}-\d{2}", month):
+            raise ValueError
+        year, mon = int(month[:4]), int(month[5:])
+        start = dt.date(year, mon, 1)
+    except ValueError:
+        raise InvalidInput("month must look like YYYY-MM") from None
+    end = dt.date(year + 1, 1, 1) if mon == 12 else dt.date(year, mon + 1, 1)
+    return start, end
+
+
+def _filtered(user_id: str, filters: ExpenseFilters):
+    if filters.scope not in EXPENSE_SCOPES:
+        raise InvalidInput(f"scope must be one of {', '.join(EXPENSE_SCOPES)}")
+    conditions = [Expense.owner_id == user_id]
+    if filters.scope == "personal":
+        conditions.append(Expense.house_id.is_(None))
+    elif filters.scope == "house":
+        conditions.append(Expense.house_id.is_not(None))
+    if filters.month:
+        start, end = _month_range(filters.month)
+        conditions += [Expense.expense_date >= start, Expense.expense_date < end]
+    if filters.category:
+        if filters.category == UNCATEGORISED:
+            conditions.append(Expense.category.is_(None))
+        elif filters.category in CATEGORIES:
+            conditions.append(Expense.category == filters.category)
+        else:
+            raise InvalidInput(f"unknown category {filters.category!r}")
+    if filters.source:
+        if filters.source not in EXPENSE_SOURCES:
+            raise InvalidInput(f"source must be one of {', '.join(EXPENSE_SOURCES)}")
+        conditions.append(Expense.source == filters.source)
+    return conditions
+
+
+def list_expenses(
+    db: Session,
+    user_id: str,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    filters: ExpenseFilters | None = None,
+) -> list[Expense]:
+    """The user's own expenses, newest first, filtered and paged."""
     stmt = (
         select(Expense)
-        .where(Expense.owner_id == user_id)
+        .where(*_filtered(user_id, filters or ExpenseFilters()))
         .options(*_LOAD_CHILDREN)
         .order_by(Expense.expense_date.desc(), Expense.id.desc())
-        .limit(limit)
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, MAX_PAGE)))
     )
     return list(db.scalars(stmt))
+
+
+def count_expenses(db: Session, user_id: str, filters: ExpenseFilters | None = None) -> int:
+    """How many expenses match the filters (for paging, ignores limit/offset)."""
+    stmt = select(func.count()).select_from(Expense).where(*_filtered(user_id, filters or ExpenseFilters()))
+    return int(db.scalar(stmt) or 0)
 
 
 def get_expense(db: Session, user_id: str, expense_id: int) -> Expense:
@@ -201,3 +271,60 @@ def get_expense(db: Session, user_id: str, expense_id: int) -> Expense:
 
 def items_sum_minor(expense: Expense) -> int:
     return sum(i.amount_minor for i in expense.items)
+
+
+@dataclass
+class ExpenseChanges:
+    """Fields `update_expense` may change. Only the names in `fields` are applied, so a
+    field can be cleared (note=None) without touching the others. Amounts never change:
+    to fix an amount, delete the expense and add it again."""
+
+    fields: set[str]
+    merchant: str | None = None
+    category: str | None = None
+    expense_date: dt.date | None = None
+    note: str | None = None
+
+
+EDITABLE_FIELDS = ("merchant", "category", "expense_date", "note")
+
+
+def update_expense(db: Session, user_id: str, expense_id: int, changes: ExpenseChanges) -> Expense:
+    """Change merchant, category, date or note of one of the user's own expenses (the payer's,
+    for a house bill). Others' expenses are NotFound."""
+    unknown = changes.fields - set(EDITABLE_FIELDS)
+    if unknown:
+        raise InvalidInput(f"cannot change {', '.join(sorted(unknown))}; only {', '.join(EDITABLE_FIELDS)}")
+    expense = get_expense(db, user_id, expense_id)
+    if "merchant" in changes.fields:
+        merchant = (changes.merchant or "").strip()
+        if not merchant:
+            raise InvalidInput("merchant is required")
+        expense.merchant = merchant[:200]
+    if "category" in changes.fields:
+        expense.category = normalize_category(changes.category)
+    if "expense_date" in changes.fields:
+        if changes.expense_date is None:
+            raise InvalidInput("expense_date cannot be empty")
+        expense.expense_date = changes.expense_date
+    if "note" in changes.fields:
+        note = (changes.note or "").strip()
+        expense.note = note[:500] or None
+    db.commit()
+    return get_expense(db, user_id, expense_id)
+
+
+def delete_expense(db: Session, user_id: str, expense_id: int) -> None:
+    """Delete one of the user's own personal expenses with its receipt lines.
+
+    House bills are refused (Conflict): they change everyone's balance, so they are deleted
+    through `houses.delete_house_expense` (DELETE /houses/{house_id}/expenses/{id}).
+    """
+    expense = get_expense(db, user_id, expense_id)
+    if expense.house_id is not None:
+        raise Conflict(
+            f"expense {expense_id} is a house expense; delete it with "
+            f"DELETE /houses/{expense.house_id}/expenses/{expense_id}"
+        )
+    db.delete(expense)
+    db.commit()

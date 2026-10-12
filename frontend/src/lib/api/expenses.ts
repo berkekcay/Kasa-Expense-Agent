@@ -1,5 +1,5 @@
 // Personal expenses and the fixed category list (shared).
-import { post, request } from "./client";
+import { del, patch, post, query, request, requestPage } from "./client";
 
 export type ExpenseItem = {
   description: string;
@@ -44,8 +44,40 @@ export type NewExpense = {
   items?: { description: string; amount: string; quantity?: string }[];
 };
 
+/** Server-side filters for GET /expenses. Empty values are left out. */
+export type ExpenseFilters = {
+  month?: string; // "YYYY-MM"
+  category?: string; // a category, or "none" for uncategorised
+  source?: Expense["source"] | "";
+  scope?: "all" | "personal" | "house";
+  limit?: number;
+  offset?: number;
+};
+
+/** Only these can change; an amount change is delete and add again. */
+export type ExpenseChanges = {
+  merchant?: string;
+  category?: string | null;
+  expense_date?: string;
+  note?: string | null;
+};
+
 export const expensesApi = {
   listExpenses: (limit = 100) => request<Expense[]>(`/expenses?limit=${limit}`),
+  /** One page of the user's expenses plus the total that match the filters. */
+  listExpensePage: (f: ExpenseFilters = {}) =>
+    requestPage<Expense>(
+      `/expenses${query({
+        month: f.month || undefined,
+        category: f.category || undefined,
+        source: f.source || undefined,
+        scope: f.scope && f.scope !== "all" ? f.scope : undefined,
+        limit: f.limit,
+        offset: f.offset || undefined,
+      })}`,
+    ),
   createExpense: (body: NewExpense) => request<Expense>("/expenses", post(body)),
+  updateExpense: (id: number, changes: ExpenseChanges) => request<Expense>(`/expenses/${id}`, patch(changes)),
+  deleteExpense: (id: number) => request<void>(`/expenses/${id}`, del),
   categories: () => request<{ categories: string[] }>("/categories"),
 };

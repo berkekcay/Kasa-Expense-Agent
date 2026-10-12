@@ -33,7 +33,7 @@ def _head(engine) -> str:
 def test_upgrade_builds_exactly_the_models(fresh_engine):
     upgrade_to_head(fresh_engine)
     assert _diff(fresh_engine) == []
-    assert _head(fresh_engine) == "0002_sprints_2_4"
+    assert _head(fresh_engine) == "0003_reminder_cancel_reason"
 
 
 def test_downgrade_to_base_and_back(fresh_engine):
@@ -58,7 +58,7 @@ def test_legacy_create_all_database_is_stamped_then_upgraded(fresh_engine):
         conn.execute(text("INSERT INTO users (id, display_name) VALUES ('old', 'Old user')"))
         conn.commit()
     upgrade_to_head(fresh_engine)
-    assert _head(fresh_engine) == "0002_sprints_2_4"
+    assert _head(fresh_engine) == "0003_reminder_cancel_reason"
     assert _diff(fresh_engine) == []
     with fresh_engine.connect() as conn:
         assert (
@@ -90,6 +90,7 @@ def test_sql_server_ddl_renders_offline(monkeypatch):
     assert "ON dbo.fx_rates" not in sql  # shared reference data, no RLS
     assert "WHERE external_ref IS NOT NULL" in sql  # filtered unique index for import dedupe
     assert "expense_date DATE NOT NULL" in sql and "parsed_json NVARCHAR(max)" in sql
+    assert "ALTER TABLE reminders ADD cancel_reason VARCHAR(20) NULL" in sql  # 0003
     assert BASELINE_REVISION in sql
 
 
