@@ -62,3 +62,13 @@ export function Money({ amount, currency }: { amount: string; currency: string }
 }
 
 export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Placeholder body for pages whose feature track has not landed yet. */
+export function ComingSoon({ track, children }: { track: string; children: ReactNode }) {
+  return (
+    <Card>
+      <p className="text-sm text-muted">{children}</p>
+      <p className="mt-2 text-xs text-muted">Coming with track {track}.</p>
+    </Card>
+  );
+}

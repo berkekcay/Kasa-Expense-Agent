@@ -1,4 +1,5 @@
-"""Agent-backed endpoints: receipt upload and chat. They return 503 without GOOGLE_API_KEY."""
+"""Agent-backed endpoints: receipt upload and chat. They return 503 while no LLM provider
+is configured (see `runtime.ensure_available`)."""
 
 from __future__ import annotations
 
@@ -7,10 +8,11 @@ from google.genai import types
 
 from app.agents import runtime
 from app.auth import DB, CurrentUser
-from app.schemas import ChartSpec, ChatIn, ChatOut, ExpenseOut, ReceiptOut
+from app.config import get_settings
+from app.schemas.agents import ChartSpec, ChatIn, ChatOut, ReceiptOut
+from app.schemas.expenses import ExpenseOut
 from app.services import expenses as expense_service
 
-MAX_RECEIPT_BYTES = 10 * 1024 * 1024
 RECEIPT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
 
 
@@ -29,9 +31,12 @@ async def upload_receipt(file: UploadFile, db: DB, user_id: CurrentUser) -> Rece
     """Receipt photo -> receipt agent (image as inline Part) -> save_expense tool -> expense."""
     if file.content_type not in RECEIPT_TYPES:
         raise HTTPException(status_code=415, detail=f"unsupported image type {file.content_type}")
-    data = await file.read(MAX_RECEIPT_BYTES + 1)
-    if not data or len(data) > MAX_RECEIPT_BYTES:
-        raise HTTPException(status_code=413, detail="image must be between 1 byte and 10 MB")
+    max_bytes = get_settings().max_upload_bytes
+    data = await file.read(max_bytes + 1)
+    if not data or len(data) > max_bytes:
+        raise HTTPException(
+            status_code=413, detail=f"image must be between 1 byte and {max_bytes // 2**20} MB"
+        )
 
     run = await runtime.run_agent(
         "receipt",
@@ -46,8 +51,9 @@ async def upload_receipt(file: UploadFile, db: DB, user_id: CurrentUser) -> Rece
         reason = (saved or {}).get("error") or run.text or "the receipt could not be read"
         raise HTTPException(status_code=422, detail=reason)
     expense = expense_service.get_expense(db, user_id, int(saved["expense_id"]))
+    warnings = saved.get("warnings", [])
     return ReceiptOut(
-        expense=ExpenseOut.from_model(expense), agent_message=run.text, warnings=saved.get("warnings", [])
+        expense=ExpenseOut.from_model(expense, warnings), agent_message=run.text, warnings=warnings
     )
 
 
@@ -58,4 +64,4 @@ async def chat(body: ChatIn, user_id: CurrentUser) -> ChatOut:
     run = await runtime.run_agent("chat", user_id, [types.Part(text=body.message)], body.session_id)
     report = run.last_tool_result("run_report")
     chart = ChartSpec(**report["chart"]) if report and report.get("chart") else None
-    return ChatOut(session_id=run.session_id, text=run.text or "(no answer)", chart=chart)
+    return ChatOut(session_id=run.session_id, text=run.text or "(no answer)", chart=chart, agent=run.agent)

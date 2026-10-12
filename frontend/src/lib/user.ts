@@ -1,25 +1,34 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { DEFAULT_USER_ID, getUserId, setUserId } from "./api";
+import {
+  type AuthUser,
+  DEFAULT_USER_ID,
+  firebaseEnabled,
+  getAuthUser,
+  getDevUserId,
+  setDevUserId,
+  subscribeAuthUser,
+  subscribeDevUser,
+} from "./auth";
 
-// The dev user id lives in localStorage; components re-render when it changes.
-const EVENT = "kasa:user-changed";
+const noUser = () => null;
+const noop = () => () => {};
 
-function subscribe(onChange: () => void) {
-  window.addEventListener(EVENT, onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    window.removeEventListener(EVENT, onChange);
-    window.removeEventListener("storage", onChange);
-  };
+/** The signed-in Firebase user (null when signed out or when Firebase is not configured). */
+export function useAuthUser(): AuthUser | null {
+  return useSyncExternalStore(firebaseEnabled ? subscribeAuthUser : noop, getAuthUser, noUser);
 }
 
+/** Id of whoever is acting now. Views use it as an effect dependency to refetch on switch.
+ *  With Firebase it is the uid ("" while signed out); in dev mode it is the dev user. */
 export function useUserId(): string {
-  return useSyncExternalStore(subscribe, getUserId, () => DEFAULT_USER_ID);
+  const devUser = useSyncExternalStore(subscribeDevUser, getDevUserId, () => DEFAULT_USER_ID);
+  const authUser = useAuthUser();
+  return firebaseEnabled ? (authUser?.uid ?? "") : devUser;
 }
 
+/** Dev mode only: act as another user. */
 export function switchUser(userId: string) {
-  setUserId(userId.trim() || DEFAULT_USER_ID);
-  window.dispatchEvent(new Event(EVENT));
+  setDevUserId(userId);
 }

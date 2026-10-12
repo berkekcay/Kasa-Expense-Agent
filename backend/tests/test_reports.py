@@ -102,6 +102,26 @@ class TestRunReport:
             "data": [{"category": "groceries", "total": 120.75}, {"category": "transport", "total": 15.0}],
         }
 
+    def test_money_alias_without_minor_suffix_is_still_converted(self, db):
+        day = dt.date(2026, 9, 1)
+        create_expense(db, "alias-user", ExpenseInput("Migros", "100.50", day, category="groceries"))
+        create_expense(db, "alias-user", ExpenseInput("Metro", "15", day, category="transport"))
+        result = run_report_query(
+            db,
+            "alias-user",
+            "SELECT category, SUM(total_minor) AS total, COUNT(*) AS n FROM my_expenses "
+            "GROUP BY category HAVING SUM(total_minor) > 0 ORDER BY total DESC",
+        )
+        assert result["columns"] == ["category", "total", "n"]
+        assert result["rows"] == [
+            {"category": "groceries", "total": "100.50", "n": 1},
+            {"category": "transport", "total": "15.00", "n": 1},
+        ]
+        assert build_chart(result, "bar", "category", "total")["data"][0] == {
+            "category": "groceries",
+            "total": 100.5,
+        }
+
     def test_row_limit(self, db):
         for i in range(5):
             create_expense(db, "limit-user", ExpenseInput(f"Shop {i}", "1", dt.date(2026, 1, 1)))

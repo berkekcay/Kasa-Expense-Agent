@@ -125,6 +125,8 @@ def build_scoped_sql(query: exp.Query, dialect: str, row_limit: int) -> str:
     """Prepend the user-scoped CTEs for the relations the query uses and cap the row count."""
     used = sorted({t.name.lower() for t in query.find_all(exp.Table)} & ALLOWED_RELATIONS)
     scoped = query.copy()
+    if isinstance(scoped, exp.Select):
+        _keep_minor_suffix(scoped)
     if isinstance(scoped, exp.Select) and scoped.args.get("limit") is None and not scoped.args.get("top"):
         scoped = scoped.limit(row_limit)
     existing = scoped.args.get("with_")
@@ -141,6 +143,35 @@ def build_scoped_sql(query: exp.Query, dialect: str, row_limit: int) -> str:
     if ours or user_ctes:
         scoped.set("with_", exp.With(expressions=ours + user_ctes))
     return scoped.sql(dialect=dialect)
+
+
+def _is_minor_money(node: exp.Expression) -> bool:
+    """A *_minor column, or SUM/MIN/MAX/COALESCE of one (COUNT and AVG are not money)."""
+    if isinstance(node, exp.Column):
+        return node.name.lower().endswith("_minor")
+    if isinstance(node, (exp.Sum, exp.Min, exp.Max, exp.Paren, exp.Coalesce)):
+        return _is_minor_money(node.this)
+    return False
+
+
+def _keep_minor_suffix(select: exp.Select) -> None:
+    """Models often write `SUM(total_minor) AS total`, which would hide that the value is in
+    minor units and skip the conversion to major units. Rename such aliases to `total_minor`
+    (and ORDER BY / HAVING references to them); results still show the column as `total`."""
+    renamed: dict[str, str] = {}
+    for projection in select.expressions:
+        if isinstance(projection, exp.Alias) and _is_minor_money(projection.this):
+            alias = projection.alias
+            if not alias.lower().endswith("_minor"):
+                renamed[alias.lower()] = f"{alias}_minor"
+                projection.set("alias", exp.to_identifier(f"{alias}_minor"))
+    if not renamed:
+        return
+    for key in ("order", "having"):
+        clause = select.args.get(key)
+        for column in clause.find_all(exp.Column) if clause else ():
+            if not column.table and column.name.lower() in renamed:
+                column.set("this", exp.to_identifier(renamed[column.name.lower()]))
 
 
 def run_report_query(db: Session, user_id: str, sql: str, row_limit: int = 200) -> dict[str, Any]:

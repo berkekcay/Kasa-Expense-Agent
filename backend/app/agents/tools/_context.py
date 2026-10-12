@@ -27,3 +27,8 @@ def error(exc: Exception) -> dict:
     """Tools report problems as data so the model can explain them instead of crashing."""
     message = str(exc) if isinstance(exc, (DomainError, ValueError)) else "internal error"
     return {"status": "error", "error": message}
+
+
+def not_available(feature: str) -> dict:
+    """What a tool returns until its track lands, so the agent can say so politely."""
+    return {"status": "unavailable", "error": f"{feature} is not available yet"}

@@ -2,9 +2,19 @@
 fastapi==0.141.1
 uvicorn[standard]==0.54.0
 SQLAlchemy==2.1.4
+alembic==1.20.0
 pydantic==2.14.0
 pydantic-settings==2.15.0
 python-multipart==0.0.32
 google-adk==2.11.0
 google-genai==2.29.0
 sqlglot==30.21.0
+# Firebase ID tokens, Pub/Sub OIDC tokens, Google OAuth credentials (+ cached cert fetches)
+google-auth==2.61.0
+requests==2.34.2
+CacheControl==0.14.4
+# Fernet encryption for stored Google refresh tokens
+cryptography==50.0.2
+# HTTP client for Gmail / Calendar / TCMB calls, PDF text for statement imports
+httpx==0.28.1
+pypdf==6.20.0

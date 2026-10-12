@@ -1,20 +1,26 @@
-"""Shared-flat ("house") data layer. Money math is delegated to `settlement`.
+"""Shared-flat ("house") data layer (owner: track HOUSE). Money math lives in `settlement`
+and `splits`.
 
 Access rule: only members of a house can read or change anything about it.
+
+Done in the foundation: equal split through the MONEY hook, recorded settlements that
+reduce balances. Track HOUSE implements `add_split_expense` (percent / exact / items).
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Expense, ExpenseShare, House, HouseMember
+from app.db.models import Expense, ExpenseItem, ExpenseShare, House, HouseMember, Settlement
 from app.services import settlement
 from app.services.errors import Forbidden, InvalidInput, NotFound
-from app.services.expenses import ExpenseInput, build_expense, ensure_user
-from app.services.money import normalize_currency
+from app.services.expenses import ExpenseInput, build_expense, ensure_user, finalize_expense
+from app.services.money import MoneyError, normalize_currency, to_minor
 
 
 @dataclass
@@ -79,6 +85,38 @@ def add_member(
     return get_house(db, user_id, house_id)
 
 
+def _prepare_house_expense(
+    db: Session,
+    user_id: str,
+    house_id: int,
+    data: ExpenseInput,
+    paid_by: str | None,
+    participants: Sequence[str] | None,
+    source: str,
+) -> tuple[House, Expense, list[str], list[str]]:
+    """Shared steps for every split type: membership checks, build, MONEY hook.
+
+    Returns (house, expense, participants, warnings). The expense is in the house currency
+    after this (or InvalidInput is raised), ready for its shares.
+    """
+    house = get_house(db, user_id, house_id)
+    members = member_ids(house)
+    payer = paid_by or user_id
+    people = list(participants or members)
+    outsiders = [u for u in [payer, *people] if u not in members]
+    if outsiders:
+        raise Forbidden(f"not members of this house: {', '.join(sorted(set(outsiders)))}")
+    if data.currency is None:
+        data.currency = house.currency
+
+    expense = build_expense(payer, data, source=source)
+    warnings = finalize_expense(db, expense, base_currency=house.currency)
+    if expense.currency != house.currency:
+        raise InvalidInput(f"house currency is {house.currency}; could not convert from {expense.currency}")
+    expense.house_id = house.id
+    return house, expense, people, warnings
+
+
 def add_equal_split_expense(
     db: Session,
     user_id: str,
@@ -91,28 +129,47 @@ def add_equal_split_expense(
 ) -> Expense:
     """Record a house expense paid by `paid_by` (default: caller), split equally between
     `split_between` (default: all members, in join order)."""
-    house = get_house(db, user_id, house_id)
-    members = member_ids(house)
-    payer = paid_by or user_id
-    participants = split_between or members
-    outsiders = [u for u in [payer, *participants] if u not in members]
-    if outsiders:
-        raise Forbidden(f"not members of this house: {', '.join(sorted(set(outsiders)))}")
-    if data.currency is None:
-        data.currency = house.currency
-
-    expense = build_expense(payer, data, source=source)
-    if expense.currency != house.currency:
-        raise InvalidInput(f"house currency is {house.currency}; currency conversion comes later")
-    expense.house_id = house.id
+    _house, expense, participants, _warnings = _prepare_house_expense(
+        db, user_id, house_id, data, paid_by, split_between, source
+    )
     try:
         shares = settlement.equal_split(expense.total_minor, participants)
     except ValueError as exc:
         raise InvalidInput(str(exc)) from exc
+    expense.split_type = "equal"
     expense.shares = [ExpenseShare(user_id=u, amount_minor=a) for u, a in shares.items()]
     db.add(expense)
     db.commit()
     return expense
+
+
+def add_split_expense(
+    db: Session,
+    user_id: str,
+    house_id: int,
+    data: ExpenseInput,
+    *,
+    split_type: str,
+    paid_by: str | None = None,
+    participants: list[str] | None = None,
+    percents: Mapping[str, Decimal | str] | None = None,
+    exact_amounts: Mapping[str, Decimal | str] | None = None,
+    item_assignees: Sequence[Sequence[str]] | None = None,
+    source: str = "manual",
+) -> tuple[Expense, list[str]]:
+    """TRACK HOUSE: record a house expense with any split type. Returns (expense, warnings).
+
+    - "equal":   like add_equal_split_expense, between `participants` (default all members).
+    - "percent": `percents` maps user_id -> percent (strings like "33.5"); must sum to 100.
+    - "exact":   `exact_amounts` maps user_id -> amount in major units; must sum to the total.
+    - "items":   `data.items` are the receipt lines; `item_assignees[i]` lists who shares
+                 line i (empty = all `participants`). Stored as ExpenseItemAssignee rows.
+    Use `_prepare_house_expense` first (it runs the MONEY hook), then `splits.*` for the
+    math, then set `expense.split_type` and `expense.shares`. When the expense was
+    converted from another currency, percent/items splits apply to the converted total and
+    exact amounts must be given in the house currency.
+    """
+    raise NotImplementedError("add_split_expense: track HOUSE")
 
 
 def list_house_expenses(db: Session, user_id: str, house_id: int) -> list[Expense]:
@@ -120,8 +177,59 @@ def list_house_expenses(db: Session, user_id: str, house_id: int) -> list[Expens
     stmt = (
         select(Expense)
         .where(Expense.house_id == house_id)
-        .options(selectinload(Expense.items), selectinload(Expense.shares))
+        .options(
+            selectinload(Expense.items).selectinload(ExpenseItem.assignees),
+            selectinload(Expense.shares),
+        )
         .order_by(Expense.expense_date.desc(), Expense.id.desc())
+    )
+    return list(db.scalars(stmt))
+
+
+def record_settlement(
+    db: Session,
+    user_id: str,
+    house_id: int,
+    *,
+    from_user: str,
+    to_user: str,
+    amount: Decimal | str,
+    note: str | None = None,
+) -> Settlement:
+    """Record that `from_user` paid `to_user` back. Any member may record it."""
+    house = get_house(db, user_id, house_id)
+    members = member_ids(house)
+    outsiders = [u for u in (from_user, to_user) if u not in members]
+    if outsiders:
+        raise Forbidden(f"not members of this house: {', '.join(sorted(set(outsiders)))}")
+    if from_user == to_user:
+        raise InvalidInput("a payment needs two different people")
+    try:
+        amount_minor = to_minor(amount)
+    except MoneyError as exc:
+        raise InvalidInput(str(exc)) from exc
+    if amount_minor <= 0:
+        raise InvalidInput("amount must be positive")
+    row = Settlement(
+        house_id=house.id,
+        from_user=from_user,
+        to_user=to_user,
+        amount_minor=amount_minor,
+        currency=house.currency,
+        note=note.strip()[:500] if note and note.strip() else None,
+        created_by=user_id,
+    )
+    db.add(row)
+    db.commit()
+    return row
+
+
+def list_settlements(db: Session, user_id: str, house_id: int) -> list[Settlement]:
+    get_house(db, user_id, house_id)  # membership check
+    stmt = (
+        select(Settlement)
+        .where(Settlement.house_id == house_id)
+        .order_by(Settlement.created_at.desc(), Settlement.id.desc())
     )
     return list(db.scalars(stmt))
 
@@ -129,9 +237,11 @@ def list_house_expenses(db: Session, user_id: str, house_id: int) -> list[Expens
 def house_balances(db: Session, user_id: str, house_id: int) -> HouseBalances:
     house = get_house(db, user_id, house_id)
     expenses = list_house_expenses(db, user_id, house_id)
+    payments = list_settlements(db, user_id, house_id)
     balances = settlement.compute_balances(
         payments=((e.owner_id, e.total_minor) for e in expenses),
         shares=((s.user_id, s.amount_minor) for e in expenses for s in e.shares),
         members=member_ids(house),
+        settlements=((p.from_user, p.to_user, p.amount_minor) for p in payments),
     )
     return HouseBalances(house=house, balances=balances, transfers=settlement.settle_up(balances))

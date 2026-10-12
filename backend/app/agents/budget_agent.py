@@ -1,17 +1,23 @@
-"""Budget agent (owner: Agent dev #1) — sprint-1 stub.
-
-TODO(sprint 3): budgets table + tools (set_budget, budget_status) so this agent can
-set monthly limits per category and warn when spending approaches them.
-"""
+"""Budget agent (owner: track MONEY): budgets, alerts, subscriptions, currency conversion."""
 
 from google.adk.agents import Agent
 
-from app.agents.common import GUARDRAILS, gemini_model
+from app.agents.common import GUARDRAILS, chat_model, with_today
+from app.agents.tools.budget_tools import (
+    convert_currency,
+    get_budget_status,
+    list_subscriptions,
+    set_budget,
+)
 
 INSTRUCTION = f"""\
-You are Kasa's budget agent. Budgets are not available yet (coming in a later sprint).
-Tell the user briefly that budgets are coming soon and that, for now, they can ask
-for spending reports (e.g. "how much did I spend on groceries this month?").
+You are Kasa's budget agent. You help the user plan spending.
+
+- To create or change a monthly limit, call `set_budget` (empty category = overall budget).
+- "How am I doing", "can I still spend", "budget left": call `get_budget_status`.
+- Recurring charges (Netflix, Spotify, gym): call `list_subscriptions`.
+- Exchange rates or "how much is 50 EUR": call `convert_currency` (TCMB rates).
+If a tool says a feature is not available yet, say so briefly.
 
 {GUARDRAILS}"""
 
@@ -19,7 +25,11 @@ for spending reports (e.g. "how much did I spend on groceries this month?").
 def build_budget_agent() -> Agent:
     return Agent(
         name="budget_agent",
-        model=gemini_model(),
-        description="Monthly budgets and limits per category (coming soon).",
-        instruction=INSTRUCTION,
+        model=chat_model(),
+        description=(
+            "Monthly budgets and limits per category, budget status/alerts, recurring "
+            "subscriptions, and currency conversion with TCMB exchange rates (kur)."
+        ),
+        instruction=with_today(INSTRUCTION),
+        tools=[set_budget, get_budget_status, list_subscriptions, convert_currency],
     )

@@ -1,12 +1,19 @@
 [project]
 name = "kasa-backend"
-version = "0.1.0"
+version = "0.2.0"
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+markers = [
+    "live: calls a real LLM provider; skipped unless KASA_LIVE_TESTS=1 (run with `pytest -m live`)",
+]
 
 [tool.ruff]
 line-length = 110
+
+[tool.ruff.lint.isort]
+# backend/alembic/ (migrations) shadows the package name for ruff's first-party detection.
+known-third-party = ["alembic"]

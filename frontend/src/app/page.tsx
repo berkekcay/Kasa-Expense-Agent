@@ -1,11 +1,11 @@
 import { PageHeader } from "@/components/ui";
-import { ExpensesView } from "@/features/expenses/ExpensesView";
+import { DashboardView } from "@/features/dashboard/DashboardView";
 
 export default function HomePage() {
   return (
     <>
-      <PageHeader title="Expenses" subtitle="Everything you spent, newest first." />
-      <ExpensesView />
+      <PageHeader title="Dashboard" subtitle="This month at a glance." />
+      <DashboardView />
     </>
   );
 }

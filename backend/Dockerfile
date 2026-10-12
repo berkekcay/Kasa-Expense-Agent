@@ -25,13 +25,15 @@ COPY requirements.txt requirements-mssql.txt ./
 RUN pip install -r requirements.txt -r requirements-mssql.txt
 
 COPY app ./app
-COPY sql ./sql
+COPY alembic.ini ./
+COPY alembic ./alembic
 
 RUN useradd --create-home --uid 10001 kasa
 USER kasa
 
 # Cloud Run injects $PORT. DATABASE_URL falls back to a throwaway SQLite file for demo deploys;
-# in prod set it (from Secret Manager) to the mssql+pyodbc URL.
+# in prod set it (from Secret Manager) to the mssql+pyodbc URL and AUTO_MIGRATE=false, and run
+# `alembic upgrade head` with an admin MIGRATION_DATABASE_URL as a deploy step (Cloud Run job).
 ENV PORT=8080 \
     DATABASE_URL=sqlite:////tmp/kasa.db
 CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]

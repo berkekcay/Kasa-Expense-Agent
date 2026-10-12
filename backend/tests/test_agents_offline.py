@@ -1,13 +1,14 @@
 """Exercise the real ADK wiring (Runner, sessions, transfer, function tools, ToolContext)
-with a scripted fake LLM, so /receipts and /chat are tested without a Gemini key."""
+with a scripted fake LLM, so /receipts and /chat are tested without any LLM provider."""
 
+import asyncio
 from collections.abc import AsyncGenerator
 
 import pytest
 from google.adk.models import BaseLlm, LlmRequest, LlmResponse
 from google.genai import types
 
-from app.agents import budget_agent, coordinator, house_agent, receipt_agent, report_agent, runtime
+from app.agents import common, runtime
 from app.config import get_settings
 
 RECEIPT_CALL = {
@@ -52,8 +53,10 @@ class ScriptedLlm(BaseLlm):
 
 @pytest.fixture
 def fake_gemini(monkeypatch):
-    for module in (receipt_agent, house_agent, report_agent, budget_agent, coordinator):
-        monkeypatch.setattr(module, "gemini_model", lambda: ScriptedLlm(model="scripted"))
+    monkeypatch.setattr(
+        common, "build_model", lambda name, vision=False: ScriptedLlm(model=f"scripted-{name}")
+    )
+    monkeypatch.setattr(get_settings(), "llm_provider", "gemini")
     monkeypatch.setattr(get_settings(), "google_api_key", "test-key")
     runtime._runner.cache_clear()
     yield
@@ -86,6 +89,7 @@ def test_chat_routes_to_report_agent_and_returns_chart(client, fake_gemini):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["session_id"]
+    assert body["agent"] == "report_agent"
     assert body["chart"]["type"] == "bar"
     assert body["chart"]["y"] == "total"
     assert {d["category"]: d["total"] for d in body["chart"]["data"]} == {
@@ -106,3 +110,70 @@ def test_chat_routes_to_report_agent_and_returns_chart(client, fake_gemini):
     )
     assert other.json()["session_id"] != body["session_id"]
     assert other.json()["chart"]["data"] == []  # intruder has no expenses
+
+
+class ParserLlm(BaseLlm):
+    """Plays the email parser: submits one expense, then stops."""
+
+    async def generate_content_async(
+        self, llm_request: LlmRequest, stream: bool = False
+    ) -> AsyncGenerator[LlmResponse, None]:
+        last = llm_request.contents[-1].parts[-1]
+        if last.function_response is not None:
+            part = types.Part(text="ok")
+        else:
+            args = {
+                "merchant": "Trendyol",
+                "total": "349,9",
+                "currency": "TL",
+                "expense_date": "2026-10-03",
+                "category": "alışveriş",
+                "items": [{"description": "Kulaklık", "amount": "349.90"}],
+            }
+            part = types.Part(function_call=types.FunctionCall(name="submit_parsed_expense", args=args))
+        yield LlmResponse(content=types.Content(role="model", parts=[part]))
+
+
+@pytest.fixture
+def fake_parser(monkeypatch):
+    monkeypatch.setattr(common, "build_model", lambda name, vision=False: ParserLlm(model="parser"))
+    monkeypatch.setattr(get_settings(), "google_api_key", "test-key")
+    runtime._runner.cache_clear()
+    yield
+    runtime._runner.cache_clear()
+
+
+def test_every_runner_kind_builds(fake_gemini):
+    for kind in runtime.RUNNERS:
+        assert runtime._runner(kind).agent is not None
+    coordinator = runtime._runner("chat").agent
+    assert {a.name for a in coordinator.sub_agents} == {
+        "receipt_agent",
+        "house_agent",
+        "report_agent",
+        "budget_agent",
+        "inbox_agent",
+    }
+
+
+def test_email_parse_runner_returns_validated_expense(fake_parser):
+    run = asyncio.run(
+        runtime.run_agent("email-parse", "parse-user", [types.Part(text="Subject: Siparişiniz alındı")])
+    )
+    result = run.last_tool_result("submit_parsed_expense")
+    assert result == {
+        "status": "parsed",
+        "expense": {
+            "merchant": "Trendyol",
+            "total": "349.90",
+            "currency": "TRY",
+            "expense_date": "2026-10-03",
+            "category": "alışveriş",
+            "items": [{"description": "Kulaklık", "amount": "349.90", "quantity": "1"}],
+        },
+    }
+    # One-shot runners do not keep sessions around.
+    sessions = asyncio.run(
+        runtime._session_service().list_sessions(app_name="kasa-email-parse", user_id="parse-user")
+    )
+    assert sessions.sessions == []

@@ -1,4 +1,4 @@
-"""Receipt agent tools (owner: Agent dev #1). The model extracts fields; code does the math."""
+"""Receipt agent tools (shared, Sprint 1). The model extracts fields; code does the math."""
 
 from __future__ import annotations
 
@@ -38,7 +38,8 @@ def save_expense(
       total: Grand total as printed, digits with '.' as decimal separator, e.g. "245.90".
       expense_date: Purchase date as YYYY-MM-DD. Empty if unknown (today is used).
       currency: ISO 4217 code, e.g. TRY, EUR, USD. Use TRY for "TL" or "₺".
-      category: One of groceries, food, transport, bills, rent, health, entertainment, other.
+      category: One of groceries, food, transport, rent, utilities, subscriptions, shopping,
+        health, education, entertainment, travel, other.
       items: Line items as printed (description, amount as string, quantity as string).
       from_receipt: True when the data came from a receipt image.
     """
@@ -53,13 +54,14 @@ def save_expense(
             items=[expense_service.ItemInput(i.description, i.amount, i.quantity) for i in items or []],
         )
         with tool_db(tool_context) as (db, user_id):
-            expense = expense_service.create_expense(
+            saved = expense_service.add_expense(
                 db, user_id, data, source="receipt" if from_receipt else "manual"
             )
     except (DomainError, ValueError) as exc:
         return error(exc)
 
-    warnings = []
+    expense = saved.expense
+    warnings = list(saved.warnings)  # FX notes and budget alerts from the MONEY hook
     if expense.items:
         items_total = expense_service.items_sum_minor(expense)
         if items_total != expense.total_minor:

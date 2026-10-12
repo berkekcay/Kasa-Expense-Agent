@@ -1,6 +1,7 @@
-"""House agent tools (owner: Agent dev #2): shared expenses, equal split, balances, settle-up.
+"""House agent tools (owner: track HOUSE): shared expenses, splits, balances, settle-up.
 
-Calendar reminders for settle-up arrive in a later sprint as another tool here.
+Track HOUSE adds: a tool for percent / exact / per-item splits (services.houses.add_split_expense)
+and one for settle-up reminders (services.reminders), then lists them in house_agent.py.
 """
 
 from __future__ import annotations
@@ -97,3 +98,42 @@ def get_house_balances(house_id: int, tool_context: ToolContext) -> dict:
             for t in result.transfers
         ],
     }
+
+
+def record_payment(
+    house_id: int,
+    from_user: str,
+    to_user: str,
+    amount: str,
+    tool_context: ToolContext,
+    note: str = "",
+) -> dict:
+    """Record that one flatmate paid another back, which reduces what they owe.
+
+    Args:
+      house_id: Id from list_my_houses.
+      from_user: Member user_id who paid the money back.
+      to_user: Member user_id who received it.
+      amount: Amount as a string with '.' decimal separator, e.g. "43.33".
+      note: Optional note, e.g. "IBAN transfer".
+    """
+    try:
+        with tool_db(tool_context) as (db, user_id):
+            row = house_service.record_settlement(
+                db, user_id, house_id, from_user=from_user, to_user=to_user, amount=amount, note=note or None
+            )
+            balances = house_service.house_balances(db, user_id, house_id)
+            return {
+                "status": "saved",
+                "payment_id": row.id,
+                "from": row.from_user,
+                "to": row.to_user,
+                "amount": format_minor(row.amount_minor),
+                "currency": row.currency,
+                "settle_up_now": [
+                    {"from": t.from_user, "to": t.to_user, "amount": format_minor(t.amount_minor)}
+                    for t in balances.transfers
+                ],
+            }
+    except (DomainError, ValueError) as exc:
+        return error(exc)

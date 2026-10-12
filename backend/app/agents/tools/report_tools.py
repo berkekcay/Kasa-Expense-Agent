@@ -1,4 +1,4 @@
-"""Report agent tool (owner: Agent dev #3): guarded read-only SQL + chart spec."""
+"""Report agent tool (owner: track REPORT): guarded read-only SQL + chart spec."""
 
 from __future__ import annotations
 

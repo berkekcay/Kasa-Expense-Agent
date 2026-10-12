@@ -34,14 +34,24 @@ def equal_split(total_minor: int, participants: Sequence[str]) -> dict[str, int]
 
 
 def compute_balances(
-    payments: Iterable[tuple[str, int]], shares: Iterable[tuple[str, int]], members: Iterable[str] = ()
+    payments: Iterable[tuple[str, int]],
+    shares: Iterable[tuple[str, int]],
+    members: Iterable[str] = (),
+    settlements: Iterable[tuple[str, str, int]] = (),
 ) -> dict[str, int]:
-    """Net balance per user = paid - owed. Positive: others owe them. Sums to zero."""
+    """Net balance per user = paid - owed. Positive: others owe them. Sums to zero.
+
+    `settlements` are recorded payments (from_user, to_user, amount) between members: the
+    payer's debt shrinks and the receiver is owed that much less.
+    """
     balances: dict[str, int] = {m: 0 for m in members}
     for user, amount in payments:
         balances[user] = balances.get(user, 0) + amount
     for user, amount in shares:
         balances[user] = balances.get(user, 0) - amount
+    for from_user, to_user, amount in settlements:
+        balances[from_user] = balances.get(from_user, 0) + amount
+        balances[to_user] = balances.get(to_user, 0) - amount
     return balances
 
 

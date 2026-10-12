@@ -2,11 +2,10 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import { api, type Expense } from "@/lib/api";
+import { CATEGORIES } from "@/lib/categories";
 import { useUserId } from "@/lib/user";
 import { Button, Card, ErrorText, Field, errorMessage } from "@/components/ui";
 import { ExpenseList } from "./ExpenseList";
-
-const CATEGORIES = ["groceries", "food", "transport", "bills", "rent", "health", "entertainment", "other"];
 
 export function ExpensesView() {
   const userId = useUserId();

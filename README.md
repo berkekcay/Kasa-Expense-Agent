@@ -4,6 +4,9 @@ Kasa is an AI agent (Google ADK + Gemini) that looks after a student's personal 
 shared-flat expenses. It reads receipts, saves expenses, splits bills, settles debts and answers
 money questions with charts.
 
+The module map, the data model, who owns which files and how a request flows through the
+system are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 The one rule: the LLM decides *what* to do, and plain Python does all the money math.
 Amounts are stored as integer minor units (kuruş/cents), never floats.
 
@@ -14,21 +17,23 @@ Amounts are stored as integer minor units (kuruş/cents), never floats.
    |
    v
  Next.js web UI (frontend/)        chat, receipt upload, expenses, house, charts
-   |  HTTPS + X-User-Id (dev)  ->  Firebase ID token (later)
+   |  HTTPS + Firebase ID token (or X-User-Id in dev mode)
    v
  FastAPI backend (backend/app)
    |-- api/        REST routers
    |-- agents/     Google ADK agents
    |     coordinator --> receipt_agent   (save_expense, list_recent_expenses)
-   |                 --> house_agent     (equal split, balances, settle-up)
+   |                 --> house_agent     (splits, balances, settle-up, paybacks)
    |                 --> report_agent    (guarded read-only SQL -> chart spec)
-   |                 --> budget_agent    (stub, sprint 3)
+   |                 --> budget_agent    (budgets, subscriptions, exchange rates)
+   |                 --> inbox_agent     (expenses found in Gmail and bank statements)
    |-- services/   plain-Python data layer + money math (unit tested)
    |-- db/         SQLAlchemy models + sessions (sets SESSION_CONTEXT on MSSQL)
+   |-- alembic/    migrations, including row-level security on SQL Server
    |        |                                  |
    v        v                                  v
- Gemini API            SQLite (local dev)  /  SQL Server with row-level security (prod)
- (later: Gmail, Calendar, TCMB exchange rates)
+ Gemini API (Ollama     SQLite (local dev)  /  SQL Server with row-level security (prod)
+ in dev and tests)      Gmail, Calendar and TCMB exchange rates via app/integrations/
 ```
 
 Guardrails:
@@ -36,20 +41,15 @@ Guardrails:
   `my_expenses` and `my_expense_items`. Those names are injected as CTEs filtered to the
   current user, and a row limit is applied.
 - Users only see their own data, enforced three times: service queries, scoped report CTEs
-  and SQL Server RLS (`backend/sql/mssql/002_row_level_security.sql`).
+  and SQL Server RLS (created by the Alembic migrations in `backend/alembic/versions/`).
 - Receipt and email content is treated as data, never as instructions. This is written into
   every agent prompt, and the acting user always comes from the request, never from the model.
 - No keys in code. Settings come from env vars, which are backed by Secret Manager on Cloud Run.
 
 ## Who owns what
 
-| Path | Owner |
-| --- | --- |
-| `backend/app/db/`, `backend/app/services/expenses.py`, `backend/app/api/`, `backend/app/auth.py`, `backend/sql/` | Database & Backend |
-| `backend/app/agents/coordinator.py`, `receipt_agent.py`, `budget_agent.py`, `tools/receipt_tools.py` | Agent dev #1 |
-| `backend/app/agents/house_agent.py`, `tools/house_tools.py`, `backend/app/services/settlement.py`, `services/houses.py` | Agent dev #2 |
-| `backend/app/agents/report_agent.py`, `tools/report_tools.py`, `backend/app/services/reports.py`, `tests/`, Dockerfiles / Cloud Run | Agent dev #3 |
-| `frontend/` (`src/features/{expenses,receipts,houses,chat}`, `src/lib/api.ts`) | Frontend |
+Sprint 2 to 4 work is split into four tracks (HOUSE, MONEY, INGEST, REPORT), each with its
+own files. The table is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tracks-and-owners).
 
 ## Run locally
 
@@ -79,8 +79,26 @@ pytest
 uvicorn app.main:app --reload --port 8000
 ```
 
-API docs are at http://localhost:8000/docs. Without `GOOGLE_API_KEY`, everything works except
-`POST /receipts` and `POST /chat`, which return 503.
+The database schema is created and upgraded by Alembic when the app starts (`AUTO_MIGRATE=true`).
+To run it by hand: `alembic upgrade head`.
+
+API docs are at http://localhost:8000/docs. Without an LLM provider, everything works except
+`POST /receipts` and `POST /chat`, which return 503. Endpoints of features that are not built
+yet return 501.
+
+### Running the agents on Ollama instead of Gemini
+
+For development without a Gemini key, point the agents at an Ollama server in `backend/.env`:
+
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434     # or the team server
+OLLAMA_MODEL=gpt-oss:20b                    # chat and tool calling
+OLLAMA_VISION_MODEL=qwen3-vl:8b             # receipt photos
+```
+
+This needs `requirements-dev.txt` (it adds litellm). Live end-to-end tests:
+`KASA_LIVE_TESTS=1 pytest -m live -s`.
 
 ### Frontend (any OS)
 
@@ -96,14 +114,23 @@ as `ali`, add `ayse`, then switch to `ayse`.
 
 ## Environment variables
 
+Every backend setting is listed with a comment in `backend/.env.example`; the frontend ones are
+in `frontend/.env.example`. The ones you need most:
+
 | Variable | Where | Default | Notes |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | backend | `sqlite:///./kasa.db` | Prod: `mssql+pyodbc://user:pass@host:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server` |
+| `AUTO_MIGRATE` | backend | `true` | Prod: `false`, and migrate as a deploy step |
+| `LLM_PROVIDER` | backend | `gemini` | `ollama` for dev and tests |
 | `GOOGLE_API_KEY` | backend | empty | Gemini key. Empty disables the agent endpoints (503). |
 | `GEMINI_MODEL` | backend | `gemini-2.5-flash` | Any Gemini model id your key can use |
+| `FIREBASE_PROJECT_ID` | backend | empty | Set in prod. Empty means dev mode (X-User-Id) |
+| `TOKEN_ENCRYPTION_KEY` | backend | empty | Fernet key for Google refresh tokens: `python -m app.services.crypto` |
+| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | backend | empty | Gmail and Calendar connection |
+| `INTERNAL_TASK_TOKEN` | backend | empty | Cloud Scheduler secret for `/internal/*` |
 | `CORS_ORIGINS` | backend | `http://localhost:3000` | Comma-separated list |
-| `DEV_DEFAULT_USER_ID` | backend | `dev-user` | Used when there is no `X-User-Id` header (dev only) |
 | `NEXT_PUBLIC_API_URL` | frontend | `http://localhost:8000` | Baked in at build time |
+| `NEXT_PUBLIC_FIREBASE_*` | frontend | empty | Google sign-in; empty shows the dev user box |
 
 ### Getting a Gemini API key
 
@@ -113,14 +140,17 @@ as `ali`, add `ayse`, then switch to `ayse`.
 
 ## SQL Server (production database)
 
+The schema and the row-level security policy come from the Alembic migrations. Run them with
+an admin login, then let the app connect as a low-privilege user (not `db_owner`):
+
 ```bash
 pip install -r requirements-mssql.txt   # pyodbc; also needs Microsoft ODBC Driver 18
-sqlcmd -S <server> -d kasa -i backend/sql/mssql/001_schema.sql
-sqlcmd -S <server> -d kasa -i backend/sql/mssql/002_row_level_security.sql
+MIGRATION_DATABASE_URL="mssql+pyodbc://admin:<pw>@<server>:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server" \
+  alembic upgrade head
 ```
 
-The app should connect as a low-privilege user, not `db_owner`. Each transaction runs
-`sp_set_session_context 'user_id'`, and the RLS policy filters on that value.
+To review the DDL first, add `--sql` (it prints the script and needs no server). Each
+transaction runs `sp_set_session_context 'user_id'`, and the RLS policy filters on that value.
 
 ## Deploy to Google Cloud Run (outline)
 
@@ -149,7 +179,9 @@ gcloud run deploy kasa-web --image $IMAGE --region europe-west1 --allow-unauthen
 
 The Cloud Run service account needs `roles/secretmanager.secretAccessor`. Without
 `DATABASE_URL`, the backend image falls back to a throwaway SQLite file in `/tmp` (demo only).
-Firebase Auth replaces the `X-User-Id` dev header in a later sprint (`backend/app/auth.py`).
+With SQL Server, deploy with `AUTO_MIGRATE=false` and run `alembic upgrade head` as a Cloud Run
+job using an admin `MIGRATION_DATABASE_URL`. Set `FIREBASE_PROJECT_ID` on the backend and the
+`NEXT_PUBLIC_FIREBASE_*` build args on the frontend so only signed-in users get in.
 
 ## Sprint 1 checklist
 
@@ -161,5 +193,16 @@ Firebase Auth replaces the `X-User-Id` dev header in a later sprint (`backend/ap
 - [x] Dockerfiles for Cloud Run (backend and frontend)
 - [x] pytest: money math, SQL guard, API happy paths, and ADK wiring with a scripted fake LLM
 - [ ] Try live Gemini calls with a real key (receipt accuracy, routing quality)
-- [ ] Provision SQL Server, run the `sql/mssql` scripts and test RLS end to end
+- [ ] Provision SQL Server, run the migrations and test RLS end to end
 - [ ] First Cloud Run deploy
+
+## Sprint 2 foundation
+
+- [x] Alembic migrations for SQLite and SQL Server (RLS included); a test checks they match the models
+- [x] Data model for sprints 2 to 4 (splits, settlements, budgets, FX, inbox, Google, subscriptions, reminders)
+- [x] Recorded payments between flatmates reduce balances
+- [x] Fixed category list with Turkish synonyms
+- [x] Firebase Auth (optional) with the dev header as fallback
+- [x] Ollama provider for dev; the three Sprint 1 flows pass live on the team server
+- [x] Skeleton modules, routes and pages for the HOUSE, MONEY, INGEST and REPORT tracks
+- [x] CI: ruff, pytest, eslint and next build on every push
