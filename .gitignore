@@ -24,3 +24,6 @@ next-env.d.ts
 Thumbs.db
 .vscode/
 .idea/
+
+# Deploy settings for one person (deploy/config.sh reads it)
+deploy/config.local.sh

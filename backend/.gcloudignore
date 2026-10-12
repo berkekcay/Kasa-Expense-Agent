@@ -1,0 +1,13 @@
+# Files `gcloud builds submit backend` does not upload (deploy/deploy_backend.sh).
+# Same idea as .dockerignore, which still applies inside the build.
+.gcloudignore
+.git
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.db
+.env
+tests/
+evals/

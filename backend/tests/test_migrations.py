@@ -1,6 +1,7 @@
 """Alembic is the only source of the schema: the migrations must build exactly the models."""
 
 import io
+import re
 
 import pytest
 from alembic import command
@@ -90,3 +91,32 @@ def test_sql_server_ddl_renders_offline(monkeypatch):
     assert "WHERE external_ref IS NOT NULL" in sql  # filtered unique index for import dedupe
     assert "expense_date DATE NOT NULL" in sql and "parsed_json NVARCHAR(max)" in sql
     assert BASELINE_REVISION in sql
+
+
+def test_sql_server_ddl_fits_azure_sql_database(monkeypatch):
+    """Azure SQL Database is one database without server-level access: no USE, no
+    cross-database names, no logins, filegroups or server settings in the migrations."""
+    monkeypatch.setenv(
+        "MIGRATION_DATABASE_URL", "mssql+pyodbc://u:p@offline/kasa?driver=ODBC+Driver+18+for+SQL+Server"
+    )
+    buffer = io.StringIO()
+    cfg = alembic_config()
+    cfg.output_buffer = buffer
+    command.upgrade(cfg, "head", sql=True)
+    sql = buffer.getvalue().upper()
+    for forbidden in (
+        r"^\s*USE\s",
+        r"\bCREATE\s+LOGIN\b",
+        r"\bALTER\s+(DATABASE|SERVER)\b",
+        r"\bFILEGROUP\b",
+        r"\bON\s+\[?PRIMARY\]?",
+        r"\bSP_CONFIGURE\b",
+        r"\bXP_\w+",
+        r"\bMASTER\.",
+        r"\bOPENROWSET\b|\bOPENQUERY\b|\bOPENDATASOURCE\b",
+        r"\b\w+\.DBO\.\w+",  # three-part (cross-database) names
+    ):
+        assert not re.search(forbidden, sql, re.MULTILINE), forbidden
+    # The predicates read the per-transaction SESSION_CONTEXT that app.db.session sets.
+    assert "SESSION_CONTEXT(N'USER_ID')" in sql
+    assert "WITH (STATE = ON, SCHEMABINDING = ON)" in sql

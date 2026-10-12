@@ -1,0 +1,58 @@
+name: Deploy
+
+# Manual deploy to Cloud Run (Actions > Deploy > Run workflow, on main).
+# Authenticates with Workload Identity Federation, so there is no JSON key anywhere.
+# One-time setup: docs/SETUP.md, step 10. The repository variables used below are printed by
+# `GITHUB_REPO=owner/repo bash deploy/gcp_bootstrap.sh`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: What to deploy
+        type: choice
+        options: [both, backend, frontend]
+        default: both
+
+permissions:
+  contents: read
+  id-token: write  # lets the job request a GitHub OIDC token for Google
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      PROJECT_NUMBER: ${{ vars.GCP_PROJECT_NUMBER }}
+      REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+      # Build with docker on the runner and push to Artifact Registry, so the deploy account
+      # needs no Cloud Build or Cloud Storage roles.
+      BUILDER: docker
+      NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY }}
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+      NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Backend (build, migrate, deploy)
+        if: inputs.target != 'frontend'
+        run: bash deploy/deploy_backend.sh
+
+      - name: Frontend (build, deploy)
+        if: inputs.target != 'backend'
+        run: bash deploy/deploy_frontend.sh

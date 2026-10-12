@@ -1,5 +1,5 @@
-# Kasa backend for Google Cloud Run.
-#   gcloud run deploy kasa-api --source . --region europe-west1
+# Kasa backend for Google Cloud Run. Built and deployed by deploy/deploy_backend.sh, which
+# also runs `alembic upgrade head` from this image as a Cloud Run job (docs/SETUP.md).
 # Debian 12 (bookworm) pinned: it is a supported target for Microsoft's msodbcsql18 packages.
 FROM python:3.12-slim-bookworm
 
@@ -32,8 +32,8 @@ RUN useradd --create-home --uid 10001 kasa
 USER kasa
 
 # Cloud Run injects $PORT. DATABASE_URL falls back to a throwaway SQLite file for demo deploys;
-# in prod set it (from Secret Manager) to the mssql+pyodbc URL and AUTO_MIGRATE=false, and run
-# `alembic upgrade head` with an admin MIGRATION_DATABASE_URL as a deploy step (Cloud Run job).
+# in prod it comes from Secret Manager (the mssql+pyodbc URL of the app user) with
+# AUTO_MIGRATE=false, and the migration job uses an admin MIGRATION_DATABASE_URL instead.
 ENV PORT=8080 \
     DATABASE_URL=sqlite:////tmp/kasa.db
 CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]

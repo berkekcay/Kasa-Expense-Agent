@@ -8,7 +8,9 @@ each new transaction pushes that id into SESSION_CONTEXT so the row-level securi
 
 from __future__ import annotations
 
+import logging
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -16,6 +18,8 @@ from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
+
+log = logging.getLogger(__name__)
 
 _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
@@ -33,7 +37,45 @@ def _make_engine(url: str) -> Engine:
 
         return engine
     # pool_pre_ping recovers connections dropped while a Cloud Run instance sat idle.
-    return create_engine(url, pool_pre_ping=True)
+    engine = create_engine(url, pool_pre_ping=True)
+    if engine.dialect.name == "mssql":
+        install_connect_retry(engine)
+    return engine
+
+
+# Azure SQL serverless pauses when idle. A login while it resumes (about a minute) fails with
+# 40613 "database is not currently available"; the others are Azure's documented transient
+# login errors. Retrying them makes the first request after a pause slow instead of failing.
+TRANSIENT_CONNECT_ERRORS = ("40613", "40197", "40501", "49918", "49919", "49920")
+CONNECT_RETRY_DELAYS = (2.0, 4.0, 8.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0)  # ~74 s in total
+
+
+def is_transient_connect_error(exc: BaseException) -> bool:
+    message = " ".join(str(arg) for arg in getattr(exc, "args", ())) or str(exc)
+    return any(code in message for code in TRANSIENT_CONNECT_ERRORS)
+
+
+def connect_with_retry(dialect, cargs, cparams, *, delays=CONNECT_RETRY_DELAYS, sleep=time.sleep):
+    """Open a DBAPI connection, waiting out transient Azure SQL login errors."""
+    for attempt, delay in enumerate((*delays, None), start=1):
+        try:
+            return dialect.connect(*cargs, **cparams)
+        except Exception as exc:
+            if delay is None or not is_transient_connect_error(exc):
+                raise
+            log.warning("database not available yet (attempt %d), retrying in %.0fs", attempt, delay)
+            sleep(delay)
+    raise AssertionError("unreachable")
+
+
+def install_connect_retry(engine: Engine):
+    """Route every new connection of `engine` through `connect_with_retry`; returns the listener."""
+
+    @event.listens_for(engine, "do_connect")
+    def _do_connect(dialect, _conn_rec, cargs, cparams):
+        return connect_with_retry(dialect, cargs, cparams)
+
+    return _do_connect
 
 
 def get_engine() -> Engine:

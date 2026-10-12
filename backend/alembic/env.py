@@ -66,6 +66,10 @@ def run_online() -> None:
     if config.config_file_name is not None:
         fileConfig(config.config_file_name, disable_existing_loggers=False)
     engine = create_engine(_url(), poolclass=pool.NullPool)
+    if engine.dialect.name == "mssql":
+        from app.db.session import install_connect_retry
+
+        install_connect_retry(engine)  # wait for a paused Azure SQL database to resume
     with engine.connect() as conn:
         if conn.dialect.name == "sqlite":
             conn.exec_driver_sql("PRAGMA foreign_keys=OFF")  # see app.db.migrate

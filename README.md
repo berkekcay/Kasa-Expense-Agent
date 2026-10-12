@@ -142,50 +142,35 @@ in `frontend/.env.example`. The ones you need most:
 2. Click **Create API key** and pick or create a Google Cloud project.
 3. Put the key in `backend/.env` as `GOOGLE_API_KEY=...`. Never commit it. `.env` is gitignored.
 
-## SQL Server (production database)
+## Deploying
 
-The schema and the row-level security policy come from the Alembic migrations. Run them with
-an admin login, then let the app connect as a low-privilege user (not `db_owner`):
+Production runs on Google Cloud Run (`kasa-api` and `kasa-web` in `europe-west1`) with an
+Azure SQL Database on the free offer. [docs/SETUP.md](docs/SETUP.md) is the full guide, from
+an empty account to a smoke-tested deployment: Gemini key, Azure SQL server, database and
+low-privilege app user, Google OAuth consent screen and client, Firebase Auth, secrets,
+Pub/Sub, Cloud Scheduler and the GitHub deploy workflow.
 
-```bash
-pip install -r requirements-mssql.txt   # pyodbc; also needs Microsoft ODBC Driver 18
-MIGRATION_DATABASE_URL="mssql+pyodbc://admin:<pw>@<server>:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server" \
-  alembic upgrade head
-```
-
-To review the DDL first, add `--sql` (it prints the script and needs no server). Each
-transaction runs `sp_set_session_context 'user_id'`, and the RLS policy filters on that value.
-
-## Deploy to Google Cloud Run (outline)
+The short version, in Cloud Shell after the console steps in the guide:
 
 ```bash
-gcloud config set project <PROJECT_ID>
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
-
-# Secrets
-printf '%s' "<gemini-key>"   | gcloud secrets create gemini-api-key --data-file=-
-printf '%s' "<mssql-url>"    | gcloud secrets create database-url  --data-file=-
-
-# Backend (builds backend/Dockerfile with Cloud Build)
-gcloud run deploy kasa-api --source backend --region europe-west1 --allow-unauthenticated \
-  --set-secrets GOOGLE_API_KEY=gemini-api-key:latest,DATABASE_URL=database-url:latest \
-  --set-env-vars CORS_ORIGINS=https://<kasa-web-url>
-
-# Frontend: NEXT_PUBLIC_API_URL is baked in at build time, so build the image with a build arg
-# (Cloud Shell has Docker; we can't run Docker on the team laptops)
-gcloud artifacts repositories create kasa --repository-format=docker --location=europe-west1
-gcloud auth configure-docker europe-west1-docker.pkg.dev
-IMAGE=europe-west1-docker.pkg.dev/<PROJECT_ID>/kasa/web
-docker build frontend --build-arg NEXT_PUBLIC_API_URL=https://<kasa-api-url> -t $IMAGE
-docker push $IMAGE
-gcloud run deploy kasa-web --image $IMAGE --region europe-west1 --allow-unauthenticated
+bash deploy/gcp_bootstrap.sh     # APIs, service accounts, secrets, Pub/Sub, Scheduler (re-runnable)
+bash deploy/deploy_backend.sh    # Cloud Build, `alembic upgrade head` as a Cloud Run job, deploy
+bash deploy/deploy_frontend.sh   # Cloud Build with the NEXT_PUBLIC_* build args, deploy
 ```
 
-The Cloud Run service account needs `roles/secretmanager.secretAccessor`. Without
-`DATABASE_URL`, the backend image falls back to a throwaway SQLite file in `/tmp` (demo only).
-With SQL Server, deploy with `AUTO_MIGRATE=false` and run `alembic upgrade head` as a Cloud Run
-job using an admin `MIGRATION_DATABASE_URL`. Set `FIREBASE_PROJECT_ID` on the backend and the
-`NEXT_PUBLIC_FIREBASE_*` build args on the frontend so only signed-in users get in.
+The schema and the row-level security policy come only from the Alembic migrations. They run
+as a Cloud Run job with an admin login (`MIGRATION_DATABASE_URL`), while the service runs with
+`AUTO_MIGRATE=false` as a contained database user that can read and write data but not change
+the schema. Each transaction sets `SESSION_CONTEXT('user_id')`, and the RLS policy filters on
+it. To review the SQL Server DDL without a server:
+
+```bash
+cd backend
+alembic -x url="mssql+pyodbc://u:p@host/kasa?driver=ODBC+Driver+18+for+SQL+Server" upgrade head --sql
+```
+
+`.github/workflows/deploy.yml` runs the same deploy scripts from GitHub (manual trigger, `main`
+only) with Workload Identity Federation instead of a key file.
 
 ## Sprint 1 checklist
 
@@ -197,8 +182,8 @@ job using an admin `MIGRATION_DATABASE_URL`. Set `FIREBASE_PROJECT_ID` on the ba
 - [x] Dockerfiles for Cloud Run (backend and frontend)
 - [x] pytest: money math, SQL guard, API happy paths, and ADK wiring with a scripted fake LLM
 - [ ] Try live Gemini calls with a real key (receipt accuracy, routing quality)
-- [ ] Provision SQL Server, run the migrations and test RLS end to end
-- [ ] First Cloud Run deploy
+- [ ] Provision SQL Server, run the migrations and test RLS end to end (Azure SQL steps are in docs/SETUP.md)
+- [ ] First Cloud Run deploy (the scripts in `deploy/` are ready but have not run against a real project)
 
 ## Sprint 2 foundation
 
@@ -210,3 +195,25 @@ job using an admin `MIGRATION_DATABASE_URL`. Set `FIREBASE_PROJECT_ID` on the ba
 - [x] Ollama provider for dev; the three Sprint 1 flows pass live on the team server
 - [x] Skeleton modules, routes and pages for the HOUSE, MONEY, INGEST and REPORT tracks
 - [x] CI: ruff, pytest, eslint and next build on every push
+
+## Sprints 2 to 4 tracks
+
+All four tracks have landed and the backend has no stubs left. Tested offline with fakes for
+Google and the LLM; the REPORT evals also ran live on Ollama (`backend/evals/latest.md`).
+
+- [x] HOUSE: equal, percent, exact and per-item splits, recorded payments, settle-up reminders (Google Calendar)
+- [x] MONEY: TCMB exchange rates, budgets with alerts, subscription detection, dashboard
+- [x] INGEST: Google OAuth connection, Gmail sync and push handler, CSV and PDF statement import, inbox approval
+- [x] REPORT: user-scoped relations, checker agent that reviews each query, eval runner
+- [ ] Real Google OAuth consent, Gmail push and Calendar events against Google
+- [ ] The same flows on Gemini instead of Ollama
+
+## Deployment kit
+
+- [x] Setup guide from an empty account to a smoke test: [docs/SETUP.md](docs/SETUP.md)
+- [x] `deploy/` scripts for Cloud Shell: bootstrap, backend (migration job, then service), frontend; checked with `bash -n` and dry runs against a stubbed `gcloud`
+- [x] Manual GitHub Actions deploy with Workload Identity Federation (`.github/workflows/deploy.yml`)
+- [x] Backend waits for a paused Azure SQL serverless database to resume (connect retry, unit tested)
+- [x] SQL Server DDL reviewed for Azure SQL Database; a test keeps out `USE`, cross-database names and server-level statements
+- [ ] Run the scripts against a real Google Cloud project and Azure SQL database
+- [ ] RLS checked on Azure SQL with real users (smoke test in docs/SETUP.md)

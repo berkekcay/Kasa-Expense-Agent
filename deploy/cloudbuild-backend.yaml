@@ -1,0 +1,9 @@
+# Cloud Build config for backend/Dockerfile, used by deploy/deploy_backend.sh.
+#   gcloud builds submit backend --config deploy/cloudbuild-backend.yaml --substitutions _IMAGE=...
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+options:
+  # Required when the build runs as a user-managed service account (kasa-build).
+  logging: CLOUD_LOGGING_ONLY
