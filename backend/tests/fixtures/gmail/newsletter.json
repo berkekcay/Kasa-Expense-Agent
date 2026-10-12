@@ -1,0 +1,119 @@
+{
+  "id": "18f2a3b4c5d6e703",
+  "threadId": "18f2a3b4c5d6e703",
+  "labelIds": [
+    "UNREAD",
+    "CATEGORY_UPDATES",
+    "INBOX"
+  ],
+  "snippet": "Ekim kampanyası başladı! Seçili ürünlerde %50&#39;ye varan indirim",
+  "sizeEstimate": 18000,
+  "historyId": "902390",
+  "internalDate": "1791612000000",
+  "payload": {
+    "partId": "",
+    "mimeType": "multipart/mixed",
+    "filename": "",
+    "headers": [
+      {
+        "name": "Delivered-To",
+        "value": "ayse.ogrenci@gmail.com"
+      },
+      {
+        "name": "Received",
+        "value": "by 2002:a05:6a10:fake with SMTP id fake; Sat, 10 Oct 2026"
+      },
+      {
+        "name": "MIME-Version",
+        "value": "1.0"
+      },
+      {
+        "name": "Date",
+        "value": "Sat, 10 Oct 2026 09:00:00 +0300"
+      },
+      {
+        "name": "Message-ID",
+        "value": "<18f2a3b4c5d6e703@mail.example>"
+      },
+      {
+        "name": "Subject",
+        "value": "Ekim kampanyası: %50'ye varan indirim"
+      },
+      {
+        "name": "From",
+        "value": "Shop Example <kampanya@shop.example>"
+      },
+      {
+        "name": "To",
+        "value": "Ayşe Öğrenci <ayse.ogrenci@gmail.com>"
+      },
+      {
+        "name": "Content-Type",
+        "value": "multipart/mixed; boundary=\"000000000000abc\""
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "partId": "0",
+        "mimeType": "multipart/alternative",
+        "filename": "",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "multipart/alternative; boundary=\"000000000000def\""
+          }
+        ],
+        "body": {
+          "size": 0
+        },
+        "parts": [
+          {
+            "partId": "0.0",
+            "mimeType": "text/plain",
+            "filename": "",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain; charset=UTF-8"
+              },
+              {
+                "name": "Content-Transfer-Encoding",
+                "value": "quoted-printable"
+              }
+            ],
+            "body": {
+              "size": 288,
+              "data": "RWtpbSBrYW1wYW55YXPEsSBiYcWfbGFkxLEhCgpTZcOnaWxpIMO8csO8bmxlcmRlICU1MCd5ZSB2YXJhbiBpbmRpcmltLCA1MDAgVEwgdmUgw7x6ZXJpIGFsxLHFn3ZlcmnFn2xlcmRlIGthcmdvIGJlZGF2YS4KS2FtcGFueWEgMzEuMTAuMjAyNiB0YXJpaGluZSBrYWRhciBnZcOnZXJsaWRpci4KCkhlbWVuIGFsxLHFn3ZlcmnFn2UgYmHFn2xhOiBodHRwczovL3Nob3AuZXhhbXBsZS9rYW1wYW55YQpBYm9uZWxpa3RlbiDDp8Sxa21hayBpw6dpbjogaHR0cHM6Ly9zaG9wLmV4YW1wbGUvdW5zdWJzY3JpYmUK"
+            }
+          }
+        ]
+      },
+      {
+        "partId": "1",
+        "mimeType": "image/jpeg",
+        "filename": "kampanya.jpg",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "image/jpeg; name=\"kampanya.jpg\""
+          },
+          {
+            "name": "Content-Disposition",
+            "value": "attachment; filename=\"kampanya.jpg\""
+          },
+          {
+            "name": "Content-Transfer-Encoding",
+            "value": "base64"
+          }
+        ],
+        "body": {
+          "attachmentId": "ANGjdJ8xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "size": 48211
+        }
+      }
+    ]
+  }
+}

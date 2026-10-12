@@ -1,0 +1,64 @@
+{
+  "id": "18f2a3b4c5d6e702",
+  "threadId": "18f2a3b4c5d6e702",
+  "labelIds": [
+    "UNREAD",
+    "CATEGORY_UPDATES",
+    "INBOX"
+  ],
+  "snippet": "Sayın AYŞE ÖĞRENCİ, **** **** **** 4821 numaralı kartınızdan 09.10.2026 14:32 tarihinde",
+  "sizeEstimate": 18000,
+  "historyId": "902355",
+  "internalDate": "1791545580000",
+  "payload": {
+    "partId": "0",
+    "mimeType": "text/html",
+    "filename": "",
+    "headers": [
+      {
+        "name": "Delivered-To",
+        "value": "ayse.ogrenci@gmail.com"
+      },
+      {
+        "name": "Received",
+        "value": "by 2002:a05:6a10:fake with SMTP id fake; Fri, 09 Oct 2026"
+      },
+      {
+        "name": "MIME-Version",
+        "value": "1.0"
+      },
+      {
+        "name": "Date",
+        "value": "Fri, 09 Oct 2026 14:33:00 +0300"
+      },
+      {
+        "name": "Message-ID",
+        "value": "<18f2a3b4c5d6e702@mail.example>"
+      },
+      {
+        "name": "Subject",
+        "value": "=?ISO-8859-9?Q?Kart=FDn=FDzdan_harcama_yap=FDld=FD?="
+      },
+      {
+        "name": "From",
+        "value": "Kasa Bank <bilgilendirme@bank.example>"
+      },
+      {
+        "name": "To",
+        "value": "Ayşe Öğrenci <ayse.ogrenci@gmail.com>"
+      },
+      {
+        "name": "Content-Type",
+        "value": "text/html; charset=ISO-8859-9"
+      },
+      {
+        "name": "Content-Transfer-Encoding",
+        "value": "quoted-printable"
+      }
+    ],
+    "body": {
+      "size": 439,
+      "data": "PGh0bWw-PGJvZHk-PHRhYmxlIHdpZHRoPSI2MDAiPjx0cj48dGQ-CjxwPlNhef1uIEFZ3kUg1tBSRU5D3Sw8L3A-CjxwPioqKiogKioqKiAqKioqIDQ4MjEgbnVtYXJhbP0ga2FydP1u_XpkYW4gMDkuMTAuMjAyNiAxNDozMiB0YXJpaGluZGUKPGI-Td1HUk9TIEtBRElL1lkg3VNUQU5CVUw8L2I-IGn-eWVyaW5kZSA8Yj40MTIsMzUgVEw8L2I-IHR1dGFy_W5kYSBoYXJjYW1hIHlhcP1sbf3-dP1yLjwvcD4KPHA-S3VsbGFu_WxhYmlsaXIgbGltaXRpbml6OiAxOC41ODcsNjUgVEw8L3A-CjxwIHN0eWxlPSJmb250LXNpemU6MTBweCI-QnUgZS1wb3N0YSBiaWxnaWxlbmRpcm1lIGFtYeds_WT9ci4g3vxwaGVsaSBiaXIgaf5sZW0gZ_Zy_HJzZW5pego0NDQgMCAwMDAgbnVtYXJhbP0gaGF0dP0gYXJhef1u_XouPC9wPgo8L3RkPjwvdHI-PC90YWJsZT48L2JvZHk-PC9odG1sPg"
+    }
+  }
+}

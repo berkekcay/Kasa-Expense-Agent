@@ -1,0 +1,99 @@
+{
+  "id": "18f2a3b4c5d6e701",
+  "threadId": "18f2a3b4c5d6e701",
+  "labelIds": [
+    "UNREAD",
+    "CATEGORY_UPDATES",
+    "INBOX"
+  ],
+  "snippet": "Merhaba Ayşe, Siparişiniz alındı! Sipariş numaranız: 7381049256 Sipariş tarihi: 05.10.2026",
+  "sizeEstimate": 18000,
+  "historyId": "902311",
+  "internalDate": "1791224040000",
+  "payload": {
+    "partId": "",
+    "mimeType": "multipart/alternative",
+    "filename": "",
+    "headers": [
+      {
+        "name": "Delivered-To",
+        "value": "ayse.ogrenci@gmail.com"
+      },
+      {
+        "name": "Received",
+        "value": "by 2002:a05:6a10:fake with SMTP id fake; Mon, 05 Oct 2026"
+      },
+      {
+        "name": "MIME-Version",
+        "value": "1.0"
+      },
+      {
+        "name": "Date",
+        "value": "Mon, 05 Oct 2026 21:14:00 +0300"
+      },
+      {
+        "name": "Message-ID",
+        "value": "<18f2a3b4c5d6e701@mail.example>"
+      },
+      {
+        "name": "Subject",
+        "value": "Siparişiniz alındı - #7381049256"
+      },
+      {
+        "name": "From",
+        "value": "Trendyol <siparis@mail.trendyol.example>"
+      },
+      {
+        "name": "To",
+        "value": "Ayşe Öğrenci <ayse.ogrenci@gmail.com>"
+      },
+      {
+        "name": "Content-Type",
+        "value": "multipart/alternative; boundary=\"000000000000abc\""
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "partId": "0",
+        "mimeType": "text/plain",
+        "filename": "",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "text/plain; charset=UTF-8"
+          },
+          {
+            "name": "Content-Transfer-Encoding",
+            "value": "quoted-printable"
+          }
+        ],
+        "body": {
+          "size": 475,
+          "data": "TWVyaGFiYSBBecWfZSwKClNpcGFyacWfaW5peiBhbMSxbmTEsSEgU2lwYXJpxZ8gbnVtYXJhbsSxejogNzM4MTA0OTI1NgpTaXBhcmnFnyB0YXJpaGk6IDA1LjEwLjIwMjYKCsOccsO8bmxlcgotIEthYmxvc3V6IEt1bGFrbMSxayBCbHVldG9vdGggNS4zICgxIGFkZXQpIC4uLi4uLi4uLi4gNzQ5LDkwIFRMCi0gxZ5lZmZhZiBUZWxlZm9uIEvEsWzEsWbEsSAoMSBhZGV0KSAuLi4uLi4uLi4uLi4uLi4uLi4uLiAxMjksOTAgVEwKCkFyYSB0b3BsYW06IDg3OSw4MCBUTApLYXJnbzogMCwwMCBUTApLdXBvbiBpbmRpcmltaTogLTUwLDAwIFRMClRvcGxhbTogODI5LDgwIFRMCgrDlmRlbWU6IEtyZWRpIGthcnTEsSAoKioqKiA0ODIxKSwgdGVrIMOnZWtpbQoKVGVzbGltYXQgYWRyZXNpOiBLYWTEsWvDtnkgLyDEsHN0YW5idWwKU2lwYXJpxZ9pbml6aSAiU2lwYXJpxZ9sZXJpbSIgc2F5ZmFzxLFuZGFuIHRha2lwIGVkZWJpbGlyc2luaXouCg"
+        }
+      },
+      {
+        "partId": "1",
+        "mimeType": "text/html",
+        "filename": "",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "text/html; charset=UTF-8"
+          },
+          {
+            "name": "Content-Transfer-Encoding",
+            "value": "quoted-printable"
+          }
+        ],
+        "body": {
+          "size": 581,
+          "data": "PGh0bWw-PGhlYWQ-PHN0eWxlPi54e2NvbG9yOiNmMjdhMWF9PC9zdHlsZT48dGl0bGU-U2lwYXJpxZ88L3RpdGxlPjwvaGVhZD48Ym9keT4KPGRpdiBzdHlsZT0iZGlzcGxheTpub25lIj5TaXBhcmnFn2luaXogYWzEsW5kxLEsIHRvcGxhbSA4MjksODAgVEw8L2Rpdj4KPGgyPk1lcmhhYmEgQXnFn2UsPC9oMj48cD5TaXBhcmnFn2luaXogYWzEsW5kxLEhIFNpcGFyacWfIG51bWFyYW7EsXo6IDxiPjczODEwNDkyNTY8L2I-PC9wPgo8dGFibGU-PHRyPjx0ZD5LYWJsb3N1eiBLdWxha2zEsWsgQmx1ZXRvb3RoIDUuMzwvdGQ-PHRkPjEgYWRldDwvdGQ-PHRkPjc0OSw5MCZuYnNwO1RMPC90ZD48L3RyPgo8dHI-PHRkPsWeZWZmYWYgVGVsZWZvbiBLxLFsxLFmxLE8L3RkPjx0ZD4xIGFkZXQ8L3RkPjx0ZD4xMjksOTAmbmJzcDtUTDwvdGQ-PC90cj4KPHRyPjx0ZD5LdXBvbiBpbmRpcmltaTwvdGQ-PHRkPjwvdGQ-PHRkPi01MCwwMCZuYnNwO1RMPC90ZD48L3RyPgo8dHI-PHRkPjxiPlRvcGxhbTwvYj48L3RkPjx0ZD48L3RkPjx0ZD48Yj44MjksODAmbmJzcDtUTDwvYj48L3RkPjwvdHI-PC90YWJsZT4KPC9ib2R5PjwvaHRtbD4"
+        }
+      }
+    ]
+  }
+}

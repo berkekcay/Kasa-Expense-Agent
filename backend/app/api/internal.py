@@ -16,7 +16,7 @@ import json
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response
 
 from app.config import get_settings
 from app.db.session import session_for
@@ -79,17 +79,29 @@ def fx_refresh() -> dict:
         return {"rates": fx.refresh_rates(db)}
 
 
+async def _process_push(email: str, history_id: str) -> None:
+    try:
+        await gmail_sync.handle_push(email, history_id)
+    except Exception:
+        # The hourly sync-all picks up whatever this run missed.
+        log.exception("Gmail push processing failed")
+
+
 @router.post("/gmail/push", status_code=204, dependencies=[Depends(require_pubsub_push)])
-async def gmail_push(request: Request) -> Response:
+async def gmail_push(request: Request, background: BackgroundTasks) -> Response:
     """Gmail -> Pub/Sub -> here. Body: {"message": {"data": base64(json{emailAddress,
-    historyId})}}. Malformed messages are acknowledged (204) so Pub/Sub does not retry them
-    forever; a failing sync returns 500 so Pub/Sub retries later."""
+    historyId})}}. Always acknowledged at once (204): parsing emails with an LLM takes longer
+    than Pub/Sub's ack deadline, so the sync runs after the response, and a failed sync is
+    caught up by the hourly /internal/gmail/sync-all instead of by Pub/Sub retries.
+    Malformed messages are acknowledged too so Pub/Sub does not retry them forever. Only a
+    bad or missing OIDC token gets a 4xx."""
     try:
         envelope = await request.json()
-        payload = json.loads(base64.b64decode(envelope["message"]["data"]))
+        data = str(envelope["message"]["data"])
+        payload = json.loads(base64.b64decode(data + "=" * (-len(data) % 4), altchars=b"-_"))
         email, history_id = str(payload["emailAddress"]), str(payload["historyId"])
     except (ValueError, KeyError, TypeError):
         log.warning("ignoring malformed Gmail push message")
         return Response(status_code=204)
-    await gmail_sync.handle_push(email, history_id)
+    background.add_task(_process_push, email, history_id)
     return Response(status_code=204)
