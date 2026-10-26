@@ -30,6 +30,24 @@ export async function requestPage<T>(path: string, init: RequestInit = {}): Prom
   return { items, total: Number.isFinite(header) && res.headers.has("X-Total-Count") ? header : items.length };
 }
 
+/** A file download (CSV export). Goes through `send` so the auth header is sent too. */
+export async function requestBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  const res = await send(path, init);
+  return res.blob();
+}
+
+/** Save a blob as a file. A plain <a href> to the API would not carry the auth header. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 async function send(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   const auth = await authHeader();
