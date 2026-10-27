@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # Gemini via Google AI Studio key. With llm_provider=gemini, agent endpoints return 503
     # while this is empty.
     google_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash-lite"
     gemini_vision_model: str = ""  # empty = same as gemini_model
     ollama_base_url: str = ""  # e.g. http://localhost:11434
     ollama_model: str = "gpt-oss:20b"  # text + tool calling (chat, house, report, budget, inbox)

@@ -4,9 +4,215 @@ Kasa is a FastAPI backend with Google ADK agents and a Next.js frontend. The LLM
 what to do; plain Python does every money calculation. Amounts are stored as integer minor
 units (kuruş), never floats.
 
-This document is the map for the four feature tracks (HOUSE, MONEY, INGEST, REPORT). The
-skeleton, data model and shared files are finished. Each track fills in the files it owns
-and should not need to edit anyone else's.
+The first part of this document is an overview the product owner (or anyone on the team) can
+present in five minutes. The second part, from [Modules](#modules) on, is the detailed map
+for the four feature tracks (HOUSE, MONEY, INGEST, REPORT).
+
+## Overview in five minutes
+
+### What to say, minute by minute
+
+1. **The problem (30 s).** Students lose track of small purchases, and in a shared flat
+   nobody knows who owes whom. Spreadsheets get abandoned.
+2. **What Kasa does (60 s).** You add a purchase by photo, by chat, by hand, or from a bank
+   statement or Gmail. Kasa splits house bills, tells everyone who pays whom, watches
+   budgets and subscriptions, and answers questions with charts, in Turkish or English.
+3. **The system (90 s).** Walk through the system diagram below: browser, Next.js, FastAPI,
+   the coordinator and its specialists, services, database, outside services.
+4. **One request end to end (90 s).** Walk through one of the two sequence diagrams.
+5. **Why it is safe (60 s).** The decisions and the security model below: the LLM never
+   does money math, the chat can only read your rows, emails never become expenses without
+   your approval.
+
+### System diagram
+
+```mermaid
+flowchart TB
+    user["Student, in a browser or on a phone"]
+
+    subgraph web["frontend: Next.js"]
+        pages["Pages: dashboard, expenses, receipt, import, inbox, house, budgets, subscriptions, chat, settings"]
+    end
+
+    subgraph api["backend: FastAPI"]
+        rest["REST routers (app/api)"]
+        subgraph agents["Google ADK agents (app/agents)"]
+            coord["Coordinator"]
+            receipt["Receipt agent"]
+            house["House agent"]
+            report["Report agent"]
+            budget["Budget agent"]
+            inbox["Inbox agent"]
+            checker["Checker agent"]
+            parsers["Email and statement parsers"]
+        end
+        tools["Tools (app/agents/tools)"]
+        services["Services (app/services): money math, splits, FX, budgets, guarded SQL"]
+        dblayer["Models, sessions, Alembic migrations"]
+    end
+
+    subgraph storage["Database"]
+        sqlite[("SQLite, local dev")]
+        mssql[("Azure SQL with row-level security, prod")]
+    end
+
+    subgraph outside["Outside services"]
+        gemini["Gemini API, or Ollama in dev"]
+        gmail["Gmail and Google Calendar"]
+        tcmb["TCMB exchange rates"]
+        firebase["Firebase Auth"]
+    end
+
+    user --> pages
+    pages -->|"JSON over HTTPS, Firebase token or X-User-Id"| rest
+    rest -->|"POST /chat"| coord
+    rest -->|"POST /receipts"| receipt
+    rest -->|"everything else"| services
+    coord --> receipt & house & report & budget & inbox
+    report -->|"run_report asks"| checker
+    receipt & house & report & budget & inbox & parsers --> tools
+    tools --> services
+    services -->|"Gmail sync, PDF import"| parsers
+    services --> dblayer
+    dblayer --> sqlite
+    dblayer --> mssql
+    agents -.-> gemini
+    services -.-> gmail
+    services -.-> tcmb
+    pages -.-> firebase
+    rest -.->|"verify token"| firebase
+```
+
+One sentence version: a Next.js app calls a FastAPI backend, where a coordinator agent hands
+each chat message to one of five specialist agents, whose tools call plain Python services
+that do all the money math and talk to the database and to Google and TCMB.
+
+### Receipt photo to saved expense
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant W as Receipt page (Next.js)
+    participant A as POST /receipts (FastAPI)
+    participant R as Receipt agent (ADK runner)
+    participant G as Gemini vision model
+    participant T as save_expense tool
+    participant S as Expense service
+    participant D as Database
+    U->>W: Choose a photo, press Read and save
+    W->>A: Image, with a Firebase token or X-User-Id
+    A->>A: Check the image type and size, find the user
+    A->>R: run_agent receipt, text part plus image part
+    R->>G: Instructions with guardrails, plus the image
+    G-->>R: Call save_expense with merchant, date, total, lines
+    R->>T: save_expense, user id taken from tool_context
+    T->>S: add_expense
+    S->>S: build_expense turns amounts into integer kurus and picks a category
+    S->>D: finalize_expense reads the TCMB rate if needed, and the budgets
+    S->>D: Insert the expense and its lines, commit
+    S-->>T: Saved expense and warnings (FX note, budget alert)
+    T-->>R: status saved, expense id, warnings
+    R->>G: Tool result
+    G-->>R: Short answer for the user
+    A-->>W: 201 with the expense, the warnings and the agent message
+    W-->>U: Saved, with the lines and any warnings
+```
+
+The model only reads the photo and fills in the tool's arguments. Validation, conversion,
+budget checks and saving are plain Python. The acting user never comes from the model.
+
+### Chat question to guarded SQL to chart
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant W as Chat page (Next.js)
+    participant A as POST /chat (FastAPI)
+    participant C as Coordinator
+    participant RA as Report agent
+    participant RT as run_report tool
+    participant GD as Static SQL guard
+    participant CK as Checker agent
+    participant D as Database
+    U->>W: Bu ay kategoriye gore ne kadar harcadim? Grafik ciz
+    W->>A: Message and chat session id
+    A->>C: run_agent chat for this user
+    C->>RA: transfer_to_agent report_agent
+    RA->>RT: One SELECT over my_spending, chart type bar
+    RT->>GD: Parse with sqlglot
+    GD-->>RT: One plain SELECT, allowed relations only, row limit applied
+    RT->>CK: The SQL next to the question
+    alt the checker finds a mistake
+        CK-->>RT: revise, with the reason
+        RT-->>RA: status revise and the reason
+        RA->>RT: Fixed SQL, checked again (at most 2 revisions)
+    else the SQL matches the question
+        CK-->>RT: approve
+    end
+    RT->>D: Relations injected as CTEs bound to the current user id
+    D-->>RT: Rows in kurus (RLS filters again on SQL Server)
+    RT-->>RA: Rows in TL plus a chart spec
+    RA-->>A: One to three sentences quoting the tool's numbers
+    A-->>W: Text, chart spec, name of the agent that answered
+    W-->>U: The answer and a bar chart (recharts)
+```
+
+### Key decisions
+
+Short records of the choices that shape the system. Each says what we decided, why, and what
+it costs.
+
+- **ADR-1 One coordinator and specialist agents.** One agent with every tool picked the
+  wrong tool and had long, mixed instructions. The coordinator only routes; each specialist
+  (receipt, house, report, budget, inbox) has a short prompt and a few tools, and each track
+  owns one agent. Cost: one extra model call per message, and routing can be wrong (5 of 6
+  routing evals passed on Ollama).
+- **ADR-2 Tools do all money math, in integer minor units.** Models make arithmetic and
+  rounding mistakes, and floats cannot hold 0.10 exactly. Amounts are integers in kuruş
+  (BIGINT). Splits use the largest remainder method, so shares always add up to the total,
+  and conversions round once, half to even (`services/money.py`, `splits.py`, `fx.py`). The
+  prompts forbid the model from computing amounts. Cost: every new money feature needs a tool.
+- **ADR-3 The chat gets read-only, user-scoped SQL and a checker agent.** Free text
+  questions need flexible queries, but a model must never write or see other users' rows.
+  sqlglot allows one plain SELECT over six virtual relations (`my_spending`, `my_expenses`,
+  `my_expense_items`, `my_house_shares`, `my_budgets`, `my_subscriptions`). They are injected
+  as CTEs filtered by the bound user id, with a row limit. A second agent compares the SQL
+  with the question and can send it back. Cost: extra latency, and the checker fails open to
+  the static guard when it times out.
+- **ADR-4 Emails and statements only create inbox items.** Email text is untrusted and
+  parsing can be wrong. Parsers can only submit candidates; a person approves each one, and
+  nothing in an email can approve. Cost: one more step for the user.
+- **ADR-5 Alembic migrations and row-level security.** The schema has to work on SQLite for
+  development and on SQL Server in production. Alembic is the only source of the schema, a
+  test keeps models and migrations in sync, and the migrations create an RLS policy that
+  filters on `SESSION_CONTEXT('user_id')`, which every session sets. The app runs as a user
+  that cannot change the schema. Cost: RLS only exists on SQL Server, and it has not run on
+  Azure yet.
+- **ADR-6 Gemini in the product, Ollama for development.** Gemini is fast and has a free
+  tier. The team's Ollama server lets us develop and run evals without a key or quota.
+  `LLM_PROVIDER` switches both through ADK (`Gemini` or `LiteLlm`). The default model is
+  `gemini-3.5-flash-lite`, because new keys cannot use the 2.5 models and flash-lite has the
+  most generous free tier. Cost: the live flows were verified on Ollama only, so far.
+
+### Security model
+
+| Layer | What protects it | Where |
+| --- | --- | --- |
+| Who is calling | Firebase ID token in production. In dev mode the `X-User-Id` header, which must never be used in production. | `app/auth.py` |
+| What they can reach | Every service takes `user_id` and filters by it. Houses answer 404 to non-members, so ids cannot be probed. | `app/services/*` |
+| What the database returns | Row-level security on SQL Server, keyed on `SESSION_CONTEXT('user_id')`. The app login cannot run DDL. | `alembic/versions/`, `app/db/session.py` |
+| What the agents can do | Tools read the user from `tool_context`, never from the model. Receipt, email and tool text is data. The model never computes money. | `app/agents/common.py`, `app/agents/tools/` |
+| What the chat can query | One SELECT over six user-scoped relations, row limit, no system objects, then the checker. | `app/services/reports.py`, `app/agents/checker_agent.py` |
+| What imports can change | Only inbox items. A person approves each expense. | `app/services/inbox.py`, `app/agents/tools/inbox_tools.py` |
+| Secrets | Environment variables only (Secret Manager on Cloud Run). `.env` is gitignored. Google refresh tokens are Fernet-encrypted and never logged. | `app/config.py`, `app/services/crypto.py` |
+| Background endpoints | `/internal/*` needs `X-Kasa-Task-Token`. The Gmail push needs a Pub/Sub OIDC token. | `app/api/internal.py` |
+| Uploads | Image types only for receipts, CSV or PDF for statements, 10 MB limit. | `app/api/agents.py`, `app/api/imports.py` |
+
+Known gaps (see [USER_STORIES.md](USER_STORIES.md)): no per-user rate limit on `/chat` and
+`/receipts`; any house member can add any user id (no invite link yet); RLS has never run on
+Azure SQL; Firebase is not configured; chat sessions live in the memory of one instance.
 
 ## Modules
 
@@ -96,7 +302,7 @@ inbox items only to their owner; `google_accounts` to its owner or a background 
 ### Changing the schema
 
 1. Edit `app/db/models.py`.
-2. `cd backend && alembic revision --autogenerate --rev-id 0003_short_name -m "what changed"`
+2. `cd backend && alembic revision --autogenerate --rev-id 0004_short_name -m "what changed"`
 3. Read the generated file. If the new table is user-owned, add its RLS predicate on SQL
    Server (drop and recreate `security.kasa_policy`, as `0002_sprints_2_4.py` does).
 4. `pytest tests/test_migrations.py` checks that migrations and models match.
