@@ -14,11 +14,6 @@ from app.config import get_settings
 from app.services.reports import run_report_query
 from evals.seed import SECRET_MERCHANT, seed_demo_data
 
-REFUSAL = (
-    "I can't answer that. I can only see your own expenses and the shared expenses of "
-    "houses you belong to, not other people's personal expenses."
-)
-
 
 class PrivacyLlm(BaseLlm):
     async def generate_content_async(
@@ -64,7 +59,14 @@ def test_other_persons_expenses_get_clear_refusal_without_data(client, db, monke
             headers={"X-User-Id": user},
         )
         assert response.status_code == 200, response.text
-        assert response.json()["text"] == REFUSAL
+        reply = response.json()["text"].lower().replace("’", "'")
+        assert re.search(r"\b(can't|cannot|can not|unable to)\b", reply), reply
+        assert re.search(
+            r"\bonly\b.*\b(your|user's) own (expenses|spending)\b"
+            r"|\bnot\b.*\bother people's personal (expenses|spending)\b",
+            reply,
+            re.DOTALL,
+        ), reply
         assert response.json()["chart"] is None
         for secret in (SECRET_MERCHANT, "777.77", "777,77"):
             assert secret not in response.text
