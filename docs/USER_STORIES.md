@@ -492,6 +492,8 @@ Elif olarak, İngilizce soruya İngilizce, Türkçe soruya Türkçe cevap almak 
 - Sprint 4 · **Kısmen** · Sahip: Agents 1 (coordinator), Agents 3 / QA (eval'ler) · Yapan: Berke
 - Diyelim ki "How much did I spend on groceries last month?" diye sordum. Cevap İngilizce gelir.
 - Kanıt: `app/agents/language.py`, `tests/test_integration.py::test_reply_language_detection`,
+  `tests/test_agents_offline.py::test_every_chat_agent_has_latest_message_language_instruction`,
+  `tests/test_agents_offline.py::test_chat_language_note_follows_message_over_ui_locale`,
   `evals/run_evals.py` içindeki `lang` kontrolü.
 - Eksik: Ollama'da altı yönlendirme vakasından biri dil kontrolünü geçemedi. Gemini'de
   ölçülmedi.

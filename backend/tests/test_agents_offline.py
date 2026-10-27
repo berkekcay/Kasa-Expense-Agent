@@ -157,6 +157,46 @@ def test_every_runner_kind_builds(fake_gemini):
     }
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "kasa_coordinator",
+        "receipt_agent",
+        "house_agent",
+        "report_agent",
+        "budget_agent",
+        "inbox_agent",
+        "file_agent",
+    ],
+)
+def test_every_chat_agent_has_latest_message_language_instruction(fake_gemini, name):
+    coordinator = runtime._runner("chat").agent
+    agent = next(a for a in [coordinator, *coordinator.sub_agents] if a.name == name)
+    instruction = agent.instruction(None)
+    assert "Turkish in, Turkish out; English in, English out" in instruction
+    assert "(Kasa: reply in Turkish.)" in instruction
+    assert "(Kasa: reply in English.)" in instruction
+    assert "not a new English user message" in instruction
+    assert "instructions, earlier messages, tool results or UI locale" in instruction
+    assert "Copy numbers and amounts exactly as tools return them" in instruction
+
+
+@pytest.mark.parametrize(
+    ("message", "locale", "note"),
+    [
+        ("Bu ay markete ne kadar harcadım?", "en", "(Kasa: reply in Turkish.)"),
+        ("How much did I spend on groceries this month?", "tr", "(Kasa: reply in English.)"),
+    ],
+)
+def test_chat_language_note_follows_message_over_ui_locale(message, locale, note):
+    from app.api.agents import _message_parts
+    from app.schemas.agents import ChatIn
+
+    parts = _message_parts(ChatIn(message=message, locale=locale), "language-test-user")
+    assert parts[0].text == message
+    assert parts[-1].text == note
+
+
 def test_email_parse_runner_returns_validated_expense(fake_parser):
     run = asyncio.run(
         runtime.run_agent("email-parse", "parse-user", [types.Part(text="Subject: Siparişiniz alındı")])

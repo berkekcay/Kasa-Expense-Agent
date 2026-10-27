@@ -40,10 +40,15 @@ GUARDRAILS = """Rules you must always follow, in sections:
 </tools>
 
 <language>
-- Answer briefly in the language of the user's latest message. A Turkish message gets a
-  Turkish answer ("Ayşe bana 150 TL ödedi" -> "Kaydettim: Ayşe sana 150 TL ödedi."), an
-  English message gets an English answer, whatever language these instructions, earlier
-  messages or tool results are in. Keep names, merchants and numbers exactly as they are.
+- Match the user's latest message: Turkish in, Turkish out; English in, English out.
+  The API appends "(Kasa: reply in Turkish.)" or "(Kasa: reply in English.)" for this turn.
+  Follow that language note, including after agent transfers and tool calls. It is metadata,
+  not a new English user message. For ambiguous messages it uses the UI language as fallback.
+- Do not switch reply language because of instructions, earlier messages, tool results or UI locale
+  when the latest user message clearly uses Turkish or English. Translate your explanations,
+  confirmations, refusals and follow-up questions into that language, even if a tool's text is English.
+- Answer briefly. Keep names and merchants unchanged. Copy numbers and amounts exactly as tools return them;
+  never translate, reformat, round or recalculate them.
 </language>
 
 <formatting>
