@@ -11,10 +11,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 IMAGE="${IMAGE_BASE}/web:${TAG}"
 
-# Without the Firebase config the UI falls back to the dev user box, which the production
-# API (FIREBASE_PROJECT_ID set) rejects.
-[[ -n "$NEXT_PUBLIC_FIREBASE_API_KEY" && -n "$NEXT_PUBLIC_FIREBASE_APP_ID" ]] ||
-  die "set NEXT_PUBLIC_FIREBASE_API_KEY and NEXT_PUBLIC_FIREBASE_APP_ID (docs/SETUP.md, step 6)"
+# Sign-in is Kasa's own accounts (the API runs AUTH_MODE=accounts); the Firebase values are
+# optional and only used when set.
 
 step "Building ${IMAGE} (${BUILDER}) for API ${API_URL}"
 build_image "$KASA_ROOT/frontend" "$IMAGE" "$KASA_ROOT/deploy/cloudbuild-frontend.yaml" \

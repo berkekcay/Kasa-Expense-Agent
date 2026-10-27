@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import (
     agents,
+    auth,
     budgets,
     dashboard,
     expenses,
@@ -24,6 +25,7 @@ from app.api import (
     inbox,
     integrations,
     internal,
+    invites,
     subscriptions,
     users,
 )
@@ -67,13 +69,16 @@ def create_app() -> FastAPI:
             "status": "ok",
             "agents_enabled": settings.agents_enabled,
             "llm_provider": settings.llm_provider,
-            "auth": "firebase" if settings.firebase_project_id else "dev",
+            "auth": "firebase" if settings.firebase_project_id else settings.auth_mode,
+            "google_login": settings.google_login_enabled,
         }
 
     for module in (
+        auth,
         users,
         expenses,
         houses,
+        invites,
         agents,
         budgets,
         subscriptions,

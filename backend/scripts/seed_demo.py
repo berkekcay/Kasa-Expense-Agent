@@ -2,6 +2,7 @@
 
     python -m scripts.seed_demo --user demo            # seed the user "demo"
     python -m scripts.seed_demo --user demo --reset    # delete that user's data, then seed again
+    python -m scripts.seed_demo --user demo --login-only   # new passwords and 2FA keys only
 
 It writes into the database in DATABASE_URL (backend/.env or the environment) and needs no
 network and no LLM. Everything goes through the same services the API uses, so FX
@@ -20,6 +21,12 @@ What it creates for the user (default display name "Deniz"):
   bills with equal, percent, exact and per-item splits, and one recorded payment;
 - 3 pending inbox items from a small bank statement (CSV) import.
 
+Sign-in: when TOKEN_ENCRYPTION_KEY is set, the three demo people also get real accounts
+(`<user>@kasa.demo`, `ali.<user>@kasa.demo`, `ayse.<user>@kasa.demo`) with a fresh random
+password and a fresh Google Authenticator key each run. They are printed once, to this
+terminal only, with a QR code for the main account; nothing is written to a file. Scan it
+with Google Authenticator on the phone that runs the demo.
+
 The script refuses to touch a user who already has data, unless `--reset` is given. Reset
 deletes the user's and the two flatmates' expenses, budgets, subscriptions, inbox items and
 every house they are in (with all of that house's bills, payments and reminders). Use it on
@@ -31,6 +38,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as dt
+import secrets
 import sys
 from dataclasses import dataclass
 from decimal import Decimal
@@ -348,6 +356,66 @@ def seed(db: Session, user_id: str, *, name: str = "Deniz", today: dt.date | Non
     }
 
 
+# --- sign-in for the demo people -------------------------------------------------------------
+
+
+@dataclass
+class DemoLogin:
+    user_id: str
+    email: str
+    password: str
+    totp_secret: str
+
+
+def make_login(db: Session, user_id: str, email: str) -> DemoLogin:
+    """Give an existing demo user a real account: email, random password, 2FA already on."""
+    from app.db.models import User
+    from app.services import accounts, crypto, security
+
+    user = db.get(User, user_id)
+    taken = accounts.find_by_email(db, email)
+    if taken is not None and taken.id != user_id:
+        raise SystemExit(f"{email} already belongs to another account ({taken.id}); use another --user")
+    password = "kasa-" + secrets.token_urlsafe(9)
+    secret = security.new_totp_secret()
+    user.login_email = email
+    user.email = user.email or email
+    user.password_hash = security.hash_password(password)
+    user.totp_secret_enc = crypto.encrypt(secret)
+    user.totp_enabled_at = accounts._now()
+    user.totp_last_step = None
+    user.failed_logins = 0
+    user.locked_until = None
+    accounts.replace_recovery_codes(db, user_id)
+    db.commit()
+    return DemoLogin(user_id, email, password, secret)
+
+
+def make_logins(db: Session, p: People) -> list[DemoLogin]:
+    return [
+        make_login(db, p.me, f"{p.me}@kasa.demo"),
+        make_login(db, p.ali, f"ali.{p.me}@kasa.demo"),
+        make_login(db, p.ayse, f"ayse.{p.me}@kasa.demo"),
+    ]
+
+
+def print_logins(logins: list[DemoLogin]) -> None:
+    from app.services import security
+
+    print("Sign-in (shown once; run again with --login-only for new ones):")
+    for login in logins:
+        print(f"  {login.user_id}: {login.email}  password {login.password}  2FA key {login.totp_secret}")
+    main_login = logins[0]
+    uri = security.otpauth_uri(main_login.totp_secret, main_login.email)
+    print(f"Scan this with Google Authenticator for {main_login.email}:")
+    try:
+        import segno
+
+        segno.make(uri, error="m").terminal(compact=True)
+    except (ImportError, UnicodeEncodeError):
+        print(f"  {uri}")
+
+
 # --- command line -----------------------------------------------------------------------------
 
 
@@ -359,6 +427,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--name", default="Deniz", help="display name for that user (default: Deniz)")
     parser.add_argument("--reset", action="store_true", help="delete the user's demo data first")
     parser.add_argument("--today", type=dt.date.fromisoformat, help="pretend today is YYYY-MM-DD")
+    parser.add_argument(
+        "--login-only", action="store_true", help="only make new passwords and 2FA keys for the demo people"
+    )
     args = parser.parse_args(argv)
 
     user_id = args.user.strip()
@@ -367,6 +438,21 @@ def main(argv: list[str] | None = None) -> int:
     target = make_url(get_settings().database_url).render_as_string(hide_password=True)
     print(f"Database: {target}")
     init_db()
+    can_login = bool(get_settings().token_encryption_key)
+    if args.login_only:
+        if not can_login:
+            print(
+                "TOKEN_ENCRYPTION_KEY is not set; generate one with python -m app.services.crypto",
+                file=sys.stderr,
+            )
+            return 1
+        with session_for(user_id, system=True) as db:
+            people = people_for(user_id)
+            for uid, name in ((people.me, args.name), (people.ali, "Ali"), (people.ayse, "Ayşe")):
+                ensure_user(db, uid, name)
+            db.commit()
+            print_logins(make_logins(db, people))
+        return 0
     with session_for(user_id) as db:
         people = people_for(user_id)
         found = existing_data(db, people)
@@ -387,6 +473,10 @@ def main(argv: list[str] | None = None) -> int:
             reset(db, people)
             print(f"Deleted the old demo data of {user_id!r}.")
         summary = seed(db, user_id, name=args.name, today=args.today)
+    logins = []
+    if can_login:
+        with session_for(user_id, system=True) as db:
+            logins = make_logins(db, people)
 
     print(f"Seeded demo data for {user_id!r} ({args.name}):")
     print(f"  personal expenses: {summary['personal_expenses']} (one in USD)")
@@ -396,7 +486,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  pending inbox items: {summary['inbox_items']}")
     for from_user, to_user, minor in summary["transfers"]:
         print(f"  settle up: {from_user} pays {to_user} {format_minor(minor)} TRY")
-    print(f"Open the web app and type {user_id} in the Dev user box, then press Switch.")
+    if logins:
+        print_logins(logins)
+        print("Open the web app and sign in with the email, password and the code from the app.")
+    else:
+        print("No sign-in made: TOKEN_ENCRYPTION_KEY is not set (python -m app.services.crypto).")
+    print(f"In dev mode you can also type {user_id} in the Dev user box and press Switch.")
     return 0
 
 

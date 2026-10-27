@@ -1,7 +1,7 @@
 // Shared fetch client for the Kasa FastAPI backend. Feature modules in this folder build on it.
 // Money arrives as decimal strings ("123.45") plus exact *_minor integers; never use floats for sums.
 
-import { authHeader } from "@/lib/auth";
+import { authHeader, onUnauthorized } from "@/lib/auth";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -48,6 +48,8 @@ export function saveBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+const CREDENTIAL_CHECK = /^\/auth\/(login|register|totp|password|recovery-codes)/;
+
 async function send(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   const auth = await authHeader();
@@ -62,6 +64,9 @@ async function send(path: string, init: RequestInit): Promise<Response> {
     throw new ApiError(0, `Cannot reach the API at ${API_URL}. Is the backend running?`);
   }
   if (!res.ok) {
+    // A stored session the API no longer accepts: drop it so the guard sends the user to /login.
+    // Endpoints that check a password or a code answer 401 for a wrong one; those keep it.
+    if (res.status === 401 && !CREDENTIAL_CHECK.test(path)) onUnauthorized();
     let message = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
@@ -95,7 +100,15 @@ export function query(params: Record<string, string | number | boolean | null | 
   return text ? `?${text}` : "";
 }
 
-export type Health = { status: string; agents_enabled: boolean; llm_provider: string; auth: "firebase" | "dev" };
+export type AuthMode = "dev" | "accounts" | "firebase";
+export type Health = {
+  status: string;
+  agents_enabled: boolean;
+  llm_provider: string;
+  auth: AuthMode;
+  /** True when the server can do "Continue with Google". */
+  google_login?: boolean;
+};
 export const health = () => request<Health>("/health");
 
 /** The raw response (after the auth header and error handling), for streamed bodies. */

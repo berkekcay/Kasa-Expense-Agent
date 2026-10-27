@@ -1,4 +1,5 @@
-// Houses (owner: track HOUSE): members, split expenses, balances, payments, reminders.
+// Houses (owner: track HOUSE): members, split expenses, balances, payments, reminders,
+// invite links.
 import { del, patch, post, query, request } from "./client";
 import type { Expense } from "./expenses";
 
@@ -96,6 +97,33 @@ export type RemindersCreated = {
   cancelled: Reminder[]; // outdated reminders this call replaced
 };
 
+/** A link that lets someone join a house. Times are UTC with an offset. */
+export type HouseInvite = {
+  id: number;
+  code: string;
+  url: string; // the page to share (frontend /invite/<code>)
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  max_uses: number;
+  uses: number;
+};
+
+export type InviteProblem = "revoked" | "expired" | "used_up";
+
+/** What an invite link leads to; any signed-in user can see it. */
+export type InvitePreview = {
+  code: string;
+  house_name: string;
+  invited_by: string; // display name of the member who made the link
+  expires_at: string;
+  usable: boolean;
+  reason: InviteProblem | null;
+  message: string | null;
+  already_member: boolean;
+  house_id: number | null; // only when you are already a member
+};
+
 export const housesApi = {
   listHouses: () => request<House[]>("/houses"),
   createHouse: (name: string, currency = "TRY") => request<House>("/houses", post({ name, currency })),
@@ -124,4 +152,13 @@ export const housesApi = {
     request<Reminder[]>(`/houses/${houseId}/reminders${query({ status })}`),
   setReminderStatus: (houseId: number, reminderId: number, status: ReminderStatus) =>
     request<Reminder>(`/houses/${houseId}/reminders/${reminderId}`, patch({ status })),
+  /** Members only. Defaults: 7 days, 10 people. */
+  createInvite: (houseId: number, options: { days?: number; max_uses?: number } = {}) =>
+    request<HouseInvite>(`/houses/${houseId}/invites`, post(options)),
+  /** Links that still work, newest first. */
+  listInvites: (houseId: number) => request<HouseInvite[]>(`/houses/${houseId}/invites`),
+  revokeInvite: (houseId: number, inviteId: number) => request<void>(`/houses/${houseId}/invites/${inviteId}`, del),
+  previewInvite: (code: string) => request<InvitePreview>(`/invites/${encodeURIComponent(code)}`),
+  /** Join the house; harmless when you are already a member. */
+  acceptInvite: (code: string) => request<House>(`/invites/${encodeURIComponent(code)}/accept`, { method: "POST" }),
 };

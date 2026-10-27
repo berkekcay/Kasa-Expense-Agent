@@ -5,7 +5,13 @@ def as_user(user_id: str) -> dict[str, str]:
 def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "agents_enabled": False, "llm_provider": "gemini", "auth": "dev"}
+    assert r.json() == {
+        "status": "ok",
+        "agents_enabled": False,
+        "llm_provider": "gemini",
+        "auth": "dev",
+        "google_login": False,
+    }
 
 
 def test_create_and_list_expenses_is_scoped_per_user(client):

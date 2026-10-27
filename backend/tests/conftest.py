@@ -9,6 +9,7 @@ _tmp = Path(tempfile.mkdtemp(prefix="kasa-test-"))
 os.environ["DATABASE_URL"] = f"sqlite:///{(_tmp / 'test.db').as_posix()}"
 os.environ["FIREBASE_PROJECT_ID"] = ""
 os.environ["AUTO_MIGRATE"] = "true"
+os.environ["AUTH_MODE"] = "dev"
 if not LIVE:
     os.environ["LLM_PROVIDER"] = "gemini"
     os.environ["GOOGLE_API_KEY"] = ""

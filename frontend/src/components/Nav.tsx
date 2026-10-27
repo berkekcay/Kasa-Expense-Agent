@@ -20,15 +20,16 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { useChatBusy } from "@/features/chat/chatStore";
 import { api } from "@/lib/api";
-import { firebaseEnabled, signInWithGoogle, signOut } from "@/lib/auth";
+import { firebaseEnabled, signInWithGoogle, signOut, signOutSession } from "@/lib/auth";
+import { useAuthMode } from "@/lib/authMode";
 import { useApi, useDataVersion, useMe } from "@/lib/hooks";
 import { LOCALES, defineMessages, setLocale, useLocale, useT } from "@/lib/i18n";
 import { type ThemeChoice, setTheme, useThemeChoice } from "@/lib/theme";
-import { switchUser, useAuthUser, useUserId } from "@/lib/user";
+import { switchUser, useAuthUser, useSession, useUserId } from "@/lib/user";
 import { Logo } from "./Logo";
 
 const messages = defineMessages({
@@ -63,6 +64,9 @@ const messages = defineMessages({
     switch: "Switch",
     signOut: "Sign out",
     signIn: "Sign in with Google",
+    signOutSession: "Sign out",
+    signingOut: "Signing out",
+    signInAccount: "Sign in",
   },
   tr: {
     overview: "Genel",
@@ -95,6 +99,9 @@ const messages = defineMessages({
     switch: "Geç",
     signOut: "Çıkış yap",
     signIn: "Google ile giriş yap",
+    signOutSession: "Oturumu kapat",
+    signingOut: "Oturum kapatılıyor",
+    signInAccount: "Giriş yap",
   },
 });
 type Key = keyof (typeof messages)["en"];
@@ -305,7 +312,7 @@ function ThemeSwitch() {
 }
 
 /** TR / EN toggle. */
-function LanguageSwitch() {
+export function LanguageSwitch() {
   const t = useT(messages);
   const locale = useLocale();
   return (
@@ -332,7 +339,14 @@ function UserBox() {
   const t = useT(messages);
   const me = useMe();
   const userId = useUserId();
-  const name = me.data?.display_name || userId || "?";
+  const session = useSession();
+  const auth = useAuthMode();
+  const name = me.data?.display_name || session?.user?.display_name || userId || "?";
+  const loginEmail = session
+    ? (me.data?.login_email ?? me.data?.email ?? session.user?.login_email ?? session.user?.email ?? null)
+    : null;
+  // The dev switcher only makes sense when the server takes X-User-Id and nobody signed in.
+  const devSwitch = !session && !firebaseEnabled && auth.mode === "dev";
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-2.5">
       <Link href="/settings" className="flex min-w-0 items-center gap-2.5" title={t("changeName")}>
@@ -344,11 +358,44 @@ function UserBox() {
         </span>
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium">{name}</span>
-          {!firebaseEnabled && <span className="block truncate text-xs text-muted">dev: {userId}</span>}
+          {loginEmail && <span className="block truncate text-xs text-muted">{loginEmail}</span>}
+          {devSwitch && <span className="block truncate text-xs text-muted">dev: {userId}</span>}
         </span>
       </Link>
-      {firebaseEnabled ? <AccountMenu /> : <DevUserSwitcher compact />}
+      {session ? (
+        <SignOutButton />
+      ) : firebaseEnabled ? (
+        <AccountMenu />
+      ) : devSwitch ? (
+        <>
+          <DevUserSwitcher compact />
+          <Link href="/login" className="text-center text-xs font-medium text-accent hover:underline">
+            {t("signInAccount")}
+          </Link>
+        </>
+      ) : null}
     </div>
+  );
+}
+
+/** Ends the Kasa account session (POST /auth/logout) and goes to the sign-in page. */
+export function SignOutButton({ className = "" }: { className?: string }) {
+  const t = useT(messages);
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        await signOutSession();
+        router.replace("/login");
+      }}
+      className={`h-8 rounded-md border border-border px-2 text-sm hover:bg-foreground/5 disabled:opacity-50 ${className}`}
+    >
+      {busy ? t("signingOut") : t("signOutSession")}
+    </button>
   );
 }
 

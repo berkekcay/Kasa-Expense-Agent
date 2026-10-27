@@ -181,6 +181,11 @@ else
   set_secret "$SECRET_TOKEN_KEY" \
     "$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
 fi
+if secret_has_value "$SECRET_AUTH"; then
+  already_set "$SECRET_AUTH"
+else
+  set_secret "$SECRET_AUTH" "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+fi
 if secret_has_value "$SECRET_TASK_TOKEN"; then
   already_set "$SECRET_TASK_TOKEN"
 else

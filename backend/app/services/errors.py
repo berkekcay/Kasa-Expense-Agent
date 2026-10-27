@@ -33,3 +33,21 @@ class UpstreamError(DomainError):
     """A Google / TCMB call failed."""
 
     status_code = 502
+
+
+class BadRequest(DomainError):
+    """The request is well formed but cannot be accepted (weak password, wrong 2FA code)."""
+
+    status_code = 400
+
+
+class Unauthenticated(DomainError):
+    """Wrong email or password, or a login step that expired."""
+
+    status_code = 401
+
+
+class Locked(DomainError):
+    """Too many failed sign-in attempts; try again later."""
+
+    status_code = 423

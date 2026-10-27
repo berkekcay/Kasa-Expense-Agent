@@ -166,5 +166,6 @@ def test_agent_lists_every_tool():
         "record_payment",
         "undo_payment",
         "create_settle_up_reminders",
+        "create_house_invite",
     }
     assert "{user, percent}" in house_agent.INSTRUCTION

@@ -198,6 +198,12 @@ bedelini yazıyor.
   uygulama, şemayı değiştiremeyen bir kullanıcıyla bağlanacak. Bedeli: RLS sadece SQL
   Server'da var ve henüz bir Azure SQL veritabanı olmadığı için gerçek bir sunucuda hiç
   çalışmadı (bkz. [Veritabanı: şimdi SQLite, sonra Azure SQL](#veritabanı-şimdi-sqlite-sonra-azure-sql)).
+- **ADR-6 Üründe Gemini, geliştirmede Ollama.** Gemini hızlı ve ücretsiz bir kotası var. Ekibin
+  Ollama sunucusu sayesinde key ya da kota olmadan geliştirme yapıp eval çalıştırabiliyoruz.
+  `LLM_PROVIDER` ikisi arasında ADK üzerinden geçiş yapıyor (`Gemini` ya da `LiteLlm`).
+  Varsayılan model `gemini-3.5-flash-lite`, çünkü yeni key'ler 2.5 modellerini kullanamıyor ve
+  en cömert ücretsiz kota flash-lite'ta. Bedeli: canlı akışlar şimdilik sadece Ollama'da
+  doğrulandı.
 - **ADR-7 Sohbette dosya analizi kod çalıştırmadan, sorgu araçlarıyla.** Kullanıcı sohbete
   Excel ya da CSV ekleyebiliyor. Dosya bir kez okunup sadece o kullanıcı için iki saat bellekte
   tutuluyor (`services/sheets.py`), veritabanına yazılmıyor. Dosya ajanı dosyayı dört araçla
@@ -227,18 +233,21 @@ bedelini yazıyor.
   `<html lang>` ayarlanıyor. Sohbet dili mesajın dilinden, belli değilse arayüzün dilinden
   seçiliyor. Bedeli: sunucu her zaman İngilizce render ediyor, Türkçe kullanıcıda ilk yüklemede
   çok kısa bir an İngilizce görünebiliyor.
-- **ADR-6 Üründe Gemini, geliştirmede Ollama.** Gemini hızlı ve ücretsiz bir kotası var. Ekibin
-  Ollama sunucusu sayesinde key ya da kota olmadan geliştirme yapıp eval çalıştırabiliyoruz.
-  `LLM_PROVIDER` ikisi arasında ADK üzerinden geçiş yapıyor (`Gemini` ya da `LiteLlm`).
-  Varsayılan model `gemini-3.5-flash-lite`, çünkü yeni key'ler 2.5 modellerini kullanamıyor ve
-  en cömert ücretsiz kota flash-lite'ta. Bedeli: canlı akışlar şimdilik sadece Ollama'da
-  doğrulandı.
+- **ADR-11 Kendi hesap sistemimiz, 2FA zorunlu.** Firebase Auth TOTP için Identity Platform'a
+  yükseltme istiyor ve proje açılmadan lokalde test edilemiyordu. Kendi sistemimiz standart
+  kütüphaneyle (scrypt, HMAC-SHA1 TOTP) yazıldı, uçtan uca test ediliyor ve Azure SQL'de RLS ile
+  çalışıyor. Bedeli: şifre güvenliği bizim sorumluluğumuzda, e-posta doğrulaması ve şifre
+  sıfırlama henüz yok.
+- **ADR-12 Davet linkiyle eve katılma.** Gerçek hesapların id'leri rastgele, kimse ev arkadaşının
+  id'sini bilemez. Bir üye 7 gün geçerli, en fazla 10 kullanımlık bir link oluşturuyor. Link
+  sahibi henüz üye olmadığı için önizleme ve katılma sistem oturumunda çalışıyor. SQL Server'da
+  `fn_member_write` bu yüzden sistem oturumuna da izin veriyor; kodu servis doğruluyor.
 
 ### Güvenlik modeli
 
 | Katman | Onu ne koruyor | Nerede |
 | --- | --- | --- |
-| Kim çağırıyor | Production'da Firebase ID token. Dev modunda `X-User-Id` header'ı, bu production'da asla kullanılmamalı. | `app/auth.py` |
+| Kim çağırıyor | Kasa oturum token'ı (şifre ya da Google, ardından zorunlu TOTP). Dev modunda oturum yoksa `X-User-Id` header'ı, bu production'da (`AUTH_MODE=accounts`) kapalı. | `app/auth.py`, `app/services/accounts.py` |
 | Neye erişebiliyor | Her service `user_id` alıyor ve ona göre süzüyor. Evler üye olmayanlara 404 dönüyor, böylece id'ler yoklanamıyor. | `app/services/*` |
 | Veritabanı ne döndürüyor | Şu an SQLite'ta service katmanındaki `user_id` süzmesi. Azure SQL'e geçince buna ek olarak `SESSION_CONTEXT('user_id')` anahtarlı row-level security gelecek, uygulamanın login'i de DDL çalıştıramayacak. Migration'lar ve kod hazır. | `alembic/versions/`, `app/db/session.py` |
 | Ajanlar ne yapabiliyor | Tool'lar kullanıcıyı modelden değil, `tool_context`'ten okuyor. Fiş, e-posta ve tool metni veridir. Model hiçbir zaman para hesaplamıyor. | `app/agents/common.py`, `app/agents/tools/` |
@@ -477,8 +486,48 @@ Gemini çok daha hızlı ve ürün onu kullanıyor.
 
 ## Kimlik doğrulama
 
-`FIREBASE_PROJECT_ID` ayarlıysa backend sadece Firebase ID token'larını kabul ediyor.
-`NEXT_PUBLIC_FIREBASE_*` değişkenleri ayarlıysa frontend Firebase JS SDK'yı (Google ile giriş)
-kullanıyor ve token'ı Bearer header'ı olarak gönderiyor. Bunlar yoksa iki taraf da dev user
-kutusuna ve `X-User-Id` header'ına dönüyor. Backend'i asla `FIREBASE_PROJECT_ID` olmadan
-deploy etme.
+Kasa'nın kendi hesap sistemi var (`app/services/accounts.py`, `app/api/auth.py`). Her hesapta
+Google Authenticator ile iki adımlı doğrulama (TOTP) **zorunlu**: kod girilmeden oturum açılmıyor.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Kullanıcı
+    participant W as Web (Next.js)
+    participant A as /auth (FastAPI)
+    participant G as Google
+    U->>W: E-posta ve şifre ya da "Google ile devam et"
+    alt Şifreyle
+        W->>A: POST /auth/login
+    else Google ile
+        W->>A: GET /auth/google/start
+        A->>G: Hesap seçici (openid email profile)
+        G->>A: /auth/google/callback?code
+        A->>W: /login/continue#pending=...
+    end
+    A-->>W: 10 dakikalık imzalı "pending" token, adım: totp ya da totp_setup
+    opt İlk giriş
+        W->>A: POST /auth/totp/setup (QR ve gizli anahtar)
+        U->>W: Uygulamadaki 6 haneli kod
+        W->>A: POST /auth/totp/confirm, 10 kurtarma kodu bir kere gösterilir
+    end
+    W->>A: POST /auth/login/verify (kod ya da kurtarma kodu)
+    A-->>W: Oturum token'ı (ks_..., 30 gün), sonra her istekte Authorization: Bearer
+```
+
+- **Şifreler** scrypt ile tuzlanıp saklanıyor. **TOTP gizli anahtarı** Fernet ile şifreli
+  (`TOKEN_ENCRYPTION_KEY`). **Oturum ve kurtarma kodları** sadece SHA-256 özetleri olarak
+  duruyor. Kullanılan TOTP kodu tekrar kabul edilmiyor.
+- Şifre ya da kodda **5 yanlış** denemede hesap 15 dakika kilitleniyor (423).
+- Oturumlar Ayarlar'dan listelenip tek tek kapatılabiliyor. Şifre değişince diğer oturumlar
+  kapanıyor.
+- **Google ile giriş** Gmail bağlantısıyla aynı OAuth client'ı kullanıyor ama sadece
+  `openid email profile` istiyor. Aynı e-postayla şifreli bir hesap varsa Google girişi o hesaba
+  bağlanmıyor. E-posta doğrulaması olmadığı için, başkasının adresini önceden kaydeden birinin
+  o kişinin Google girişlerini alması (pre-account takeover) böyle engelleniyor.
+- `AUTH_MODE=accounts` (production ve demo) her istekte oturum istiyor. `AUTH_MODE=dev`
+  (lokal, testler) oturum yoksa `X-User-Id` header'ına da güveniyor. Firebase yolu
+  (`FIREBASE_PROJECT_ID`) hâlâ çalışıyor ama artık gerekmiyor.
+- Bilinen eksikler: e-posta doğrulaması ve "şifremi unuttum" yok (e-posta gönderen bir servis
+  gerekiyor). Kayıt için IP başına sınır yok. Kurtarma kodları da kaybolursa hesabı ekip elle
+  açabiliyor.

@@ -24,7 +24,9 @@ for pair in "${API_SECRETS[@]}"; do
   fi
 done
 secret_has_value "$SECRET_GEMINI" || info "without ${SECRET_GEMINI}, /chat and /receipts answer 503"
-[[ -n "$FIREBASE_PROJECT_ID" ]] || die "FIREBASE_PROJECT_ID is empty; the API would trust X-User-Id"
+# AUTH_MODE=accounts below: every request needs a sign-in session. Accounts need both keys.
+secret_has_value "$SECRET_TOKEN_KEY" || die "${SECRET_TOKEN_KEY} is empty; run deploy/gcp_bootstrap.sh"
+secret_has_value "$SECRET_AUTH" || die "${SECRET_AUTH} is empty; run deploy/gcp_bootstrap.sh"
 
 step "Building ${IMAGE} (${BUILDER})"
 build_image "$KASA_ROOT/backend" "$IMAGE" "$KASA_ROOT/deploy/cloudbuild-backend.yaml"
@@ -51,11 +53,13 @@ env_vars=(
   "AUTO_MIGRATE=false"
   "LLM_PROVIDER=gemini"
   "GEMINI_MODEL=${GEMINI_MODEL}"
-  "FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}"
+  "AUTH_MODE=accounts"
   "CORS_ORIGINS=${CORS_ORIGINS}"
   "FRONTEND_URL=${WEB_URL}"
   "GOOGLE_OAUTH_REDIRECT_URI=${API_URL}/integrations/google/callback"
+  "GOOGLE_LOGIN_REDIRECT_URI=${API_URL}/auth/google/callback"
 )
+[[ -z "$FIREBASE_PROJECT_ID" ]] || env_vars+=("FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}")
 if [[ "$ENABLE_GMAIL_PUSH" == "true" ]]; then
   env_vars+=(
     "PUBSUB_TOPIC=${PUBSUB_TOPIC}"
@@ -77,7 +81,7 @@ secrets_flag="$(IFS=,; echo "${api_secrets[*]}")"
 # --concurrency 20     requests mostly wait on Gemini and the database.
 # --max-instances 1    ADK chat sessions are kept in instance memory (see config.sh).
 # --allow-unauthenticated  the browser, Pub/Sub and Cloud Scheduler call the API directly;
-#                      the app checks a Firebase token, the push OIDC token or the task token.
+#                      the app checks a Kasa session, the push OIDC token or the task token.
 step "Deploying service ${API_SERVICE}"
 gcloud run deploy "$API_SERVICE" \
   --image "$IMAGE" \

@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { Footer } from "@/components/Footer";
+import { Suspense } from "react";
+import { AppFrame, FrameLoading } from "@/components/AppFrame";
 import { LocaleRoot } from "@/components/LocaleRoot";
-import { Nav } from "@/components/Nav";
 import { ToastProvider } from "@/components/Toast";
 import { LOCALE_SCRIPT } from "@/lib/i18n";
 import { THEME_SCRIPT } from "@/lib/theme";
@@ -40,13 +40,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </a>
         <ToastProvider>
           <LocaleRoot>
-            <Nav />
-            <div className="flex min-h-dvh flex-col lg:pl-64">
-              <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 min-[1800px]:max-w-[1600px]">
-                {children}
-              </main>
-              <Footer className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10 min-[1800px]:max-w-[1600px]" />
-            </div>
+            {/* The frame reads the pathname, which suspends on routes with request-time params. */}
+            <Suspense fallback={<FrameLoading />}>
+              {/* Sidebar for app pages, a bare frame for sign-in and info pages, and the
+                  accounts-mode guard. */}
+              <AppFrame>{children}</AppFrame>
+            </Suspense>
           </LocaleRoot>
         </ToastProvider>
       </body>

@@ -33,7 +33,7 @@ def _head(engine) -> str:
 def test_upgrade_builds_exactly_the_models(fresh_engine):
     upgrade_to_head(fresh_engine)
     assert _diff(fresh_engine) == []
-    assert _head(fresh_engine) == "0004_chat_history"
+    assert _head(fresh_engine) == "0005_accounts_and_invites"
 
 
 def test_downgrade_to_base_and_back(fresh_engine):
@@ -58,7 +58,7 @@ def test_legacy_create_all_database_is_stamped_then_upgraded(fresh_engine):
         conn.execute(text("INSERT INTO users (id, display_name) VALUES ('old', 'Old user')"))
         conn.commit()
     upgrade_to_head(fresh_engine)
-    assert _head(fresh_engine) == "0004_chat_history"
+    assert _head(fresh_engine) == "0005_accounts_and_invites"
     assert _diff(fresh_engine) == []
     with fresh_engine.connect() as conn:
         assert (
@@ -94,6 +94,16 @@ def test_sql_server_ddl_renders_offline(monkeypatch):
     assert "ALTER SECURITY POLICY security.kasa_policy" in sql  # 0004
     for table in ("chat_conversations", "chat_messages"):
         assert f"ADD FILTER PREDICATE security.fn_owner_access(user_id) ON dbo.{table}" in sql, table
+    # 0005: accounts, sessions, recovery codes and invites; invites can be accepted as system.
+    for fn, table in (
+        ("fn_owner_or_system(user_id)", "auth_sessions"),
+        ("fn_owner_or_system(user_id)", "recovery_codes"),
+        ("fn_house_member_or_system(house_id)", "house_invites"),
+    ):
+        assert f"ADD FILTER PREDICATE security.{fn} ON dbo.{table}" in sql, table
+    assert "WHERE login_email IS NOT NULL" in sql and "WHERE google_sub IS NOT NULL" in sql
+    member_write = sql[sql.rindex("CREATE OR ALTER FUNCTION security.fn_member_write") :]
+    assert "SESSION_CONTEXT(N'kasa_system')" in member_write.split("GO")[0]
     assert BASELINE_REVISION in sql
 
 

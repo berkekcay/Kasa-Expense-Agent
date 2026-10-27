@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     # the X-User-Id header (or dev_default_user_id) says who is calling.
     firebase_project_id: str = ""
     dev_default_user_id: str = "dev-user"
+    # Kasa's own accounts (services.accounts): "dev" also trusts X-User-Id when a request has
+    # no session (local work, tests); "accounts" requires a session token (production, demo).
+    auth_mode: Literal["dev", "accounts"] = "dev"
+    # Signs the short-lived login steps (between password and 2FA) and the Google sign-in
+    # state. Empty = a random value per process, so pending logins end on restart.
+    auth_secret: str = ""
+    session_days: int = 30
+    # Google sign-in uses the same OAuth client as Gmail, with this extra redirect URI.
+    google_login_redirect_uri: str = "http://localhost:8000/auth/google/callback"
 
     # --- Google OAuth (Gmail + Calendar for one user) ---------------------------------------
     google_oauth_client_id: str = ""
@@ -117,6 +126,13 @@ class Settings(BaseSettings):
     @property
     def chat_model_name(self) -> str:
         return self.ollama_model if self.llm_provider == "ollama" else self.gemini_model
+
+    @property
+    def google_login_enabled(self) -> bool:
+        """Sign in with Google needs the OAuth client and the key that encrypts TOTP secrets."""
+        return bool(
+            self.google_oauth_client_id and self.google_oauth_client_secret and self.token_encryption_key
+        )
 
     @property
     def google_oauth_enabled(self) -> bool:

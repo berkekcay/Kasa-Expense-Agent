@@ -55,6 +55,7 @@ SECRET_TOKEN_KEY="token-encryption-key"             # TOKEN_ENCRYPTION_KEY
 SECRET_OAUTH_ID="google-oauth-client-id"            # GOOGLE_OAUTH_CLIENT_ID
 SECRET_OAUTH_SECRET="google-oauth-client-secret"    # GOOGLE_OAUTH_CLIENT_SECRET
 SECRET_TASK_TOKEN="internal-task-token"             # INTERNAL_TASK_TOKEN
+SECRET_AUTH="auth-secret"                           # AUTH_SECRET (signs the sign-in steps)
 # "ENV_VAR=secret-name" pairs mounted on the backend service (when the secret has a value).
 API_SECRETS=(
   "DATABASE_URL=${SECRET_DATABASE_URL}"
@@ -63,11 +64,14 @@ API_SECRETS=(
   "GOOGLE_OAUTH_CLIENT_ID=${SECRET_OAUTH_ID}"
   "GOOGLE_OAUTH_CLIENT_SECRET=${SECRET_OAUTH_SECRET}"
   "INTERNAL_TASK_TOKEN=${SECRET_TASK_TOKEN}"
+  "AUTH_SECRET=${SECRET_AUTH}"
 )
 
 # --- Backend settings (plain env vars) -------------------------------------------------------
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash-lite}"
-FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-$PROJECT_ID}"  # same project unless you split them
+# Sign-in is Kasa's own accounts (AUTH_MODE=accounts, 2FA always on). Firebase is optional and
+# only used when this is set.
+FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-}"
 CORS_ORIGINS="${CORS_ORIGINS:-$WEB_URL}"  # comma-separated browser origins allowed to call the API
 API_MEMORY="${API_MEMORY:-1Gi}"
 API_CPU="${API_CPU:-1}"

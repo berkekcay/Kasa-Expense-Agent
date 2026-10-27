@@ -71,7 +71,7 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-BUDGET-05 | Bütçe, abonelik ve kurları sohbette sor | 3 | Kısmen | Berke | Yusuf: cevap dili, Gemini'de doğrulamak |
 | US-BUDGET-06 | Ayımı grafiklerle geçen ayla karşılaştır | 4 | Bitti | Berke | - |
 | US-HOUSE-01 | Ev oluştur, ev arkadaşlarını ekle | 1 | Bitti | Berke | - |
-| US-HOUSE-02 | Ev arkadaşını linkle davet et | 4 | Başlanmadı | - | Ömer (#6), Zehra (#11) |
+| US-HOUSE-02 | Ev arkadaşını linkle davet et | 4 | Bitti | Berke | Ömer (#6): backend testi, Zehra (#11): arayüz testi |
 | US-HOUSE-03 | Faturayı eşit böl | 1 | Bitti | Berke | - |
 | US-HOUSE-04 | Yüzdeyle, tutarla ya da kalem kalem böl | 2 | Bitti | Berke | - |
 | US-HOUSE-05 | Kimin kime borçlu olduğunu gör | 1 | Bitti | Berke | - |
@@ -102,11 +102,13 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-GUARD-06 | Kodda ve loglarda gizli bilgi yok | 2 | Bitti | Berke | - |
 | US-GUARD-07 | Kullanıcı başına sohbet sınırı | 4 | Başlanmadı | - | Mustafa (#9) |
 | US-GUARD-08 | Hesabımı ve verilerimi sil | 4 | Başlanmadı | - | Mustafa, Zehra (#13) |
-| US-ACCOUNT-01 | Google ile giriş yap | 2 | Kısmen | Berke | Mustafa, Zehra: Firebase ile gerçek giriş |
+| US-ACCOUNT-01 | Kayıt ol, e-posta ya da Google ile giriş yap | 4 | Kısmen | Berke | Mustafa: Google OAuth client'ı |
 | US-ACCOUNT-02 | Dev modunda herhangi bir kullanıcı ol | 1 | Bitti | Berke | - |
 | US-ACCOUNT-03 | Görünen adımı değiştir | 4 | Bitti | Berke | - |
 | US-ACCOUNT-04 | Kasa'yı herkese açık bir adreste aç | 4 | Kısmen | Berke | Mustafa, Yusuf: ilk Cloud Run deploy'u |
 | US-ACCOUNT-05 | Kasa'yı Türkçe ya da İngilizce kullan | 4 | Bitti | Berke | - |
+| US-ACCOUNT-06 | Google Authenticator ile iki adımlı doğrulama | 4 | Bitti | Berke | - |
+| US-ACCOUNT-07 | Açık oturumlarımı gör ve kapat | 4 | Bitti | Berke | - |
 
 ## Personalar
 
@@ -328,11 +330,16 @@ paylaşabiliriz.
 Deniz olarak, Ali'nin kabul edeceği bir davet linki göndermek istiyorum, böylece kimse "evet"
 demeden bir eve eklenmez.
 
-- Sprint 4 · **Başlanmadı** · Sahip: Backend, Frontend
-- Diyelim ki bir davet oluşturdum. Ali giriş yapmışken linki açtığında eve katılır.
-- Diyelim ki kimse kabul etmedi. Kimse eklenmez.
-- Bugün herhangi bir üye herhangi bir kullanıcı id'sini ekleyebiliyor (`app/services/houses.py`,
-  `add_member`: "Later: invite links + Firebase accounts").
+- Sprint 4 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke · Test: Ömer (#6), Zehra (#11)
+- Diyelim ki bir davet oluşturdum. Ev sayfasında 7 gün geçerli, en fazla 10 kullanımlık bir link
+  çıkar; kopyalayabilir ya da WhatsApp'ta paylaşabilirim. Ali giriş yapmışken linki açtığında
+  evin adını ve beni görür, "Eve katıl" deyince eve eklenir ve ev sayfası o evle açılır.
+- Diyelim ki link süresi doldu, iptal edildi ya da kullanım hakkı bitti. Ali nedenini görür,
+  kimse eklenmez. Ali giriş yapmamışsa önce giriş sayfasına, sonra linke döner.
+- Diyelim ki "ev için davet linki oluştur" yazdım. Ev ajanı linki oluşturur.
+- Kullanıcı id'siyle üye ekleme sadece geliştirme modunda görünür.
+- Kanıt: `POST/GET/DELETE /houses/{id}/invites`, `GET /invites/{code}`,
+  `POST /invites/{code}/accept`, sayfa `/invite/[code]`, `tests/test_house_invites.py`.
 
 ### US-HOUSE-03 Faturayı eşit böl
 
@@ -757,18 +764,46 @@ verilerimin kontrolü bende kalır (KVKK).
 
 ## Epik: hesaplar
 
-### US-ACCOUNT-01 Google ile giriş yap
+### US-ACCOUNT-01 Kayıt ol, e-posta ya da Google ile giriş yap
 
-Elif olarak, Google hesabımla giriş yapmak istiyorum, böylece verilerim her cihazda benim olur.
+Elif olarak, e-postamla kayıt olup ya da Google hesabımla giriş yapmak istiyorum, böylece
+verilerim her cihazda benim olur.
 
-- Sprint 2 · **Kısmen** · Sahip: Backend, Frontend · Yapan: Berke
-- Diyelim ki `FIREBASE_PROJECT_ID` ayarlı. Korumalı her uygulama endpoint'i bir Firebase ID
-  token'ı ister (`/health`, Google OAuth callback'i ve kendi kontrolü olan `/internal/*` hariç),
-  adım ve e-postam da bu token'dan kaydedilir.
-- Kanıt: `app/auth.py`, `frontend/src/lib/auth.ts`, sol menüdeki "Sign in with Google" butonu,
-  `tests/test_foundation_api.py` (`test_requires_bearer_token`,
-  `test_valid_token_sets_user_and_profile`, sahte bir doğrulayıcıyla).
-- Eksik: ayarlı bir Firebase projesi yok, bu yüzden gerçek giriş hiç çalışmadı.
+- Sprint 4 · **Kısmen** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki kayıt oldum (ad, e-posta, en az 10 karakterlik şifre, KVKK ve koşulları kabul).
+  Hemen iki adımlı doğrulamayı kurarım, kurmadan uygulamaya giremem.
+- Diyelim ki "Google ile devam et" dedim. Google sadece kim olduğumu söyler (Gmail izni
+  istenmez), Kasa yine 2FA kodunu ister. Aynı e-postayla şifreli bir hesap varsa Google girişi o
+  hesaba bağlanmaz.
+- Diyelim ki 5 kere yanlış şifre girdim. Hesap 15 dakika kilitlenir.
+- `AUTH_MODE=accounts` iken her endpoint oturum ister; dev modunda `X-User-Id` de çalışır.
+- Kanıt: `app/api/auth.py`, `app/services/accounts.py`, `app/services/security.py`, sayfalar
+  `/login`, `/register`, `/login/continue`, `tests/test_accounts.py`.
+- Eksik: Google OAuth client'ı açılmadığı için Google ile giriş sadece testte (sahte Google ile)
+  çalıştı. E-posta doğrulaması ve "şifremi unuttum" yok.
+
+### US-ACCOUNT-06 Google Authenticator ile iki adımlı doğrulama
+
+Elif olarak, şifrem çalınsa bile hesabıma girilemesin istiyorum.
+
+- Sprint 4 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki hesabım var. Her girişte Google Authenticator'daki 6 haneli kodu girerim; aynı kod
+  ikinci kez kabul edilmez.
+- Diyelim ki telefonumu kaybettim. Kurulumda bir kere gösterilen 10 kurtarma kodundan biriyle
+  girerim, her kod bir kere çalışır. Ayarlar'dan yeni kodlar alabilirim (o anki kodla).
+- Kanıt: `POST /auth/totp/setup`, `/auth/totp/confirm`, `/auth/login/verify`,
+  `/auth/recovery-codes`, `tests/test_accounts.py` (RFC 6238 test vektörü dahil).
+
+### US-ACCOUNT-07 Açık oturumlarımı gör ve kapat
+
+Elif olarak, kütüphane bilgisayarında açık unuttuğum oturumu kapatmak istiyorum.
+
+- Sprint 4 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki Ayarlar'dayım. Giriş yapılmış cihazları, son kullanım zamanıyla görürüm ve
+  istediğimi kapatırım; kapanan oturumun token'ı hemen çalışmaz olur. Şifremi değiştirince
+  diğer bütün oturumlar kapanır.
+- Kanıt: `GET /auth/sessions`, `DELETE /auth/sessions/{id}`, `POST /auth/logout`,
+  `POST /auth/password`, `tests/test_accounts.py`.
 
 ### US-ACCOUNT-02 Dev modunda herhangi bir kullanıcı ol
 
@@ -836,7 +871,7 @@ yolları `backend/tests/` altında.
 | US-BUDGET-05 | Kısmen | `POST /chat` | `/chat` | `test_money_tools.py`, eval'ler |
 | US-BUDGET-06 | Bitti | `GET /dashboard` | `/` | `test_money_dashboard.py` |
 | US-HOUSE-01 | Bitti | `POST/GET /houses`, `POST /houses/{id}/members` | `/houses` | `test_api.py` |
-| US-HOUSE-02 | Başlanmadı | yok | yok | yok |
+| US-HOUSE-02 | Bitti | `POST/GET/DELETE /houses/{id}/invites`, `GET /invites/{code}`, `POST /invites/{code}/accept` | `/houses`, `/invite/[code]` | `test_house_invites.py` |
 | US-HOUSE-03 | Bitti | `POST /houses/{id}/expenses` | `/houses` | `test_settlement.py`, `test_api.py` |
 | US-HOUSE-04 | Bitti | `POST /houses/{id}/expenses/split` | `/houses` | `test_house_api.py`, `test_house_splits.py` |
 | US-HOUSE-05 | Bitti | `GET /houses/{id}/balances` | `/houses`, `/` | `test_settlement.py`, `test_house_api.py` |
@@ -867,11 +902,13 @@ yolları `backend/tests/` altında.
 | US-GUARD-06 | Bitti | `/integrations/google/*` | `/settings` | `test_ingest_oauth.py`, `test_categories_crypto.py` |
 | US-GUARD-07 | Başlanmadı | `POST /chat`, `POST /receipts` | yok | yok |
 | US-GUARD-08 | Başlanmadı | yok | yok | yok |
-| US-ACCOUNT-01 | Kısmen | her endpoint (Bearer token) | sol menü | `test_foundation_api.py` (sahte doğrulayıcı) |
+| US-ACCOUNT-01 | Kısmen | `/auth/register`, `/auth/login`, `/auth/google/*` | `/login`, `/register` | `test_accounts.py`, `test_foundation_api.py` |
 | US-ACCOUNT-02 | Bitti | her endpoint (`X-User-Id`) | sol menü | `test_api.py` |
 | US-ACCOUNT-03 | Bitti | `GET/PATCH /me` | `/settings` | `test_expenses_api.py` |
 | US-ACCOUNT-04 | Kısmen | `GET /health` | hepsi | yok (deploy script'leri yalnızca dry-run) |
 | US-ACCOUNT-05 | Bitti | `POST /chat` (`locale`) | hepsi | `test_chat_files.py`, `pickers.test.tsx` |
+| US-ACCOUNT-06 | Bitti | `/auth/totp/*`, `/auth/login/verify`, `/auth/recovery-codes` | `/register`, `/login`, `/settings` | `test_accounts.py` |
+| US-ACCOUNT-07 | Bitti | `GET/DELETE /auth/sessions`, `POST /auth/logout`, `POST /auth/password` | `/settings` | `test_accounts.py` |
 
 ## Açık story'ler
 

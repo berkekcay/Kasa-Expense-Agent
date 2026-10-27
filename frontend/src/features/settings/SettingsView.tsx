@@ -9,8 +9,8 @@ import { common } from "@/lib/commonMessages";
 import { formatDateTime } from "@/lib/format";
 import { dataChanged, useApi, useMe } from "@/lib/hooks";
 import { LOCALES, type Locale, setLocale, useLocale, useT } from "@/lib/i18n";
-import { useAuthUser, useUserId } from "@/lib/user";
-import { AccountMenu, DevUserSwitcher } from "@/components/Nav";
+import { useAuthUser, useSession, useUserId } from "@/lib/user";
+import { AccountMenu, DevUserSwitcher, SignOutButton } from "@/components/Nav";
 import { useToast } from "@/components/Toast";
 import {
   Alert,
@@ -27,6 +27,7 @@ import {
   errorMessage,
 } from "@/components/ui";
 import { messages } from "./messages";
+import { SecurityCard } from "./SecurityCard";
 
 const OAUTH_REASONS = ["denied", "scopes", "invalid", "not_configured", "google"] as const;
 
@@ -42,6 +43,7 @@ export function SettingsView() {
       <OAuthReturn />
       <ProfileCard />
       <AccountCard />
+      <SecuritySection />
       <GoogleCard />
       <DataCard />
     </div>
@@ -157,18 +159,30 @@ function AccountCard() {
   const health = useApi(() => api.health(), []);
   const user = useAuthUser();
   const userId = useUserId();
+  const session = useSession();
+  const me = useMe();
   const t = useT(messages);
   // Split around the id so it can be bold in either word order.
   const [beforeId, afterId] = t("devUserDesc", { id: "\u0000" }).split("\u0000");
+  const serverAuth = health.data?.auth;
+  const accountName = me.data?.display_name || session?.user?.display_name || "";
+  const loginEmail = me.data?.login_email ?? me.data?.email ?? session?.user?.login_email ?? session?.user?.email;
 
   return (
-    <Card title={t("accountTitle")} description={firebaseEnabled ? t("accountDescFirebase") : t("accountDescDev")}>
+    <Card
+      title={t("accountTitle")}
+      description={session ? t("accountDescSession") : firebaseEnabled ? t("accountDescFirebase") : t("accountDescDev")}
+    >
       <Rows>
-        {firebaseEnabled ? (
+        {session ? (
+          <Row label={t("signedInAs")} description={loginEmail ? `${accountName} (${loginEmail})` : accountName}>
+            <SignOutButton />
+          </Row>
+        ) : firebaseEnabled ? (
           <Row label={t("signedInAs")} description={user ? (user.displayName ?? user.email) : t("notSignedIn")}>
             <AccountMenu />
           </Row>
-        ) : (
+        ) : serverAuth === "accounts" ? null : (
           <Row
             label={t("devUser")}
             description={
@@ -185,7 +199,9 @@ function AccountCard() {
         {health.data && (
           <>
             <Row label={t("serverSignIn")} description={t("serverSignInDesc")}>
-              <span className="text-muted">{health.data.auth === "firebase" ? t("firebase") : t("devHeader")}</span>
+              <span className="text-muted sm:text-right">
+                {serverAuth === "firebase" ? t("firebase") : serverAuth === "accounts" ? t("accounts") : t("devHeader")}
+              </span>
             </Row>
             <Row label={t("aiModel")} description={t("aiModelDesc")}>
               <span className="inline-flex items-center gap-2 text-muted">
@@ -202,6 +218,14 @@ function AccountCard() {
       <ErrorText error={health.error} />
     </Card>
   );
+}
+
+/** The Security card, only for a Kasa account session (GET /me says kind "account"). */
+function SecuritySection() {
+  const me = useMe();
+  const session = useSession();
+  if (!session || me.data?.kind !== "account") return null;
+  return <SecurityCard me={me.data} />;
 }
 
 // --- Google -----------------------------------------------------------------------------------

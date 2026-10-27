@@ -69,12 +69,40 @@ def _now() -> Mapped[dt.datetime]:
 
 
 class User(Base):
+    """A person. Rows made by dev mode or Firebase only have id, name and email; accounts made
+    with POST /auth/register or Google sign-in also have the login fields (`services.accounts`).
+    The TOTP secret is stored Fernet-encrypted; passwords only as scrypt hashes."""
+
     __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "uq_users_login_email",
+            "login_email",
+            unique=True,
+            sqlite_where=text("login_email IS NOT NULL"),
+            mssql_where=text("login_email IS NOT NULL"),
+        ),
+        Index(
+            "uq_users_google_sub",
+            "google_sub",
+            unique=True,
+            sqlite_where=text("google_sub IS NOT NULL"),
+            mssql_where=text("google_sub IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(UserId, primary_key=True)
     display_name: Mapped[str] = mapped_column(Unicode(100))
     email: Mapped[str | None] = mapped_column(Unicode(320))
     created_at: Mapped[dt.datetime] = _now()
+    login_email: Mapped[str | None] = mapped_column(Unicode(320))  # lower-cased, unique
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    google_sub: Mapped[str | None] = mapped_column(String(255))
+    totp_secret_enc: Mapped[str | None] = mapped_column(String(500))
+    totp_enabled_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    totp_last_step: Mapped[int | None] = mapped_column(BigInteger)  # stops a code being reused
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    locked_until: Mapped[dt.datetime | None] = mapped_column(DateTime)
 
 
 class House(Base):
@@ -384,3 +412,49 @@ class ChatMessage(Base):
     payload_json: Mapped[str | None] = mapped_column(UnicodeText)
     created_at: Mapped[dt.datetime] = _now()
     conversation: Mapped[ChatConversation] = relationship(back_populates="messages")
+
+
+class AuthSession(Base):
+    """A signed-in browser. Only a SHA-256 of the bearer token is stored."""
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_agent: Mapped[str | None] = mapped_column(Unicode(300))
+    created_at: Mapped[dt.datetime] = _now()
+    last_seen_at: Mapped[dt.datetime] = _now()
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+
+
+class RecoveryCode(Base):
+    """One-time codes for when the authenticator app is lost. Stored as SHA-256."""
+
+    __tablename__ = "recovery_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[dt.datetime] = _now()
+    used_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+
+
+class HouseInvite(Base):
+    """A link a member shares to let others join the house. `house_name` is copied in so a
+    person who is not a member yet can see where the link leads."""
+
+    __tablename__ = "house_invites"
+    __table_args__ = (CheckConstraint("max_uses > 0", name="max_uses_positive"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    house_id: Mapped[int] = mapped_column(ForeignKey("houses.id"), index=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True)
+    house_name: Mapped[str] = mapped_column(Unicode(100))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = _now()
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    max_uses: Mapped[int] = mapped_column(Integer, default=10, server_default=text("10"))
+    uses: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime)

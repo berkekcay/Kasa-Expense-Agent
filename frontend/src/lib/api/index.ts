@@ -2,6 +2,7 @@
 // keeps working; new features are namespaced (api.budgets.list(), api.inbox.approve(...)).
 // Tracks edit only their own module and never need to touch this file.
 
+import { authApi } from "./auth";
 import { budgetsApi } from "./budgets";
 import { chatApi } from "./chat";
 import { health } from "./client";
@@ -16,6 +17,7 @@ import { meApi } from "./me";
 import { receiptsApi } from "./receipts";
 import { subscriptionsApi } from "./subscriptions";
 
+export * from "./auth";
 export * from "./budgets";
 export * from "./chat";
 export * from "./client";
@@ -44,4 +46,5 @@ export const api = {
   imports: importsApi,
   integrations: integrationsApi,
   me: meApi,
+  auth: authApi,
 };

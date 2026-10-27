@@ -1,5 +1,8 @@
 """Who is calling?
 
+- `Authorization: Bearer ks_...`: a Kasa account session (`services.accounts`), made by
+  signing in with a password or Google plus the mandatory 2FA code. Checked first.
+- AUTH_MODE=accounts (production, demo): a session is required; X-User-Id is ignored.
 - FIREBASE_PROJECT_ID set: every request needs `Authorization: Bearer <Firebase ID token>`.
   The token is verified with Google's public certs (cached), the user id is the Firebase
   `uid`, and the user's email / name from the token are saved on `users`.
@@ -22,7 +25,9 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db.session import session_for
+from app.services import accounts
 from app.services.expenses import ensure_user
+from app.services.security import SESSION_PREFIX
 
 _USER_ID_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,128}$")
 
@@ -32,6 +37,19 @@ class Principal:
     user_id: str
     email: str | None = None
     name: str | None = None
+    kind: str = "dev"  # "account" (Kasa session), "firebase" or "dev" (X-User-Id)
+    session_id: int | None = None
+
+
+def _unauthenticated(detail: str) -> HTTPException:
+    return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
+
+
+def session_principal(token: str) -> Principal | None:
+    """The account behind a session token. Runs as system: the user is not known yet."""
+    with session_for(None, system=True) as db:
+        row = accounts.session_for_token(db, token)
+        return Principal(user_id=row.user_id, kind="account", session_id=row.id) if row else None
 
 
 @lru_cache
@@ -61,6 +79,15 @@ def authenticate(
     x_user_id: Annotated[str | None, Header()] = None,
 ) -> Principal:
     settings = get_settings()
+    scheme, _, bearer = (authorization or "").partition(" ")
+    bearer = bearer.strip() if scheme.lower() == "bearer" else ""
+    if bearer.startswith(SESSION_PREFIX):
+        principal = session_principal(bearer)
+        if principal is None:
+            raise _unauthenticated("your session has ended; sign in again")
+        return principal
+    if settings.auth_mode == "accounts" and not settings.firebase_project_id:
+        raise _unauthenticated("sign in required")
     if settings.firebase_project_id:
         scheme, _, token = (authorization or "").partition(" ")
         if scheme.lower() != "bearer" or not token.strip():
@@ -77,7 +104,7 @@ def authenticate(
         if not _USER_ID_RE.match(uid):
             raise HTTPException(status_code=401, detail="token has no usable user id")
         email = claims.get("email") if claims.get("email_verified", False) else None
-        return Principal(user_id=uid, email=email, name=claims.get("name"))
+        return Principal(user_id=uid, email=email, name=claims.get("name"), kind="firebase")
 
     # DEV ONLY: trusts the X-User-Id header.
     user_id = (x_user_id or settings.dev_default_user_id).strip()

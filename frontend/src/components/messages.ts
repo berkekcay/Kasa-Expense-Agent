@@ -101,3 +101,16 @@ export const chartMessages = defineMessages({
     over: "fazla",
   },
 });
+
+export const frameMessages = defineMessages({
+  en: {
+    openKasa: "Open Kasa",
+    signIn: "Sign in",
+    checkingSession: "Checking your session",
+  },
+  tr: {
+    openKasa: "Kasa'yı aç",
+    signIn: "Giriş yap",
+    checkingSession: "Oturumun kontrol ediliyor",
+  },
+});

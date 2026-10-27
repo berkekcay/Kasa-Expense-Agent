@@ -124,3 +124,28 @@ def test_a_usd_expense_added_live_converts_without_tcmb(client, db, no_tcmb, mon
     assert body["total"] == "738.24"
     assert body["warnings"][0].startswith("Converted 15.00 USD to 738.24 TRY")
     assert any(w.startswith("Entertainment budget exceeded") for w in body["warnings"])
+
+
+def test_demo_people_get_real_sign_in_with_2fa(client, no_tcmb, capsys, monkeypatch):
+    import re
+
+    from app.config import get_settings
+    from app.services import crypto, security
+
+    monkeypatch.setattr(get_settings(), "token_encryption_key", crypto.generate_key())
+    user = "seed-demo-login"
+    assert seed_demo.main(["--user", user]) == 0
+    out = capsys.readouterr().out
+    match = re.search(rf"{user}: (\S+)  password (\S+)  2FA key (\S+)", out)
+    assert match, out
+    email, password, secret = match.groups()
+    assert email == f"{user}@kasa.demo"
+    pending = client.post("/auth/login", json={"email": email, "password": password}).json()
+    assert pending["step"] == "totp"
+    code = security.totp_code(secret, security.current_step())
+    r = client.post("/auth/login/verify", json={"pending_token": pending["pending_token"], "code": code})
+    assert r.status_code == 200 and r.json()["user"]["user_id"] == user
+
+    # --login-only replaces the password; the old one stops working.
+    assert seed_demo.main(["--user", user, "--login-only"]) == 0
+    assert client.post("/auth/login", json={"email": email, "password": password}).status_code == 401

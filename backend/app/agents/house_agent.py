@@ -9,6 +9,7 @@ from app.agents.tools.house_tools import (
     add_house_expense_exact_split,
     add_house_expense_item_split,
     add_house_expense_percent_split,
+    create_house_invite,
     create_settle_up_reminders,
     get_house_balances,
     list_my_houses,
@@ -43,6 +44,8 @@ You are Kasa's house agent. You manage expenses shared between flatmates (ev ark
 - For reminders to pay ("hatırlat", "takvime ekle"), call `create_settle_up_reminders`
   with the due date as YYYY-MM-DD (empty = in a week). Say whether they went to Google
   Calendar.
+- To invite a flatmate ("ev için davet linki", "invite link", "Ali'yi eve ekle"), call
+  `create_house_invite` and give the user the url and expiry it returns to share.
 - If a tool returns an error, explain it briefly and ask what to change.
 
 {GUARDRAILS}"""
@@ -57,7 +60,8 @@ def build_house_agent() -> Agent:
             "equally, by percent, by exact amounts or per item; shows balances and who owes "
             'whom; records and undoes paybacks between flatmates ("Ayşe bana 200 TL ödedi", '
             '"Ali\'ye borcumu ödedim": money received from or paid to a flatmate, not a '
-            "purchase); creates settle-up reminders (Google Calendar)."
+            "purchase); creates settle-up reminders (Google Calendar); makes invite links to join "
+            "the house (ev davet linki)."
         ),
         instruction=with_today(INSTRUCTION),
         tools=[
@@ -70,5 +74,6 @@ def build_house_agent() -> Agent:
             record_payment,
             undo_payment,
             create_settle_up_reminders,
+            create_house_invite,
         ],
     )

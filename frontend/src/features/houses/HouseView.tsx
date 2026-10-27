@@ -5,7 +5,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { api, type Balances, type Expense, type House } from "@/lib/api";
 import { categoryLabel, common } from "@/lib/commonMessages";
 import { formatDate, fromMinor, todayIso } from "@/lib/format";
-import { dataChanged, useApi, useHydrated } from "@/lib/hooks";
+import { dataChanged, useApi, useDataVersion, useHydrated } from "@/lib/hooks";
 import { useT } from "@/lib/i18n";
 import { useUserId } from "@/lib/user";
 import { useToast } from "@/components/Toast";
@@ -25,19 +25,28 @@ import {
   errorMessage,
 } from "@/components/ui";
 import { ConversionNote } from "@/features/expenses/ExpenseList";
+import { InviteCard, focusInviteCard } from "@/features/invites/InviteCard";
+import { inviteMessages } from "@/features/invites/messages";
 import { RemindersPanel } from "./Reminders";
 import { BalanceBars, PaymentHistory, SettleUpPanel } from "./SettleUp";
 import { SplitExpenseForm } from "./SplitExpenseForm";
 import { houseMessages } from "./messages";
 import { AvatarStack, MemberAvatar, joinNames } from "./parts";
-
-const ADD_MEMBER_INPUT = "add-member-user-id";
+import { usePreferredHouse } from "./selection";
 
 export function HouseView() {
   const t = useT(houseMessages);
   const userId = useUserId();
-  const houses = useApi(() => api.listHouses(), []);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const joined = useDataVersion("houses"); // reload after joining a house with an invite link
+  const houses = useApi(() => api.listHouses(), [joined]);
+  const preferred = usePreferredHouse();
+  const [selectedId, setSelectedId] = useState<number | null>(preferred);
+  const [seenPreferred, setSeenPreferred] = useState(preferred);
+  // A house was just joined: open it.
+  if (preferred !== seenPreferred) {
+    setSeenPreferred(preferred);
+    setSelectedId(preferred);
+  }
   const [creating, setCreating] = useState(false);
 
   function created(h: House) {
@@ -149,6 +158,9 @@ function HouseDetail({
   const settlements = useApi(() => api.listSettlements(house.id), [house.id, version]);
   const reminders = useApi(() => api.listReminders(house.id), [house.id, version]);
   const google = useApi(() => api.integrations.googleStatus(), []);
+  // Adding someone by user id is a dev tool: real accounts have random ids and join by link.
+  const health = useApi(() => api.health(), []);
+  const devAuth = health.data?.auth === "dev";
   const name = (id: string) => house.members.find((m) => m.user_id === id)?.display_name ?? id;
   const names = [...house.members]
     .sort((a, b) => Number(b.user_id === me) - Number(a.user_id === me))
@@ -161,12 +173,6 @@ function HouseDetail({
     card?.scrollIntoView({ behavior: "smooth", block: "start" });
     card?.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus({ preventScroll: true });
   }, [adding]);
-
-  function inviteFlatmate() {
-    const input = document.getElementById(ADD_MEMBER_INPUT);
-    input?.scrollIntoView({ behavior: "smooth", block: "center" });
-    input?.focus({ preventScroll: true });
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -204,7 +210,7 @@ function HouseDetail({
             <Button variant="ghost" onClick={onNewHouse}>
               <Home aria-hidden className="size-4" /> {t("newHouse")}
             </Button>
-            <Button variant="ghost" onClick={inviteFlatmate}>
+            <Button variant="ghost" onClick={focusInviteCard}>
               <UserPlus aria-hidden className="size-4" /> {t("addFlatmate")}
             </Button>
             <Button onClick={() => setAdding(true)} aria-expanded={adding} aria-controls="add-expense">
@@ -302,20 +308,25 @@ function HouseDetail({
         </div>
       </div>
 
-      <Card
-        id="members"
-        title={t("membersTitle")}
-        description={t("membersDesc", { n: house.members.length, house: house.name })}
-      >
-        <Members
-          house={house}
-          me={me}
-          onChanged={() => {
-            onHouseChanged();
-            refresh();
-          }}
-        />
-      </Card>
+      <div className="grid items-start gap-6 xl:grid-cols-5">
+        <Card
+          id="members"
+          title={t("membersTitle")}
+          description={t("membersDesc", { n: house.members.length, house: house.name })}
+          className="xl:col-span-3"
+        >
+          <Members
+            house={house}
+            me={me}
+            devAuth={devAuth}
+            onChanged={() => {
+              onHouseChanged();
+              refresh();
+            }}
+          />
+        </Card>
+        <InviteCard house={house} className="xl:col-span-2" />
+      </div>
     </div>
   );
 }
@@ -618,8 +629,19 @@ function ExpenseDetail({ house, e, name }: { house: House; e: Expense; name: (id
   );
 }
 
-function Members({ house, me, onChanged }: { house: House; me: string; onChanged: () => void }) {
+function Members({
+  house,
+  me,
+  devAuth,
+  onChanged,
+}: {
+  house: House;
+  me: string;
+  devAuth: boolean;
+  onChanged: () => void;
+}) {
   const t = useT(houseMessages);
+  const ti = useT(inviteMessages);
   const notify = useToast();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -668,7 +690,7 @@ function Members({ house, me, onChanged }: { house: House; me: string; onChanged
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="flex flex-col gap-6">
       <div className="flex min-w-0 flex-col gap-3">
         <ul className="flex flex-col divide-y divide-border text-sm">
           {house.members.map((m) => {
@@ -721,28 +743,35 @@ function Members({ house, me, onChanged }: { house: House; me: string; onChanged
         </p>
         <ErrorText error={removeError} />
       </div>
-      <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-xl border border-border p-4" aria-label={t("addFlatmateTitle")}>
-        <div>
-          <h3 className="text-sm font-semibold">{t("addFlatmateTitle")}</h3>
-          <p className="mt-0.5 text-xs text-muted">{t("addFlatmateHint")}</p>
-        </div>
-        <Field
-          id={ADD_MEMBER_INPUT}
-          label={t("userId")}
-          name="user_id"
-          required
-          maxLength={128}
-          placeholder="ayse"
-          autoComplete="off"
-          hint={t("userIdHint")}
-        />
-        <Field label={t("displayName")} name="display_name" maxLength={100} placeholder="Ayşe" autoComplete="off" />
-        <Button type="submit" variant="ghost" disabled={saving} className="self-start">
-          <UserPlus aria-hidden className="size-4" />
-          {saving ? t("adding") : t("addMember")}
-        </Button>
-        <ErrorText error={error} />
-      </form>
+      {devAuth && (
+        <form
+          onSubmit={onSubmit}
+          className="flex max-w-md flex-col gap-3 rounded-xl border border-dashed border-border p-4"
+          aria-label={ti("devTitle")}
+        >
+          <div>
+            <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+              {ti("devTitle")} <Badge tone="warning">{ti("devBadge")}</Badge>
+            </h3>
+            <p className="mt-0.5 text-xs text-muted">{ti("devHint")}</p>
+          </div>
+          <Field
+            label={t("userId")}
+            name="user_id"
+            required
+            maxLength={128}
+            placeholder="ayse"
+            autoComplete="off"
+            hint={t("userIdHint")}
+          />
+          <Field label={t("displayName")} name="display_name" maxLength={100} placeholder="Ayşe" autoComplete="off" />
+          <Button type="submit" variant="ghost" disabled={saving} className="self-start">
+            <UserPlus aria-hidden className="size-4" />
+            {saving ? t("adding") : t("addMember")}
+          </Button>
+          <ErrorText error={error} />
+        </form>
+      )}
     </div>
   );
 }

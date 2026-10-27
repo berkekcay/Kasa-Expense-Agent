@@ -187,7 +187,16 @@ class TestDelete:
 class TestMe:
     def test_get_and_patch_display_name(self, client, user):
         me = client.get("/me", headers=as_user(user)).json()
-        assert me == {"user_id": user, "display_name": user, "email": None}
+        assert me == {
+            "user_id": user,
+            "display_name": user,
+            "email": None,
+            "login_email": None,
+            "has_password": False,
+            "google_linked": False,
+            "totp_enabled": False,
+            "kind": "dev",
+        }
         r = client.patch("/me", json={"display_name": "  Deniz Yılmaz  "}, headers=as_user(user))
         assert r.status_code == 200 and r.json()["display_name"] == "Deniz Yılmaz"
         assert client.get("/me", headers=as_user(user)).json()["display_name"] == "Deniz Yılmaz"

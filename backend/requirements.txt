@@ -20,3 +20,5 @@ httpx==0.28.1
 pypdf==6.20.0
 # Excel (.xlsx) files attached in the chat
 openpyxl==3.1.5
+# QR code (SVG) for setting up Google Authenticator
+segno==1.6.6

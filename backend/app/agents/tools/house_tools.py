@@ -1,5 +1,5 @@
 """House agent tools (owner: track HOUSE): shared expenses, splits, balances, payments,
-settle-up reminders.
+settle-up reminders, invite links.
 
 The model passes who and how much exactly as the user said it; code computes every share.
 People can be given as member user ids or display names ("Ayşe"); "me"/"ben" (or an empty
@@ -20,6 +20,7 @@ from app.agents.tools._context import error, tool_db
 from app.db.models import Expense, House
 from app.services import clock
 from app.services import houses as house_service
+from app.services import invites as invite_service
 from app.services import reminders as reminder_service
 from app.services.errors import DomainError, InvalidInput
 from app.services.expenses import ExpenseInput, ItemInput
@@ -478,4 +479,29 @@ def create_settle_up_reminders(
                 "warnings": result.warnings,
             }
     except (DomainError, ValueError) as exc:
+        return error(exc)
+
+
+def create_house_invite(house_id: int, tool_context: ToolContext) -> dict:
+    """Create an invite link for the house ("ev için davet linki", "Ali'yi eve davet et").
+    Whoever opens the link and accepts joins the house. Valid 7 days, for up to 10 people.
+
+    Args:
+      house_id: Id from list_my_houses.
+    """
+    try:
+        with tool_db(tool_context) as (db, user_id):
+            house_id = _pick_house(db, user_id, house_id)
+            invite = invite_service.create_invite(db, user_id, house_id)
+            return {
+                "status": "created",
+                "house": invite.house_name,
+                "url": invite_service.invite_url(invite.code),
+                "code": invite.code,
+                "expires_at": invite.expires_at.replace(tzinfo=dt.UTC)
+                .astimezone(clock.KASA_TZ)
+                .isoformat(timespec="minutes"),
+                "max_uses": invite.max_uses,
+            }
+    except DomainError as exc:
         return error(exc)
