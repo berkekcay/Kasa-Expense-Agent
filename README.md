@@ -4,6 +4,12 @@ Kasa is an AI agent (Google ADK + Gemini) that looks after a student's personal 
 shared-flat expenses. It reads receipts, saves expenses, splits bills, settles debts and answers
 money questions with charts.
 
+**Start here:** [user stories](docs/USER_STORIES.md) (what Kasa does and how far each part
+is), [architecture](docs/ARCHITECTURE.md) (a five minute overview with diagrams, then the
+module map), [team](docs/TEAM.md) (who owns what and how we work) and the
+[demo runbook](docs/DEMO.md) (setup, demo data and the script for Friday 2026-10-30).
+Coding agents read [AGENTS.md](AGENTS.md).
+
 The module map, the data model, who owns which files and how a request flows through the
 system are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -38,7 +44,8 @@ Amounts are stored as integer minor units (kuruş/cents), never floats.
 
 Guardrails:
 - Report SQL is parsed with sqlglot. Only one plain `SELECT` is allowed, and only over
-  `my_expenses`, `my_expense_items`, `my_house_shares`, `my_budgets` and `my_subscriptions`.
+  `my_spending`, `my_expenses`, `my_expense_items`, `my_house_shares`, `my_budgets` and
+  `my_subscriptions`.
   Those names are injected as CTEs filtered to the current user, and a row limit is applied.
   A second agent, the checker, reads each query next to the user's question and can send it
   back for a fix before it runs.
@@ -85,6 +92,11 @@ uvicorn app.main:app --reload --port 8000
 
 The database schema is created and upgraded by Alembic when the app starts (`AUTO_MIGRATE=true`).
 To run it by hand: `alembic upgrade head`.
+
+Demo data for one dev user (three months of expenses, a shared house, budgets, subscriptions
+and inbox items; no network or LLM needed): `python -m scripts.seed_demo --user demo`, then
+type `demo` in the "Dev user" box. Add `--reset` to start over. Details are in
+[docs/DEMO.md](docs/DEMO.md).
 
 API docs are at http://localhost:8000/docs. Without an LLM provider, everything works except
 `POST /receipts` and `POST /chat`, which return 503. Endpoints of features that are not built
