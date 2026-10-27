@@ -43,18 +43,26 @@ it. Everyone writes tests for their own files.
 ### First issues for each person
 
 Each Partial or Not started story in [USER_STORIES.md](USER_STORIES.md) becomes an issue.
-A first pick, so nobody waits:
+The open ones, with a ready prompt for a coding agent in each:
 
-- **Berke:** open the issues from USER_STORIES, keep the board current, review every PR
-  for scope, run the architecture part of lab presentations.
-- **Mustafa:** run the migrations and the RLS smoke test on Azure SQL (US-GUARD-04), the first
-  Cloud Run deploy with Yusuf (US-ACCOUNT-04), per-user rate limits (US-GUARD-07).
-- **Yusuf:** verify Gemini with `gemini-3.5-flash-lite`: live tests, receipt vision and the
-  evals (US-ASK-06, US-CAPTURE-02), then the reply language failure (US-ASK-04).
-- **Ömer:** invite links for flatmates, backend and house agent (US-HOUSE-02), Calendar
-  reminders against a real Google account once the OAuth client exists (US-HOUSE-07).
-- **Zehra:** the invite link pages (US-HOUSE-02), the "delete my data" flow in Settings
-  (US-GUARD-08), and a small set of frontend tests (today CI only runs lint and build).
+- **Everyone:** [#3](https://github.com/berkekcay/Kasa-Expense-Agent/issues/3) set up,
+  rehearse and record the Friday demo.
+- **Mustafa:** [#7](https://github.com/berkekcay/Kasa-Expense-Agent/issues/7) finish the CSV
+  export PR, [#8](https://github.com/berkekcay/Kasa-Expense-Agent/issues/8) Next.js 16.4.3,
+  [#9](https://github.com/berkekcay/Kasa-Expense-Agent/issues/9) per-user chat limit
+  (US-GUARD-07). Later: Azure SQL and RLS smoke test (US-GUARD-04), first Cloud Run deploy
+  with Yusuf (US-ACCOUNT-04).
+- **Yusuf:** [#4](https://github.com/berkekcay/Kasa-Expense-Agent/issues/4) verify Gemini
+  with `gemini-3.5-flash-lite` (US-ASK-06, US-CAPTURE-02), then
+  [#5](https://github.com/berkekcay/Kasa-Expense-Agent/issues/5) reply language (US-ASK-04).
+- **Ömer:** [#6](https://github.com/berkekcay/Kasa-Expense-Agent/issues/6) house invite codes,
+  backend and house agent (US-HOUSE-02). Later: Calendar reminders against a real Google
+  account once the OAuth client exists (US-HOUSE-07).
+- **Zehra:** [#10](https://github.com/berkekcay/Kasa-Expense-Agent/issues/10) frontend tests in
+  CI, [#11](https://github.com/berkekcay/Kasa-Expense-Agent/issues/11) invite code pages
+  (US-HOUSE-02). Later: "delete my data" in Settings (US-GUARD-08).
+- **Berke:** keep USER_STORIES and the board current, review every PR for scope, present the
+  architecture in labs.
 
 ## Working agreement
 
