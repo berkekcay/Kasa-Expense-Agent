@@ -138,6 +138,20 @@ npm run dev                        # http://localhost:3000
 Farklı kullanıcılar gibi davranmak için nav bar'daki "Dev user" kutusunu kullan. Örneğin
 `ali` olarak bir ev oluştur, `ayse`'yi ekle, sonra `ayse`'ye geç.
 
+### Frontend testleri
+
+CI ile aynı Node.js 24 sürümünü kullan.
+
+```bash
+cd frontend
+npm ci
+npm test
+```
+
+Vitest, React Testing Library ve jsdom ile testler tek sefer çalışır; izleme modu için
+`npm test -- --watch` kullan. API yanıtları testlerde taklit edilir; backend veya API anahtarı
+gerekmez. Para biçimlendirme, API hata yönetimi ve harcama listesinin gösterimi test edilir.
+
 ## Ortam değişkenleri
 
 Backend ayarlarının hepsi açıklamalarıyla birlikte `backend/.env.example` içinde, frontend
@@ -218,7 +232,7 @@ tetiklenir, sadece `main`). Anahtar dosyası yerine Workload Identity Federation
 - [x] Firebase Auth (isteğe bağlı), yedek olarak dev header'ı
 - [x] Dev için Ollama sağlayıcısı; Sprint 1'in üç akışı ekibin Ollama sunucusunda canlı olarak geçiyor
 - [x] HOUSE, MONEY, INGEST ve REPORT track'leri için iskelet modüller, route'lar ve sayfalar
-- [x] CI: her push'ta ruff, pytest, eslint ve next build
+- [x] CI: her push'ta ruff, pytest, eslint, Vitest ve next build
 
 ## Sprint 2-4 track'leri
 

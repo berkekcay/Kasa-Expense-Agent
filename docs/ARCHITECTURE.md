@@ -266,6 +266,11 @@ frontend/src/
   lib/auth.ts, lib/user.ts  Firebase sign-in or the dev user box
 ```
 
+Frontend testleri `src/` altında `*.test.ts` ve `*.test.tsx` dosyalarında bulunur.
+`cd frontend && npm test`, Vitest ile React Testing Library testlerini jsdom ortamında
+çalıştırır. API yanıtları taklit edilir; backend veya dış servis bağlantısı gerekmez.
+CI frontend işinde lint, testler ve production build sırayla çalışır.
+
 ## Track'ler ve sahipleri
 
 | Track | Backend dosyaları | Frontend dosyaları |
