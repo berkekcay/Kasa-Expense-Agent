@@ -1,15 +1,19 @@
 "use client";
 
+import { Bell, BellPlus, CalendarCheck, CalendarX2, Check } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { api, type GoogleStatus, type House, type Reminder, type ReminderStatus, type RemindersCreated } from "@/lib/api";
 import { formatDate, todayIso } from "@/lib/format";
 import { useHydrated } from "@/lib/hooks";
+import { useT } from "@/lib/i18n";
 import { useToast } from "@/components/Toast";
-import { Alert, Badge, Button, Empty, ErrorText, Field, Money, errorMessage } from "@/components/ui";
+import { DatePicker } from "@/components/pickers";
+import { Alert, Badge, Button, Empty, ErrorText, Money, errorMessage } from "@/components/ui";
+import { houseMessages } from "./messages";
+import { DateChip } from "./parts";
 
 const STATUS_TONE = { scheduled: "accent", done: "positive", cancelled: "neutral" } as const;
-const STATUS_LABEL = { scheduled: "Scheduled", done: "Paid", cancelled: "Cancelled" } as const;
 
 export function RemindersPanel({
   house,
@@ -28,6 +32,7 @@ export function RemindersPanel({
   name: (id: string) => string;
   onChanged: () => void;
 }) {
+  const t = useT(houseMessages);
   const notify = useToast();
   const hydrated = useHydrated();
   const calendarReady = Boolean(google?.connected && google.calendar_access);
@@ -43,7 +48,7 @@ export function RemindersPanel({
     e.preventDefault();
     const due = String(new FormData(e.currentTarget).get("due_date") ?? "");
     if (!due) {
-      setError("Pick a due date.");
+      setError(t("errDueDate"));
       return;
     }
     setSaving(true);
@@ -65,7 +70,7 @@ export function RemindersPanel({
     try {
       await api.setReminderStatus(house.id, r.id, status);
       notify(
-        status === "done" ? "Marked as paid." : status === "cancelled" ? "Reminder cancelled." : "Marked as not paid yet.",
+        status === "done" ? t("markedPaid") : status === "cancelled" ? t("reminderCancelled") : t("markedNotPaid"),
         "success",
       );
       setConfirmCancel(null);
@@ -78,56 +83,62 @@ export function RemindersPanel({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="text-sm">
-        {google === null ? null : calendarReady ? (
-          <p className="flex flex-wrap items-center gap-2">
-            <Badge tone="positive">Google Calendar connected</Badge>
-            <span className="text-muted">{google.google_email}</span>
+    <div className="flex flex-col gap-5">
+      {google !== null &&
+        (calendarReady ? (
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <CalendarCheck aria-hidden className="size-4 text-positive" />
+            <span>{t("calConnected")}</span>
+            {google.google_email && <span className="text-muted">{google.google_email}</span>}
           </p>
         ) : (
-          <Alert tone="info">
-            Google Calendar is not connected, so reminders stay in Kasa.{" "}
-            <Link href="/settings" className="font-medium text-accent underline">
-              Connect it in Settings
-            </Link>
-            .
-          </Alert>
-        )}
-      </div>
+          <p className="flex items-start gap-2 text-sm text-muted">
+            <CalendarX2 aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <span>
+              {t("calNotConnected")}{" "}
+              <Link href="/settings" className="font-medium text-accent hover:underline">
+                {t("connectIt")}
+              </Link>
+            </span>
+          </p>
+        ))}
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium">Remind everyone to settle up</h3>
-        <p className="text-sm text-muted">
-          Kasa makes one reminder per suggested transfer.
-          {calendarReady && " With the calendar on, each one becomes an all day event and both flatmates are invited."}
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Due date" name="due_date" type="date" required min={hydrated ? todayIso() : undefined} className="w-48" />
-          <label className="flex h-9 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={addToCalendar}
-              onChange={(e) => setAddToCalendar(e.target.checked)}
-              className="size-4 accent-[var(--accent)]"
-            />
-            Add to Google Calendar
-          </label>
-          <Button type="submit" disabled={saving || !hasTransfers}>
-            {saving ? "Creating" : "Create reminders"}
-          </Button>
+      <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-xl border border-border p-4">
+        <div>
+          <h3 className="text-sm font-semibold">{t("remindTitle")}</h3>
+          <p className="mt-0.5 text-xs text-muted">
+            {t("remindHint")}
+            {calendarReady && t("remindCalHint")}
+          </p>
         </div>
-        {!hasTransfers && <p className="text-sm text-muted">Everyone is settled up, so there is nothing to remind about.</p>}
+        <DatePicker
+          label={t("dueDate")}
+          name="due_date"
+          required
+          min={hydrated ? todayIso() : undefined}
+          placeholder={t("pickDueDate")}
+        />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={addToCalendar}
+            onChange={(e) => setAddToCalendar(e.target.checked)}
+            className="size-4 accent-[var(--accent)]"
+          />
+          {t("addToCalendar")}
+        </label>
+        <Button type="submit" disabled={saving || !hasTransfers} className="self-start">
+          <BellPlus aria-hidden className="size-4" />
+          {saving ? t("creating") : t("createReminders")}
+        </Button>
+        {!hasTransfers && <p className="text-xs text-muted">{t("nothingToRemind")}</p>}
         <ErrorText error={error} />
-        <div aria-live="polite" className="flex flex-col gap-2">
+        <div aria-live="polite" className="flex flex-col gap-2 empty:hidden">
           {created && (
             <Alert tone="success" onDismiss={() => setCreated(null)}>
-              {created.reminders.length === 0
-                ? "No reminders were needed."
-                : `${created.reminders.length} ${created.reminders.length === 1 ? "reminder is" : "reminders are"} set.`}
-              {created.calendar_connected && " They are on your Google Calendar."}
-              {created.cancelled.length > 0 &&
-                ` ${created.cancelled.length} old ${created.cancelled.length === 1 ? "reminder was" : "reminders were"} updated because the balances changed.`}
+              {t("remindersCreated", { n: created.reminders.length })}
+              {created.calendar_connected && t("onCalendar")}
+              {created.cancelled.length > 0 && t("remindersReplaced", { n: created.cancelled.length })}
             </Alert>
           )}
           {created?.warnings.map((w) => (
@@ -138,69 +149,79 @@ export function RemindersPanel({
         </div>
       </form>
 
-      <div>
-        <h3 className="mb-2 text-sm font-medium">Reminders</h3>
-        {reminders.length === 0 ? (
-          <Empty>No reminders yet.</Empty>
-        ) : (
-          <ul className="flex flex-col divide-y divide-border text-sm">
-            {reminders.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-2">
-                    <span>
-                      <strong className="font-medium">{r.from_user === me ? "You" : name(r.from_user)}</strong>{" "}
-                      {r.from_user === me ? "pay" : "pays"}{" "}
-                      <strong className="font-medium">{r.to_user === me ? "you" : name(r.to_user)}</strong>{" "}
-                      <Money amount={r.amount} currency={r.currency} className="font-semibold" />
+      {reminders.length === 0 ? (
+        <Empty icon={<Bell />}>{t("noReminders")}</Empty>
+      ) : (
+        <ul className="flex flex-col divide-y divide-border text-sm" aria-label={t("remindersTitle")}>
+          {reminders.map((r) => (
+            <li key={r.id} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
+              <div className="flex items-start gap-3">
+                <DateChip
+                  iso={r.due_date}
+                  tone={r.status === "scheduled" ? (r.outdated ? "neutral" : "accent") : r.status === "done" ? "neutral" : "muted"}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className={`flex items-baseline justify-between gap-3 ${r.status === "cancelled" ? "text-muted" : ""}`}>
+                    <span className="min-w-0 font-medium">
+                      {t("willPay", {
+                        from: r.from_user === me ? t("youSubject") : name(r.from_user),
+                        to: r.to_user === me ? t("youObject") : name(r.to_user),
+                        fromMe: r.from_user === me ? 1 : 0,
+                        toMe: r.to_user === me ? 1 : 0,
+                      })}
                     </span>
-                    {r.cancel_reason === "outdated" ? (
-                      <Badge>Updated</Badge>
-                    ) : (
-                      <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
-                    )}
-                    {r.outdated && <Badge tone="warning">Out of date</Badge>}
-                    {r.calendar_event_id && r.status !== "cancelled" && <Badge>In calendar</Badge>}
+                    <Money amount={r.amount} currency={r.currency} className="shrink-0 font-semibold tabular-nums" />
                   </p>
-                  <p className="text-muted">
-                    Due {formatDate(r.due_date)}
-                    {r.cancel_reason === "outdated" && ". Replaced after the balances changed."}
-                    {r.outdated && ". The balances changed; create reminders again to update it."}
+                  <p className="mt-0.5 text-xs text-muted">
+                    {t("due", { date: formatDate(r.due_date) })}
+                    {r.cancel_reason === "outdated" && t("replacedNote")}
+                    {r.outdated && t("outdatedNote")}
+                  </p>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {r.cancel_reason === "outdated" ? (
+                      <Badge>{t("updated")}</Badge>
+                    ) : (
+                      <Badge tone={STATUS_TONE[r.status]}>{t(`status.${r.status}`)}</Badge>
+                    )}
+                    {r.outdated && <Badge tone="warning">{t("outOfDate")}</Badge>}
+                    {r.calendar_event_id && r.status !== "cancelled" && <Badge>{t("inCalendar")}</Badge>}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+              </div>
+              {r.status !== "cancelled" && (
+                <div className="flex flex-wrap items-center gap-2 pl-[3.25rem]">
                   {r.status === "scheduled" && (
                     <Button size="sm" variant="ghost" onClick={() => setStatus(r, "done")} disabled={busyId === r.id}>
-                      Mark paid
+                      <Check aria-hidden className="size-3.5" />
+                      {t("markPaid")}
                     </Button>
                   )}
                   {r.status === "done" && (
                     <Button size="sm" variant="subtle" onClick={() => setStatus(r, "scheduled")} disabled={busyId === r.id}>
-                      Not paid yet
+                      {t("notPaidYet")}
                     </Button>
                   )}
-                  {r.status !== "cancelled" &&
-                    r.created_by === me &&
+                  {r.created_by === me &&
                     (confirmCancel === r.id ? (
                       <>
                         <Button size="sm" variant="danger" onClick={() => setStatus(r, "cancelled")} disabled={busyId === r.id}>
-                          Cancel reminder
+                          {t("cancelReminder")}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setConfirmCancel(null)}>
-                          Keep
+                          {t("keep")}
                         </Button>
                       </>
                     ) : (
                       <Button size="sm" variant="subtle" onClick={() => setConfirmCancel(r.id)}>
-                        Cancel
+                        {t("cancelShort")}
                       </Button>
                     ))}
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

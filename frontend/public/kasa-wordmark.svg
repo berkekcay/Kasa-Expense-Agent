@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 32" width="200" height="64" role="img" aria-label="Kasa">
+  <title>Kasa</title>
+  <style>
+    .word { fill: #16181d; }
+    @media (prefers-color-scheme: dark) { .word { fill: #ececef; } }
+  </style>
+  <rect width="32" height="32" rx="9" fill="#047857"/>
+  <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.5 8.5v15"/>
+    <path d="M21.5 8.5 13 16.2"/>
+    <path d="M13 16.2c2.4 0 3.6 1.2 4.8 3.4"/>
+  </g>
+  <circle cx="22" cy="22" r="3.3" fill="#ffffff"/>
+  <text class="word" x="41" y="23.5" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="-0.5">Kasa</text>
+</svg>

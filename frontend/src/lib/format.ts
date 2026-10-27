@@ -1,5 +1,8 @@
 // Display helpers. Money comes from the API as decimal strings ("1234.50"); these only format
 // it, they never do arithmetic on it. Dates come as ISO strings ("2026-10-12").
+// Money uses Turkish grouping in both languages (₺1.234,50); month names follow the UI locale.
+
+import { getLocale } from "./i18n";
 
 const moneyFormatters = new Map<string, Intl.NumberFormat>();
 
@@ -39,7 +42,22 @@ export function formatAxis(value: number): string {
   return axisNumber.format(value);
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NAMES = {
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  tr: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"],
+};
+const LONG_MONTH_NAMES = {
+  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+  tr: ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
+};
+/** Short month names ("Oct" / "Eki") for the current locale. */
+export function monthNames(): string[] {
+  return MONTH_NAMES[getLocale()];
+}
+/** Long month names ("October" / "Ekim") for the current locale. */
+export function longMonthNames(): string[] {
+  return LONG_MONTH_NAMES[getLocale()];
+}
 function parseDay(iso: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!m) return null;
@@ -50,14 +68,14 @@ function parseDay(iso: string): Date | null {
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = parseDay(iso);
-  return d ? `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` : iso;
+  return d ? `${d.getUTCDate()} ${monthNames()[d.getUTCMonth()]} ${d.getUTCFullYear()}` : iso;
 }
 
 /** "2026-10-01" or "2026-10" -> "Oct 2026". */
 export function formatMonth(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = parseDay(iso.length === 7 ? `${iso}-01` : iso);
-  return d ? `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` : iso;
+  return d ? `${monthNames()[d.getUTCMonth()]} ${d.getUTCFullYear()}` : iso;
 }
 
 /** Backend datetimes are UTC; naive ones get a Z. Shown in the viewer's time zone. */
@@ -67,7 +85,7 @@ export function formatDateTime(iso: string | null | undefined): string {
   const d = new Date(withZone);
   if (Number.isNaN(d.getTime())) return iso;
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getDate()} ${monthNames()[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /** Local "today" as YYYY-MM-DD. Call only in the browser (event handlers, after hydration). */

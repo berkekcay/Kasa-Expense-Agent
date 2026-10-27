@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { useT } from "@/lib/i18n";
+import { uiMessages } from "./messages";
 
 type ToastTone = "info" | "success" | "warning" | "error";
 type Toast = { id: number; tone: ToastTone; text: string };
@@ -12,6 +14,7 @@ const ToastContext = createContext<Notify>(() => {});
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
+  const tr = useT(uiMessages);
 
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
@@ -60,13 +63,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               }`}
             />
             <p className="min-w-0 flex-1">
-              <span className="sr-only">{{ info: "Note", success: "Done", warning: "Warning", error: "Error" }[t.tone]}: </span>
+              <span className="sr-only">{tr(`tone.${t.tone}`)}: </span>
               {t.text}
             </p>
             <button
               type="button"
               onClick={() => dismiss(t.id)}
-              aria-label="Dismiss message"
+              aria-label={tr("dismissMessage")}
               className="-mr-1 -mt-0.5 h-6 w-6 shrink-0 rounded text-muted hover:text-foreground"
             >
               ×

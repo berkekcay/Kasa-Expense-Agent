@@ -1,74 +1,228 @@
 "use client";
 
+import { CalendarPlus, Check, Inbox, MailSearch, MailX, RefreshCw, ShieldCheck, Unplug, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { api, type GoogleStatus, type SyncResult } from "@/lib/api";
 import { firebaseEnabled } from "@/lib/auth";
+import { common } from "@/lib/commonMessages";
 import { formatDateTime } from "@/lib/format";
 import { dataChanged, useApi, useMe } from "@/lib/hooks";
+import { LOCALES, type Locale, setLocale, useLocale, useT } from "@/lib/i18n";
 import { useAuthUser, useUserId } from "@/lib/user";
 import { AccountMenu, DevUserSwitcher } from "@/components/Nav";
 import { useToast } from "@/components/Toast";
-import { Alert, Async, Badge, Button, Card, ErrorText, Field, Spinner, errorMessage } from "@/components/ui";
+import {
+  Alert,
+  Async,
+  Badge,
+  Button,
+  Card,
+  ErrorText,
+  Field,
+  PageHeader,
+  Segmented,
+  Skeleton,
+  Spinner,
+  errorMessage,
+} from "@/components/ui";
+import { messages } from "./messages";
 
-const OAUTH_ERRORS: Record<string, string> = {
-  denied: "You cancelled the Google sign-in, so nothing was connected.",
-  scopes: "Google did not grant the access Kasa needs. Try again and tick both Gmail and Calendar.",
-  invalid: "The sign-in link expired or was not valid. Start again from this page.",
-  not_configured: "Google connection is not set up on the server yet.",
-  google: "Google returned an error. Try again in a minute.",
-};
+const OAUTH_REASONS = ["denied", "scopes", "invalid", "not_configured", "google"] as const;
+
+/** The page header, translated on the client (the page itself is a server component). */
+export function SettingsHeader() {
+  const t = useT(messages);
+  return <PageHeader title={t("title")} subtitle={t("subtitle")} />;
+}
 
 export function SettingsView() {
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-2">
+    <div className="flex max-w-3xl flex-col gap-6">
       <OAuthReturn />
+      <ProfileCard />
+      <AccountCard />
       <GoogleCard />
-      <div className="flex flex-col gap-6">
-        <ProfileCard />
-        <AccountCard />
-        <GmailExplainer />
-      </div>
+      <DataCard />
     </div>
   );
 }
 
+/** One settings line: what it is on the left, its value or control on the right. */
+function Row({ label, description, children }: { label: string; description?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">{label}</p>
+        {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
+      </div>
+      {children && <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 text-sm sm:justify-end">{children}</div>}
+    </div>
+  );
+}
+
+function Rows({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col divide-y divide-border">{children}</div>;
+}
+
 /** Message for the ?google=connected|error&reason=... redirect back from the OAuth callback. */
 function OAuthReturn() {
+  const t = useT(messages);
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const result = params.get("google");
   if (!result) return null;
   const clear = () => router.replace(pathname, { scroll: false });
-  const reason = params.get("reason") ?? "google";
-  return (
-    <div className="lg:col-span-2">
-      {result === "connected" ? (
-        <Alert tone="success" title="Google is connected" onDismiss={clear}>
-          Kasa will check your Gmail for receipts and can add settle-up reminders to your calendar.
-        </Alert>
-      ) : (
-        <Alert tone="error" title="Google was not connected" onDismiss={clear}>
-          {OAUTH_ERRORS[reason] ?? OAUTH_ERRORS.google}
-        </Alert>
-      )}
-    </div>
+  const raw = params.get("reason") ?? "google";
+  const reason = (OAUTH_REASONS as readonly string[]).includes(raw) ? (raw as (typeof OAUTH_REASONS)[number]) : "google";
+  return result === "connected" ? (
+    <Alert tone="success" title={t("connectedTitle")} onDismiss={clear}>
+      {t("connectedText")}
+    </Alert>
+  ) : (
+    <Alert tone="error" title={t("notConnectedTitle")} onDismiss={clear}>
+      {t(`oauth.${reason}`)}
+    </Alert>
   );
 }
 
-function Access({ ok, label }: { ok: boolean; label: string }) {
+// --- Profile ----------------------------------------------------------------------------------
+
+function ProfileCard() {
+  const me = useMe();
+  const notify = useToast();
+  const t = useT(messages);
+  const tc = useT(common);
+  const locale = useLocale();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const name = String(new FormData(e.currentTarget).get("display_name") ?? "").trim();
+    if (!name) {
+      setError(t("errName"));
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await api.me.setDisplayName(name);
+      notify(t("nameSaved", { name: saved.display_name }), "success");
+      dataChanged("profile");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <li className="flex items-center justify-between gap-3 py-2">
-      <span>{label}</span>
-      {ok ? <Badge tone="positive">✓ Allowed</Badge> : <Badge>Not allowed</Badge>}
-    </li>
+    <Card title={t("profileTitle")} description={t("profileDesc")}>
+      <Async {...me} label={t("profileLoading")} fallback={<Skeleton className="h-16 w-full max-w-md" />}>
+        {(profile) => (
+          <form key={profile.display_name} onSubmit={onSubmit} className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-end gap-3">
+              <Field
+                label={t("displayName")}
+                name="display_name"
+                required
+                maxLength={100}
+                defaultValue={profile.display_name}
+                autoComplete="name"
+                className="min-w-48 flex-1 sm:max-w-sm"
+              />
+              <Button type="submit" variant="ghost" disabled={saving}>
+                {saving && <Spinner className="size-3.5" />}
+                {saving ? tc("saving") : t("saveName")}
+              </Button>
+            </div>
+            <ErrorText error={error} />
+          </form>
+        )}
+      </Async>
+      <div className="mt-5 border-t border-border pt-4">
+        <Row label={t("language")} description={t("languageDesc")}>
+          <Segmented<Locale> label={t("language")} value={locale} options={LOCALES} onChange={setLocale} />
+        </Row>
+      </div>
+    </Card>
+  );
+}
+
+// --- Account ----------------------------------------------------------------------------------
+
+function AccountCard() {
+  const health = useApi(() => api.health(), []);
+  const user = useAuthUser();
+  const userId = useUserId();
+  const t = useT(messages);
+  // Split around the id so it can be bold in either word order.
+  const [beforeId, afterId] = t("devUserDesc", { id: "\u0000" }).split("\u0000");
+
+  return (
+    <Card title={t("accountTitle")} description={firebaseEnabled ? t("accountDescFirebase") : t("accountDescDev")}>
+      <Rows>
+        {firebaseEnabled ? (
+          <Row label={t("signedInAs")} description={user ? (user.displayName ?? user.email) : t("notSignedIn")}>
+            <AccountMenu />
+          </Row>
+        ) : (
+          <Row
+            label={t("devUser")}
+            description={
+              <>
+                {beforeId}
+                <span className="font-medium text-foreground">{userId}</span>
+                {afterId}
+              </>
+            }
+          >
+            <DevUserSwitcher idPrefix="settings-dev-user" />
+          </Row>
+        )}
+        {health.data && (
+          <>
+            <Row label={t("serverSignIn")} description={t("serverSignInDesc")}>
+              <span className="text-muted">{health.data.auth === "firebase" ? t("firebase") : t("devHeader")}</span>
+            </Row>
+            <Row label={t("aiModel")} description={t("aiModelDesc")}>
+              <span className="inline-flex items-center gap-2 text-muted">
+                <span
+                  aria-hidden
+                  className={`size-2 rounded-full ${health.data.agents_enabled ? "bg-[var(--status-good)]" : "bg-[var(--status-warning)]"}`}
+                />
+                {health.data.agents_enabled ? t("aiOn", { provider: health.data.llm_provider ?? "" }) : t("aiOff")}
+              </span>
+            </Row>
+          </>
+        )}
+      </Rows>
+      <ErrorText error={health.error} />
+    </Card>
+  );
+}
+
+// --- Google -----------------------------------------------------------------------------------
+
+function Access({ ok }: { ok: boolean }) {
+  const t = useT(messages);
+  return ok ? (
+    <Badge tone="positive">
+      <Check aria-hidden className="mr-1 size-3" /> {t("allowed")}
+    </Badge>
+  ) : (
+    <Badge>
+      <X aria-hidden className="mr-1 size-3" /> {t("notAllowed")}
+    </Badge>
   );
 }
 
 function GoogleCard() {
   const status = useApi(() => api.integrations.googleStatus(), []);
   const notify = useToast();
+  const t = useT(messages);
   const [busy, setBusy] = useState<"connect" | "sync" | "disconnect" | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [sync, setSync] = useState<SyncResult | null>(null);
@@ -100,7 +254,7 @@ function GoogleCard() {
     setBusy("disconnect");
     try {
       await api.integrations.googleDisconnect();
-      notify("Google is disconnected. Kasa no longer reads your Gmail.", "success");
+      notify(t("disconnectedToast"), "success");
       setConfirm(false);
       setSync(null);
       status.reload();
@@ -112,79 +266,78 @@ function GoogleCard() {
   }
 
   return (
-    <Card title="Google account">
-      <Async {...status} label="Checking the Google connection">
+    <Card title={t("googleTitle")} description={t("googleDesc")}>
+      <Async {...status} label={t("googleLoading")} fallback={<Skeleton className="h-24 w-full" />}>
         {(s: GoogleStatus) =>
           !s.configured && !s.connected ? (
-            <Alert tone="info" title="Not available on this server">
-              The server has no Google sign-in set up, so Gmail import and Calendar reminders are off. You can still import
-              statements and add expenses by hand.
+            <Alert tone="info" title={t("notAvailableTitle")}>
+              {t("notAvailableText")}
             </Alert>
           ) : (
             <div className="flex flex-col gap-4 text-sm">
-              <p className="flex flex-wrap items-center gap-2">
-                {s.connected ? <Badge tone="positive">Connected</Badge> : <Badge>Not connected</Badge>}
-                {s.google_email && <span className="font-medium">{s.google_email}</span>}
-              </p>
-              {s.connected && (
-                <ul className="flex flex-col divide-y divide-border">
-                  <Access ok={s.gmail_access} label="Read Gmail (receipts and invoices)" />
-                  <Access ok={s.calendar_access} label="Add Calendar events (reminders)" />
-                  <li className="flex items-center justify-between gap-3 py-2">
-                    <span>New email</span>
-                    <span className="text-right text-muted">
-                      {s.gmail_watch_expires_at
-                        ? `Checked right away until ${formatDateTime(s.gmail_watch_expires_at)}`
-                        : "Checked every hour"}
-                    </span>
-                  </li>
-                </ul>
-              )}
-              {s.connected && (!s.gmail_access || !s.calendar_access) && (
-                <Alert tone="warning">Some access is missing. Connect again and allow both to use every feature.</Alert>
-              )}
-              <div className="flex flex-wrap gap-2">
+              <Rows>
+                <Row label={t("status")} description={s.google_email ?? (s.connected ? undefined : t("noAccount"))}>
+                  {s.connected ? <Badge tone="positive">{t("connected")}</Badge> : <Badge>{t("notConnected")}</Badge>}
+                </Row>
+                {s.connected && (
+                  <>
+                    <Row label={t("gmail")} description={t("gmailDesc")}>
+                      <Access ok={s.gmail_access} />
+                    </Row>
+                    <Row label={t("calendar")} description={t("calendarDesc")}>
+                      <Access ok={s.calendar_access} />
+                    </Row>
+                    <Row label={t("newEmail")}>
+                      <span className="text-muted sm:text-right">
+                        {s.gmail_watch_expires_at
+                          ? t("watchUntil", { date: formatDateTime(s.gmail_watch_expires_at) })
+                          : t("hourly")}
+                      </span>
+                    </Row>
+                  </>
+                )}
+              </Rows>
+              {s.connected && (!s.gmail_access || !s.calendar_access) && <Alert tone="warning">{t("missingAccess")}</Alert>}
+              <div className="flex flex-wrap gap-2 border-t border-border pt-4">
                 {(!s.connected || !s.gmail_access || !s.calendar_access) && (
                   <Button onClick={connect} disabled={busy !== null || !s.configured}>
-                    {busy === "connect" ? "Opening Google" : s.connected ? "Connect again" : "Connect Google"}
+                    {busy === "connect" ? t("openingGoogle") : s.connected ? t("connectAgain") : t("connectGoogle")}
                   </Button>
                 )}
                 {s.connected && s.gmail_access && (
                   <Button variant="ghost" onClick={syncNow} disabled={busy !== null}>
-                    {busy === "sync" ? (
-                      <>
-                        <Spinner /> Checking email
-                      </>
-                    ) : (
-                      "Check email now"
-                    )}
+                    {busy === "sync" ? <Spinner className="size-3.5" /> : <RefreshCw aria-hidden className="size-3.5" />}
+                    {busy === "sync" ? t("checkingEmail") : t("checkEmailNow")}
                   </Button>
                 )}
                 {s.connected &&
                   (confirm ? (
-                    <>
+                    <span className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                      <span className="text-muted">{t("confirmDisconnect")}</span>
                       <Button variant="danger" onClick={disconnect} disabled={busy !== null}>
-                        Disconnect Google
+                        {t("disconnectGoogle")}
                       </Button>
                       <Button variant="ghost" onClick={() => setConfirm(false)}>
-                        Keep connected
+                        {t("keepConnected")}
                       </Button>
-                    </>
+                    </span>
                   ) : (
-                    <Button variant="subtle" onClick={() => setConfirm(true)} disabled={busy !== null}>
-                      Disconnect
+                    <Button variant="subtle" className="sm:ml-auto" onClick={() => setConfirm(true)} disabled={busy !== null}>
+                      <Unplug aria-hidden className="size-3.5" /> {t("disconnect")}
                     </Button>
                   ))}
               </div>
               <div aria-live="polite">
-                {busy === "sync" && (
-                  <p className="text-muted">Each new email is read by the AI model, so this can take a few minutes.</p>
-                )}
+                {busy === "sync" && <p className="text-muted">{t("syncSlow")}</p>}
                 {sync && (
-                  <Alert tone={sync.error ? "warning" : "success"} title="Email check finished" onDismiss={() => setSync(null)}>
-                    {sync.fetched} emails looked at, {sync.created} new in your inbox, {sync.ignored} not expenses,{" "}
-                    {sync.duplicates} already seen
-                    {sync.failed > 0 && `, ${sync.failed} could not be read`}.
+                  <Alert tone={sync.error ? "warning" : "success"} title={t("syncDone")} onDismiss={() => setSync(null)}>
+                    {t("syncSummary", {
+                      fetched: sync.fetched,
+                      created: sync.created,
+                      ignored: sync.ignored,
+                      duplicates: sync.duplicates,
+                    })}
+                    {sync.failed > 0 && t("syncFailed", { n: sync.failed })}.
                     {sync.error && <span className="mt-1 block">{sync.error}</span>}
                   </Alert>
                 )}
@@ -197,106 +350,30 @@ function GoogleCard() {
   );
 }
 
-function ProfileCard() {
-  const me = useMe();
-  const notify = useToast();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+// --- Data -------------------------------------------------------------------------------------
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const name = String(new FormData(e.currentTarget).get("display_name") ?? "").trim();
-    if (!name) {
-      setError("Enter a name.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const saved = await api.me.setDisplayName(name);
-      notify(`Your name is now ${saved.display_name}.`, "success");
-      dataChanged("profile");
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
+const DATA_POINTS = [
+  { icon: MailSearch, key: "data1" },
+  { icon: MailX, key: "data2" },
+  { icon: Inbox, key: "data3" },
+  { icon: ShieldCheck, key: "data4" },
+  { icon: CalendarPlus, key: "data5" },
+  { icon: Unplug, key: "data6" },
+] as const;
 
+function DataCard() {
+  const t = useT(messages);
   return (
-    <Card title="Your name">
-      <Async {...me} label="Loading your profile">
-        {(profile) => (
-          <form key={profile.display_name} onSubmit={onSubmit} className="flex flex-col gap-3">
-            <Field
-              label="Display name"
-              name="display_name"
-              required
-              maxLength={100}
-              defaultValue={profile.display_name}
-              autoComplete="name"
-              hint="Flatmates see this name in houses, balances and reminders."
-            />
-            <Button type="submit" variant="ghost" disabled={saving} className="self-start">
-              {saving ? "Saving" : "Save name"}
-            </Button>
-            <ErrorText error={error} />
-          </form>
-        )}
-      </Async>
-    </Card>
-  );
-}
-
-function AccountCard() {
-  const health = useApi(() => api.health(), []);
-  const user = useAuthUser();
-  const userId = useUserId();
-
-  return (
-    <Card title="Signed in as">
-      <div className="flex flex-col gap-4 text-sm">
-        {firebaseEnabled ? (
-          <>
-            <p>{user ? <span className="font-medium">{user.displayName ?? user.email}</span> : "You are not signed in."}</p>
-            <AccountMenu />
-          </>
-        ) : (
-          <>
-            <p>
-              Dev mode: you act as <span className="font-medium">{userId}</span>. Switch to another id to test sharing a house.
-            </p>
-            <DevUserSwitcher idPrefix="settings-dev-user" />
-          </>
-        )}
-        {health.data && (
-          <ul className="flex flex-col divide-y divide-border text-muted">
-            <li className="flex justify-between gap-3 py-1.5">
-              <span>Server sign-in</span>
-              <span>{health.data.auth === "firebase" ? "Firebase" : "Dev header"}</span>
-            </li>
-            <li className="flex justify-between gap-3 py-1.5">
-              <span>AI model</span>
-              <span>{health.data.agents_enabled ? `On (${health.data.llm_provider})` : "Off"}</span>
-            </li>
-          </ul>
-        )}
-        {health.error && <p className="text-danger">{health.error}</p>}
-      </div>
-    </Card>
-  );
-}
-
-function GmailExplainer() {
-  return (
-    <Card title="What Kasa reads from Gmail">
-      <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm text-muted">
-        <li>Only emails from the last 30 days that look like receipts, invoices or orders (for example fatura, makbuz, dekont).</li>
-        <li>Kasa never sends, deletes or changes email. It asks for read only access.</li>
-        <li>Each match becomes an inbox item. Nothing is saved as an expense until you approve it.</li>
-        <li>Email text is treated as data. Instructions inside an email are ignored.</li>
-        <li>Calendar access is only used to add settle-up reminders you create.</li>
-        <li>Disconnect at any time. Kasa deletes its stored Google token.</li>
+    <Card title={t("dataTitle")} description={t("dataDesc")}>
+      <ul className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
+        {DATA_POINTS.map(({ icon: Icon, key }) => (
+          <li key={key} className="flex items-start gap-3">
+            <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.05] text-foreground/70">
+              <Icon className="size-4" />
+            </span>
+            <span className="pt-1.5 text-muted">{t(key)}</span>
+          </li>
+        ))}
       </ul>
     </Card>
   );

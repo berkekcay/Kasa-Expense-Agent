@@ -1,21 +1,45 @@
 "use client";
 
+import { ArrowRight, Camera, CircleCheck, ImageUp, Plus, RotateCcw, ScanLine, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { api, type ReceiptResult } from "@/lib/api";
-import { capitalize, formatDate } from "@/lib/format";
+import { categoryLabel, common, sourceLabel } from "@/lib/commonMessages";
+import { formatDate } from "@/lib/format";
 import { useApi, useElapsed } from "@/lib/hooks";
-import { Alert, Badge, Button, Card, Money, Spinner, errorMessage } from "@/components/ui";
+import { useT } from "@/lib/i18n";
+import { Alert, Badge, Button, Card, Empty, Money, PageHeader, Skeleton, cardLinkClass, errorMessage } from "@/components/ui";
+import { CategoryIcon } from "@/features/expenses/CategoryIcon";
 import { ConversionNote } from "@/features/expenses/ExpenseList";
 import { Markdown } from "@/features/chat/Markdown";
+import { Dropzone, SlowProgress, fileSize } from "./Dropzone";
+import { messages } from "./messages";
 
 const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 10 * 1024 * 1024;
 
-const pickerLabel =
-  "inline-flex h-10 cursor-pointer items-center justify-center rounded-lg px-4 text-sm font-medium peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--accent)] peer-disabled:cursor-not-allowed peer-disabled:opacity-50";
+/** The page header. A client component so its text follows the chosen language. */
+export function ReceiptsHeader() {
+  const t = useT(messages);
+  return (
+    <PageHeader
+      title={t("pageTitle")}
+      subtitle={t("pageSubtitle")}
+      actions={
+        <Link
+          href="/expenses#add"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-card hover:bg-card-hover"
+        >
+          <Plus aria-hidden className="size-4" /> {t("addByHand")}
+        </Link>
+      }
+    />
+  );
+}
 
 export function ReceiptUpload() {
+  const t = useT(messages);
+  const tc = useT(common);
   const health = useApi(() => api.health(), []);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -32,22 +56,26 @@ export function ReceiptUpload() {
     };
   }, [preview]);
 
-  function onPick(e: ChangeEvent<HTMLInputElement>) {
-    const picked = e.target.files?.[0] ?? null;
-    e.target.value = ""; // picking the same photo again still fires change
+  function onPick(picked: File) {
     setResult(null);
     setError(null);
-    if (!picked) return;
     if (picked.type && !ALLOWED.includes(picked.type)) {
-      setError("Use a JPEG, PNG, WebP or HEIC photo.");
+      setError(t("badType"));
       return;
     }
     if (picked.size > MAX_BYTES) {
-      setError("The photo is larger than 10 MB. Take it again at a lower resolution.");
+      setError(t("tooBig"));
       return;
     }
     setFile(picked);
     setPreview(URL.createObjectURL(picked));
+  }
+
+  function clear() {
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    setError(null);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -68,68 +96,79 @@ export function ReceiptUpload() {
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
-      <Card title="Photo">
+      <Card title={t("photoTitle")} description={t("photoDescription")}>
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           {agentsOff && (
-            <Alert tone="warning" title="Receipt reading is off">
-              The server has no AI model configured, so it cannot read photos right now. You can still add expenses by hand on
-              the Expenses page.
+            <Alert tone="warning" title={t("offTitle")}>
+              {t("offText")}
             </Alert>
           )}
-          <div className="flex flex-wrap gap-2">
-            <span>
-              <input
-                id="receipt-camera"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={onPick}
-                disabled={busy || agentsOff}
-                className="peer sr-only"
-              />
-              <label htmlFor="receipt-camera" className={`${pickerLabel} bg-accent text-accent-foreground hover:opacity-90`}>
-                Take a photo
-              </label>
-            </span>
-            <span>
-              <input
-                id="receipt-file"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                onChange={onPick}
-                disabled={busy || agentsOff}
-                className="peer sr-only"
-              />
-              <label htmlFor="receipt-file" className={`${pickerLabel} border border-border hover:bg-foreground/5`}>
-                Choose a file
-              </label>
-            </span>
-          </div>
-          {file && <p className="text-sm text-muted">{file.name}</p>}
-          {preview && (
-            // eslint-disable-next-line @next/next/no-img-element -- local blob preview, nothing to optimise
-            <img src={preview} alt="Receipt preview" className="max-h-80 w-full rounded-lg border border-border object-contain" />
-          )}
-          <Button type="submit" disabled={!file || busy || agentsOff} className="h-10">
-            {busy ? (
-              <>
-                <Spinner /> Reading the receipt
-              </>
-            ) : (
-              "Read and save"
+          <Dropzone
+            onFile={onPick}
+            disabled={busy || agentsOff}
+            icon={<ImageUp />}
+            title={t("dropTitle")}
+            hint={t("dropHint")}
+            pickers={[
+              {
+                id: "receipt-camera",
+                label: file ? t("takeAnother") : t("takePhoto"),
+                icon: <Camera aria-hidden />,
+                accept: "image/*",
+                capture: "environment",
+                primary: !file,
+                touchOnly: true,
+              },
+              {
+                id: "receipt-file",
+                label: file ? t("chooseAnother") : t("chooseFile"),
+                icon: <ImageUp aria-hidden />,
+                accept: ALLOWED.join(","),
+              },
+            ]}
+          >
+            {file && preview && (
+              <div className="flex w-full flex-col gap-3">
+                <div className="relative overflow-hidden rounded-xl bg-foreground/[0.04]">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview, nothing to optimise */}
+                  <img
+                    src={preview}
+                    alt={t("previewAlt")}
+                    className={`mx-auto max-h-96 w-full object-contain transition ${busy ? "opacity-50" : ""}`}
+                  />
+                  {busy && <span aria-hidden className="skeleton absolute inset-0 opacity-30" />}
+                </div>
+                <div className="flex items-center gap-2 text-left text-sm">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{file.name}</span>
+                    <span className="text-xs text-muted">{fileSize(file.size)}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clear}
+                    disabled={busy}
+                    aria-label={t("removePhoto")}
+                    title={t("removePhoto")}
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-foreground/5 hover:text-foreground disabled:opacity-40"
+                  >
+                    <X aria-hidden className="size-4" />
+                  </button>
+                </div>
+              </div>
             )}
+          </Dropzone>
+          <Button type="submit" disabled={!file || busy || agentsOff} className="h-10">
+            <ScanLine aria-hidden className="size-4" />
+            {busy ? t("reading") : t("readAndSave")}
           </Button>
-          <div aria-live="polite">
+          <div aria-live="polite" className="flex flex-col gap-3">
             {busy && (
-              <p className="text-sm text-muted">
-                Kasa is reading the receipt. On the dev server this can take 30 to 120 seconds. Keep this page open.
-                <span aria-hidden className="ml-1 tabular-nums">
-                  ({elapsed} s)
-                </span>
-              </p>
+              <SlowProgress title={t("reading")} elapsed={elapsed}>
+                {elapsed < 120 ? t("readingSlow") : t("stillReading")}
+              </SlowProgress>
             )}
             {error && (
-              <Alert tone="error" title="Could not save this receipt">
+              <Alert tone="error" title={t("errorTitle")}>
                 {error}
               </Alert>
             )}
@@ -137,44 +176,82 @@ export function ReceiptUpload() {
         </form>
       </Card>
 
-      <Card title="Result">
+      <Card title={t("result")} description={expense ? undefined : t("resultDescription")}>
         <div aria-live="polite">
-          {!expense ? (
-            <p className="text-sm text-muted">
-              Kasa reads the merchant, date, lines and total, then saves the expense with exact amounts. Check the result
-              here.
-            </p>
+          {busy ? (
+            <ResultSkeleton label={t("reading")} />
+          ) : !expense ? (
+            <Empty icon={<ScanLine />}>
+              {t("emptyResult")}
+            </Empty>
           ) : (
-            <div className="flex flex-col gap-4 text-sm">
-              <Alert tone="success">Saved as an expense.</Alert>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-base font-semibold">{expense.merchant}</p>
-                  <p className="text-muted">
-                    {formatDate(expense.expense_date)}
-                    {expense.category && ` · ${capitalize(expense.category)}`}
-                  </p>
+            <div className="flex flex-col gap-5 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-positive">
+                <CircleCheck aria-hidden className="size-4" /> {t("saved")}
+              </p>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <CategoryIcon category={expense.category} size="lg" />
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-semibold tracking-tight">{expense.merchant}</p>
+                    <p className="text-muted">
+                      {formatDate(expense.expense_date)}
+                      {expense.category && ` · ${categoryLabel(expense.category)}`}
+                    </p>
+                  </div>
                 </div>
                 <div className="text-right">
-                  <Money amount={expense.total} currency={expense.currency} className="text-xl font-semibold" />
+                  <Money amount={expense.total} currency={expense.currency} className="text-2xl font-semibold tracking-tight tabular-nums" />
                   <ConversionNote e={expense} />
                 </div>
               </div>
+
               {expense.items.length > 0 ? (
-                <ul className="divide-y divide-border rounded-lg border border-border">
-                  {expense.items.map((item, i) => (
-                    <li key={i} className="flex justify-between gap-4 px-3 py-1.5">
-                      <span className="min-w-0">
-                        {item.description}
-                        {item.quantity !== "1" && <span className="text-muted"> × {item.quantity}</span>}
-                      </span>
-                      <Money amount={item.amount} currency={expense.currency} className="tabular-nums" />
-                    </li>
-                  ))}
-                </ul>
+                <div className="overflow-hidden rounded-xl border border-border">
+                  <table className="w-full text-sm">
+                    <caption className="sr-only">{t("linesCaption")}</caption>
+                    <thead className="bg-foreground/[0.03] text-xs text-muted">
+                      <tr>
+                        <th scope="col" className="px-3 py-2 text-left font-medium">
+                          {t("item")}
+                        </th>
+                        <th scope="col" className="px-3 py-2 text-right font-medium">
+                          {t("qty")}
+                        </th>
+                        <th scope="col" className="px-3 py-2 text-right font-medium">
+                          {t("amount")}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {expense.items.map((item, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-2">{item.description}</td>
+                          <td className="px-3 py-2 text-right text-muted tabular-nums">{item.quantity}</td>
+                          <td className="px-3 py-2 text-right">
+                            <Money amount={item.amount} currency={expense.currency} className="tabular-nums" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t border-border-strong">
+                      <tr>
+                        <th scope="row" colSpan={2} className="px-3 py-2.5 text-left font-semibold">
+                          {tc("total")}
+                        </th>
+                        <td className="px-3 py-2.5 text-right font-semibold">
+                          <Money amount={expense.total} currency={expense.currency} className="tabular-nums" />
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               ) : (
-                <p className="text-muted">No separate lines were read.</p>
+                <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-muted">
+                  {t("noLines")}
+                </p>
               )}
+
               {result.warnings.length > 0 && (
                 <div className="flex flex-col gap-2">
                   {result.warnings.map((w) => (
@@ -184,21 +261,61 @@ export function ReceiptUpload() {
                   ))}
                 </div>
               )}
+
               {result.agent_message && (
-                <div>
-                  <Badge>Kasa says</Badge>
-                  <div className="mt-1 text-muted">
+                <div className="rounded-xl bg-foreground/[0.04] px-4 py-3">
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <Sparkles aria-hidden className="size-3.5 text-accent" /> {t("kasaSays")}
+                  </p>
+                  <div className="text-foreground/90">
                     <Markdown text={result.agent_message} />
                   </div>
                 </div>
               )}
-              <Link href="/expenses" className="text-accent hover:underline">
-                See all expenses
-              </Link>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+                <span className="flex flex-wrap gap-1.5">
+                  <Badge>{sourceLabel("receipt")}</Badge>
+                  {expense.items.length > 0 && (
+                    <Badge>{t("lineCount", { n: expense.items.length })}</Badge>
+                  )}
+                </span>
+                <span className="flex flex-wrap items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={clear}>
+                    <RotateCcw aria-hidden className="size-3.5" /> {t("scanAnother")}
+                  </Button>
+                  <Link href="/expenses" className={cardLinkClass}>
+                    {t("seeAllExpenses")} <ArrowRight aria-hidden className="size-3.5" />
+                  </Link>
+                </span>
+              </div>
             </div>
           )}
         </div>
       </Card>
+    </div>
+  );
+}
+
+function ResultSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label} className="flex flex-col gap-5">
+      <div className="flex items-center gap-3">
+        <Skeleton className="size-11 rounded-xl" />
+        <div className="flex flex-1 flex-col gap-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+        <Skeleton className="h-6 w-24" />
+      </div>
+      <div className="flex flex-col gap-2.5 rounded-xl border border-border p-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex justify-between gap-4">
+            <Skeleton className="h-3.5 w-1/2" />
+            <Skeleton className="h-3.5 w-16" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

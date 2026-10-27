@@ -1,14 +1,9 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/ui";
 import { BudgetsView } from "@/features/budgets/BudgetsView";
 
 export const metadata: Metadata = { title: "Budgets" };
 
+// The view draws its own page header, because the header actions need client state.
 export default function Page() {
-  return (
-    <>
-      <PageHeader title="Budgets" subtitle="Monthly limits per category, with alerts before you go over." />
-      <BudgetsView />
-    </>
-  );
+  return <BudgetsView />;
 }

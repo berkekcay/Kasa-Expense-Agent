@@ -1,18 +1,19 @@
 "use client";
 
+import { Check, CircleAlert, CircleCheck, Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { api, type House, type SplitExpense, type SplitType } from "@/lib/api";
 import { CATEGORIES } from "@/lib/categories";
-import { capitalize, formatMoney, fromMinor, normalizeAmount, percentToHundredths, toMinor } from "@/lib/format";
+import { categoryLabel, common } from "@/lib/commonMessages";
+import { formatMoney, fromMinor, normalizeAmount, percentToHundredths, toMinor } from "@/lib/format";
+import { useLocale, useT } from "@/lib/i18n";
 import { useWarningToasts, useToast } from "@/components/Toast";
-import { Button, ErrorText, Field, SelectField, controlClass, errorMessage } from "@/components/ui";
+import { DatePicker } from "@/components/pickers";
+import { Button, ErrorText, Field, Segmented, SelectField, controlClass, errorMessage } from "@/components/ui";
+import { houseMessages } from "./messages";
+import { MemberAvatar } from "./parts";
 
-const SPLITS: { value: SplitType; label: string; help: string }[] = [
-  { value: "equal", label: "Equal", help: "Everyone chosen pays the same." },
-  { value: "percent", label: "Percent", help: "Give each person a percent. They must add up to 100." },
-  { value: "exact", label: "Exact", help: "Give each person an amount. They must add up to the total." },
-  { value: "items", label: "Per item", help: "Each line is shared by the people ticked on it. No one ticked means everyone." },
-];
+const SPLITS: SplitType[] = ["equal", "percent", "exact", "items"];
 
 type ItemRow = { key: number; description: string; amount: string; assignees: string[] };
 
@@ -25,6 +26,9 @@ function shareMinor(input: string): number | null {
 }
 
 export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: string; onSaved: () => void }) {
+  const t = useT(houseMessages);
+  const c = useT(common);
+  const locale = useLocale();
   const notify = useToast();
   const toastWarnings = useWarningToasts();
   const members = house.members;
@@ -37,6 +41,7 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [items, setItems] = useState<ItemRow[]>([{ key: 1, description: "", amount: "", assignees: [] }]);
   const [nextKey, setNextKey] = useState(2);
+  const [formKey, setFormKey] = useState(0); // remounts the form (and its DatePicker) after a save
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,51 +55,51 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
   if (splitType === "equal") {
     check =
       participants.length === 0
-        ? { ok: false, text: "Pick at least one person." }
-        : { ok: true, text: `Split between ${participants.length} ${participants.length === 1 ? "person" : "people"}.` };
+        ? { ok: false, text: t("pickOne") }
+        : { ok: true, text: t("splitBetween", { n: participants.length }) };
   } else if (splitType === "percent") {
     const values = memberIds.map((id) => percentToHundredths(percents[id] ?? ""));
-    if (values.some((v) => v === null)) check = { ok: false, text: "Percents are numbers from 0 to 100 with up to 2 decimals." };
+    if (values.some((v) => v === null)) check = { ok: false, text: t("percentFormat") };
     else {
       const sum = values.reduce<number>((a, v) => a + (v ?? 0), 0);
       const left = 10000 - sum;
-      const pct = (h: number) => fromMinor(h).replace(/\.00$/, "");
+      const pct = (h: number) => {
+        const v = fromMinor(h).replace(/\.00$/, "");
+        return locale === "tr" ? v.replace(".", ",") : v;
+      };
       check =
         left === 0
-          ? { ok: true, text: "Adds up to 100%." }
+          ? { ok: true, text: t("adds100") }
           : left > 0
-            ? { ok: false, text: `${pct(sum)}% given, ${pct(left)}% left to assign.` }
-            : { ok: false, text: `${pct(sum)}% given, ${pct(-left)}% too much.` };
+            ? { ok: false, text: t("pctLeft", { given: pct(sum), left: pct(left) }) }
+            : { ok: false, text: t("pctOver", { given: pct(sum), over: pct(-left) }) };
     }
   } else if (splitType === "exact") {
     const values = memberIds.map((id) => shareMinor(amounts[id] ?? ""));
-    if (values.some((v) => v === null)) check = { ok: false, text: "Amounts look like 120 or 120,50." };
-    else if (totalMinor === null) check = { ok: false, text: "Enter the total first." };
+    if (values.some((v) => v === null)) check = { ok: false, text: t("amountFormat") };
+    else if (totalMinor === null) check = { ok: false, text: t("totalFirst") };
     else {
       const sum = values.reduce<number>((a, v) => a + (v ?? 0), 0);
       const left = totalMinor - sum;
       check =
         left === 0
-          ? { ok: true, text: "Adds up to the total." }
+          ? { ok: true, text: t("addsTotal") }
           : left > 0
-            ? { ok: false, text: `${money(sum)} assigned, ${money(left)} left.` }
-            : { ok: false, text: `${money(sum)} assigned, ${money(-left)} more than the total.` };
+            ? { ok: false, text: t("amountLeft", { sum: money(sum), left: money(left) }) }
+            : { ok: false, text: t("amountOver", { sum: money(sum), over: money(-left) }) };
     }
   } else {
     const filled = items.filter((r) => r.description.trim() || r.amount.trim());
     const values = filled.map((r) => (r.description.trim() ? normalizeAmount(r.amount) : null));
-    if (filled.length === 0) check = { ok: false, text: "Add at least one line." };
-    else if (values.some((v) => v === null)) check = { ok: false, text: "Every line needs a description and an amount." };
+    if (filled.length === 0) check = { ok: false, text: t("addLineCheck") };
+    else if (values.some((v) => v === null)) check = { ok: false, text: t("lineNeeds") };
     else if (totalMinor !== null) {
       const sum = values.reduce<number>((a, v) => a + toMinor(v as string), 0);
       const diff = totalMinor - sum;
       check =
         diff === 0
-          ? { ok: true, text: "Lines add up to the total." }
-          : {
-              ok: true,
-              text: `Lines add up to ${money(sum)}. The ${diff > 0 ? "extra" : "discount of"} ${money(Math.abs(diff))} is shared in proportion to what each person had.`,
-            };
+          ? { ok: true, text: t("linesTotal") }
+          : { ok: true, text: t("linesDiff", { sum: money(sum), diff: money(Math.abs(diff)), extra: diff > 0 ? 1 : 0 }) };
     }
   }
 
@@ -107,7 +112,7 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
     const form = e.currentTarget;
     const data = new FormData(form);
     if (!totalNorm) {
-      setError("Enter the total, like 600 or 600,50.");
+      setError(t("errTotal"));
       return;
     }
     if (!check.ok) {
@@ -154,7 +159,7 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
     setError(null);
     try {
       const saved = await api.addSplitExpense(house.id, body);
-      notify(`Added ${saved.merchant}.`, "success");
+      notify(t("addedExpense", { merchant: saved.merchant }), "success");
       toastWarnings(saved.warnings);
       form.reset();
       setTotal("");
@@ -162,6 +167,7 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
       setAmounts({});
       setItems([{ key: nextKey, description: "", amount: "", assignees: [] }]);
       setNextKey((k) => k + 1);
+      setFormKey((k) => k + 1);
       onSaved();
     } catch (err) {
       setError(errorMessage(err));
@@ -173,40 +179,28 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
   const defaultPayer = memberIds.includes(me) ? me : memberIds[0];
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <fieldset>
-        <legend className="mb-2 text-sm text-muted">How to split</legend>
-        <div className="grid grid-cols-2 gap-1 rounded-lg border border-border p-1 sm:grid-cols-4">
-          {SPLITS.map((s) => (
-            <label
-              key={s.value}
-              className={`flex h-9 cursor-pointer items-center justify-center rounded-md text-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[var(--accent)] ${
-                splitType === s.value ? "bg-accent text-accent-foreground font-medium" : "hover:bg-foreground/5"
-              }`}
-            >
-              <input
-                type="radio"
-                name="split_type"
-                value={s.value}
-                checked={splitType === s.value}
-                onChange={() => {
-                  setSplitType(s.value);
-                  setError(null);
-                }}
-                className="sr-only"
-              />
-              {s.label}
-            </label>
-          ))}
+    <form key={formKey} onSubmit={onSubmit} className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
+        <span className="text-sm text-muted">{t("howToSplit")}</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Segmented
+            label={t("howToSplit")}
+            value={splitType}
+            options={SPLITS.map((s) => ({ value: s, label: t(`splitLabel.${s}`) }))}
+            onChange={(v) => {
+              setSplitType(v);
+              setError(null);
+            }}
+          />
+          <p className="text-xs text-muted">{t(`splitHelp.${splitType}`)}</p>
         </div>
-        <p className="mt-2 text-xs text-muted">{SPLITS.find((s) => s.value === splitType)?.help}</p>
-      </fieldset>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="What" name="merchant" required maxLength={200} placeholder="Electricity bill" className="sm:col-span-2" />
-        <div className="grid grid-cols-[1fr_96px] gap-3">
+        <Field label={t("what")} name="merchant" required maxLength={200} placeholder={t("whatPlaceholder")} className="sm:col-span-2" />
+        <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-3">
           <Field
-            label="Total"
+            label={c("total")}
             name="total"
             required
             inputMode="decimal"
@@ -217,66 +211,77 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
             aria-invalid={total !== "" && !totalNorm}
           />
           {splitType === "exact" ? (
-            <Field label="Currency" value={house.currency} readOnly aria-readonly />
+            <Field label={t("currency")} value={house.currency} readOnly aria-readonly />
           ) : (
-            <SelectField label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              {[house.currency, ...["TRY", "USD", "EUR", "GBP"].filter((c) => c !== house.currency)].map((c) => (
-                <option key={c}>{c}</option>
+            <SelectField label={t("currency")} value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {[house.currency, ...["TRY", "USD", "EUR", "GBP"].filter((x) => x !== house.currency)].map((x) => (
+                <option key={x}>{x}</option>
               ))}
             </SelectField>
           )}
         </div>
-        <SelectField label="Paid by" name="paid_by" defaultValue={defaultPayer}>
+        <SelectField label={t("paidByLabel")} name="paid_by" defaultValue={defaultPayer}>
           {members.map((m) => (
             <option key={m.user_id} value={m.user_id}>
               {m.display_name}
-              {m.user_id === me ? " (you)" : ""}
+              {m.user_id === me ? t("youTag") : ""}
             </option>
           ))}
         </SelectField>
-        <Field label="Date" name="expense_date" type="date" hint="Empty means today." />
-        <SelectField label="Category" name="category" defaultValue="">
-          <option value="">Let Kasa decide</option>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {capitalize(c)}
+        <DatePicker label={t("date")} name="expense_date" hint={t("dateHint")} placeholder={c("today")} />
+        <SelectField label={t("category")} name="category" defaultValue="">
+          <option value="">{t("letKasa")}</option>
+          {CATEGORIES.map((cat) => (
+            <option key={cat} value={cat}>
+              {categoryLabel(cat)}
             </option>
           ))}
         </SelectField>
+        {(splitType === "exact" || currency !== house.currency) && (
+          <p className="text-xs text-muted sm:col-span-2">
+            {splitType === "exact"
+              ? t("exactCurrency", { currency: house.currency })
+              : t("converts", { currency: house.currency })}
+          </p>
+        )}
       </div>
-      {splitType === "exact" && (
-        <p className="-mt-2 text-xs text-muted">Exact amounts are in the house currency ({house.currency}).</p>
-      )}
-      {splitType !== "exact" && currency !== house.currency && (
-        <p className="-mt-2 text-xs text-muted">Kasa converts this to {house.currency} at the TCMB rate for the date.</p>
-      )}
 
       {splitType === "equal" && (
         <fieldset>
-          <legend className="mb-2 text-sm text-muted">Who shares it</legend>
+          <legend className="mb-2 text-sm text-muted">{t("whoShares")}</legend>
           <div className="flex flex-wrap gap-2">
-            {members.map((m) => (
-              <label
-                key={m.user_id}
-                className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/10"
-              >
-                <input
-                  type="checkbox"
-                  checked={participants.includes(m.user_id)}
-                  onChange={() => setParticipants((p) => toggle(p, m.user_id))}
-                  className="size-4 accent-[var(--accent)]"
-                />
-                {m.display_name}
-              </label>
-            ))}
+            {members.map((m) => {
+              const on = participants.includes(m.user_id);
+              return (
+                <label
+                  key={m.user_id}
+                  className={`flex cursor-pointer items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm transition has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--accent)] ${
+                    on ? "border-accent/50 bg-accent-soft" : "border-border text-muted hover:border-border-strong"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => setParticipants((p) => toggle(p, m.user_id))}
+                    className="sr-only"
+                  />
+                  <MemberAvatar house={house} userId={m.user_id} name={m.display_name} size="sm" />
+                  <span className={on ? "font-medium text-foreground" : ""}>
+                    {m.display_name}
+                    {m.user_id === me && <span className="font-normal text-muted">{t("youTag")}</span>}
+                  </span>
+                  {on && <Check aria-hidden className="size-3.5 text-accent" />}
+                </label>
+              );
+            })}
           </div>
         </fieldset>
       )}
 
       {(splitType === "percent" || splitType === "exact") && (
         <fieldset>
-          <legend className="mb-2 text-sm text-muted">{splitType === "percent" ? "Percent per person" : "Amount per person"}</legend>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <legend className="mb-2 text-sm text-muted">{splitType === "percent" ? t("percentPer") : t("amountPer")}</legend>
+          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
             {members.map((m) => {
               const id = `split-${splitType}-${m.user_id}`;
               const values = splitType === "percent" ? percents : amounts;
@@ -286,9 +291,10 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
                   ? percentToHundredths(values[m.user_id] ?? "") === null
                   : shareMinor(values[m.user_id] ?? "") === null;
               return (
-                <div key={m.user_id} className="grid grid-cols-[1fr_8rem] items-center gap-2 text-sm">
-                  <label htmlFor={id} className="truncate">
-                    {m.display_name}
+                <div key={m.user_id} className="grid grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-2 text-sm">
+                  <label htmlFor={id} className="flex min-w-0 items-center gap-2">
+                    <MemberAvatar house={house} userId={m.user_id} name={m.display_name} size="sm" />
+                    <span className="truncate">{m.display_name}</span>
                   </label>
                   <div className="relative">
                     <input
@@ -299,7 +305,7 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
                       value={values[m.user_id] ?? ""}
                       onChange={(e) => setValues((v) => ({ ...v, [m.user_id]: e.target.value }))}
                       aria-invalid={bad}
-                      className={`${controlClass} pr-9 text-right`}
+                      className={`${controlClass} pr-11 text-right tabular-nums`}
                     />
                     <span aria-hidden className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted">
                       {splitType === "percent" ? "%" : house.currency}
@@ -313,82 +319,100 @@ export function SplitExpenseForm({ house, me, onSaved }: { house: House; me: str
       )}
 
       {splitType === "items" && (
-        <fieldset className="flex flex-col gap-3">
-          <legend className="mb-2 text-sm text-muted">Lines</legend>
+        <fieldset className="flex flex-col gap-2.5">
+          <legend className="mb-2 text-sm text-muted">{t("lines")}</legend>
           {items.map((row, index) => (
-            <div key={row.key} className="flex flex-col gap-2 rounded-lg border border-border p-3">
-              <div className="grid grid-cols-[1fr_7rem_auto] items-end gap-2">
+            <div key={row.key} className="flex flex-col gap-3 rounded-xl border border-border p-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-end gap-2">
                 <Field
-                  label={`Line ${index + 1}`}
+                  label={t("lineN", { n: index + 1 })}
                   value={row.description}
-                  placeholder="Cheese"
+                  placeholder={t("linePlaceholder")}
                   maxLength={200}
                   onChange={(e) =>
                     setItems((rows) => rows.map((r) => (r.key === row.key ? { ...r, description: e.target.value } : r)))
                   }
                 />
                 <Field
-                  label="Amount"
+                  label={t("amount")}
                   inputMode="decimal"
                   autoComplete="off"
                   placeholder="60,00"
                   value={row.amount}
                   onChange={(e) => setItems((rows) => rows.map((r) => (r.key === row.key ? { ...r, amount: e.target.value } : r)))}
                 />
-                <Button
-                  variant="ghost"
+                <button
+                  type="button"
                   onClick={() => setItems((rows) => rows.filter((r) => r.key !== row.key))}
                   disabled={items.length === 1}
-                  aria-label={`Remove line ${index + 1}`}
+                  aria-label={t("removeLine", { n: index + 1 })}
+                  className="inline-flex size-9 items-center justify-center rounded-lg text-muted hover:bg-foreground/5 hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
                 >
-                  ×
-                </Button>
+                  <X aria-hidden className="size-4" />
+                </button>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm" role="group" aria-label={`Who had line ${index + 1}`}>
-                <span className="text-xs text-muted">Shared by</span>
-                {members.map((m) => (
-                  <label key={m.user_id} className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      checked={row.assignees.includes(m.user_id)}
-                      onChange={() =>
-                        setItems((rows) =>
-                          rows.map((r) => (r.key === row.key ? { ...r, assignees: toggle(r.assignees, m.user_id) } : r)),
-                        )
-                      }
-                      className="size-4 accent-[var(--accent)]"
-                    />
-                    {m.display_name}
-                  </label>
-                ))}
-                {row.assignees.length === 0 && <span className="text-xs text-muted">(everyone)</span>}
+              <div className="flex flex-wrap items-center gap-1.5 text-sm" role="group" aria-label={t("whoHadLine", { n: index + 1 })}>
+                <span className="mr-1 text-xs text-muted">{t("sharedBy")}</span>
+                {members.map((m) => {
+                  const on = row.assignees.includes(m.user_id);
+                  return (
+                    <label
+                      key={m.user_id}
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--accent)] ${
+                        on ? "border-accent/50 bg-accent-soft font-medium text-foreground" : "border-border text-muted hover:border-border-strong"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() =>
+                          setItems((rows) =>
+                            rows.map((r) => (r.key === row.key ? { ...r, assignees: toggle(r.assignees, m.user_id) } : r)),
+                          )
+                        }
+                        className="sr-only"
+                      />
+                      {on && <Check aria-hidden className="size-3 text-accent" />}
+                      {m.display_name}
+                    </label>
+                  );
+                })}
+                {row.assignees.length === 0 && <span className="text-xs text-muted">{t("everyone")}</span>}
               </div>
             </div>
           ))}
           <Button
-            variant="ghost"
+            variant="subtle"
+            size="sm"
             className="self-start"
             onClick={() => {
               setItems((rows) => [...rows, { key: nextKey, description: "", amount: "", assignees: [] }]);
               setNextKey((k) => k + 1);
             }}
           >
-            Add a line
+            <Plus aria-hidden className="size-3.5" />
+            {t("addLine")}
           </Button>
         </fieldset>
       )}
 
-      <Field label="Note (optional)" name="note" maxLength={500} />
+      <Field label={t("noteOptional")} name="note" maxLength={500} />
 
-      <p aria-live="polite" className={`text-sm ${check.ok ? "text-muted" : "text-warning"}`}>
-        {check.text}
-      </p>
-
-      <Button type="submit" disabled={saving || members.length === 0}>
-        {saving ? "Saving" : "Add shared expense"}
-      </Button>
+      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p aria-live="polite" className={`flex min-h-5 items-start gap-2 text-sm ${check.ok ? "text-muted" : "text-warning"}`}>
+          {check.text &&
+            (check.ok ? (
+              <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-positive" />
+            ) : (
+              <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+            ))}
+          <span>{check.text}</span>
+        </p>
+        <Button type="submit" disabled={saving || members.length === 0} className="shrink-0">
+          {saving ? c("saving") : t("submitExpense")}
+        </Button>
+      </div>
       <ErrorText error={error} />
-      <p className="text-xs text-muted">Kasa works out the exact shares. They always add up to the total.</p>
     </form>
   );
 }

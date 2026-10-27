@@ -97,3 +97,8 @@ export function query(params: Record<string, string | number | boolean | null | 
 
 export type Health = { status: string; agents_enabled: boolean; llm_provider: string; auth: "firebase" | "dev" };
 export const health = () => request<Health>("/health");
+
+/** The raw response (after the auth header and error handling), for streamed bodies. */
+export function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
+  return send(path, init);
+}

@@ -38,7 +38,13 @@ export type Dashboard = {
   pending_inbox: number;
   trend: { month: string; total: string; total_minor: number }[];
   recent_expenses: RecentExpense[];
+  daily: DayTotal[]; // every day of `month`, zeros included
+  previous_daily: DayTotal[]; // every day of the month before
+  top_merchants: { merchant: string; total: string; total_minor: number; count: number }[];
+  previous_by_category: { category: string; total: string; total_minor: number }[];
 };
+
+export type DayTotal = { day: string; total: string; total_minor: number };
 
 export const dashboardApi = {
   get: (month?: string) => request<Dashboard>(`/dashboard${query({ month })}`),

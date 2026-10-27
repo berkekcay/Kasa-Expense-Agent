@@ -88,7 +88,7 @@ export function useElapsed(running: boolean): number {
 // Pages stay mounted (hidden) across navigations, so a view that shows data another page
 // changes puts `useDataVersion(topic)` in its useApi deps and reloads when it moves.
 
-export type DataTopic = "expenses" | "profile";
+export type DataTopic = "expenses" | "profile" | "inbox" | "chats";
 const versions = new Map<DataTopic, number>();
 const versionListeners = new Set<() => void>();
 

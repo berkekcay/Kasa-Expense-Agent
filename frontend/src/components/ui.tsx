@@ -1,3 +1,5 @@
+"use client";
+
 // Small styling primitives shared by every page.
 import type {
   ButtonHTMLAttributes,
@@ -6,40 +8,48 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
+import { common } from "@/lib/commonMessages";
 import { formatMoney } from "@/lib/format";
+import { useT } from "@/lib/i18n";
+import { uiMessages } from "./messages";
 
 export { errorMessage } from "@/lib/errors";
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+        <h1 className="text-[26px] leading-tight font-semibold tracking-tight sm:text-3xl">{title}</h1>
+        {subtitle && <p className="mt-1.5 max-w-2xl text-sm text-muted">{subtitle}</p>}
       </div>
-      {actions}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );
 }
 
 export function Card({
   title,
+  description,
   actions,
   children,
   className = "",
   id,
 }: {
   title?: ReactNode;
+  description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
   id?: string;
 }) {
   return (
-    <section id={id} className={`min-w-0 rounded-xl border border-border bg-card p-4 sm:p-5 ${className}`}>
+    <section id={id} className={`min-w-0 rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6 ${className}`}>
       {(title || actions) && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          {title && <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>}
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0">
+            {title && <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>}
+            {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
+          </div>
           {actions}
         </div>
       )}
@@ -48,10 +58,14 @@ export function Card({
   );
 }
 
+/** A link styled as a quiet card action ("See all"). */
+export const cardLinkClass =
+  "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-medium text-accent hover:bg-accent/10";
+
 type Variant = "primary" | "ghost" | "danger" | "subtle";
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-accent text-accent-foreground hover:opacity-90",
-  ghost: "border border-border hover:bg-foreground/5",
+  primary: "bg-accent text-accent-foreground shadow-card hover:brightness-110 active:brightness-95",
+  ghost: "border border-border bg-card shadow-card hover:border-border-strong hover:bg-card-hover",
   danger: "border border-danger/40 text-danger hover:bg-danger/10",
   subtle: "text-accent hover:bg-accent/10",
 };
@@ -73,7 +87,7 @@ export function Button({
 }
 
 const CONTROL =
-  "h-9 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 aria-[invalid=true]:border-danger";
+  "h-9 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm outline-none transition hover:border-border-strong focus:border-accent focus:ring-2 focus:ring-accent/30 aria-[invalid=true]:border-danger";
 
 export function Field({
   label,
@@ -123,11 +137,11 @@ export function TextArea({
 export const controlClass = CONTROL;
 
 type Tone = "info" | "success" | "warning" | "error";
-const TONES: Record<Tone, { box: string; icon: string; label: string }> = {
-  info: { box: "border-border bg-foreground/[0.03]", icon: "i", label: "Note" },
-  success: { box: "border-positive/40 bg-positive/10", icon: "✓", label: "Done" },
-  warning: { box: "border-[var(--status-warning)]/60 bg-[var(--status-warning)]/10", icon: "!", label: "Warning" },
-  error: { box: "border-danger/40 bg-danger/10", icon: "×", label: "Error" },
+const TONES: Record<Tone, { box: string; icon: string }> = {
+  info: { box: "border-border bg-foreground/[0.03]", icon: "i" },
+  success: { box: "border-positive/40 bg-positive/10", icon: "✓" },
+  warning: { box: "border-[var(--status-warning)]/60 bg-[var(--status-warning)]/10", icon: "!" },
+  error: { box: "border-danger/40 bg-danger/10", icon: "×" },
 };
 
 export function Alert({
@@ -144,6 +158,8 @@ export function Alert({
   className?: string;
 }) {
   const t = TONES[tone];
+  const tr = useT(uiMessages);
+  const tc = useT(common);
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
@@ -156,7 +172,7 @@ export function Alert({
         {t.icon}
       </span>
       <div className="min-w-0 flex-1">
-        <span className="sr-only">{t.label}: </span>
+        <span className="sr-only">{tr(`tone.${tone}`)}: </span>
         {title && <p className="font-medium">{title}</p>}
         {children && <div className={title ? "mt-0.5" : ""}>{children}</div>}
       </div>
@@ -164,7 +180,7 @@ export function Alert({
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Dismiss"
+          aria-label={tc("dismiss")}
           className="-mr-1 h-6 w-6 shrink-0 rounded text-muted hover:text-foreground"
         >
           ×
@@ -223,18 +239,62 @@ export function Spinner({ className = "" }: { className?: string }) {
   );
 }
 
-export function Loading({ label = "Loading" }: { label?: string }) {
+/** Grey placeholder blocks while data loads, in the shape of what will appear. */
+export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
+  return <span aria-hidden className={`skeleton block rounded-md ${className}`} />;
+}
+
+/** Pill-shaped single choice, for view switches ("Month / Year", "Bar / Line"). */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex rounded-lg bg-foreground/[0.05] p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={`h-7 rounded-md px-2.5 text-xs font-medium whitespace-nowrap transition ${value === o.value ? "bg-card text-foreground shadow-card" : "text-muted hover:text-foreground"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Loading({ label }: { label?: string }) {
+  const t = useT(common);
   return (
     <p role="status" className="flex items-center gap-2 text-sm text-muted">
-      <Spinner /> {label}
+      <Spinner /> {label ?? t("loading")}
     </p>
   );
 }
 
-export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
+export function Empty({ children, action, icon }: { children: ReactNode; action?: ReactNode; icon?: ReactNode }) {
   return (
-    <div className="flex flex-col items-start gap-3 text-sm text-muted">
-      <p>{children}</p>
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted">
+      {icon && (
+        <span
+          aria-hidden
+          className="flex size-10 items-center justify-center rounded-full bg-foreground/[0.05] text-foreground/60 [&>svg]:size-5"
+        >
+          {icon}
+        </span>
+      )}
+      <p className="max-w-sm">{children}</p>
       {action}
     </div>
   );
@@ -248,27 +308,38 @@ export function Async<T>({
   reload,
   children,
   label,
+  fallback,
 }: {
   data: T | null;
   error: string | null;
   loading: boolean;
   reload?: () => void;
   label?: string;
+  /** Shown instead of the spinner on the first load, e.g. skeleton blocks. */
+  fallback?: ReactNode;
   children: (data: T) => ReactNode;
 }) {
+  const t = useT(common);
   if (error && data === null) {
     return (
       <div className="flex flex-col items-start gap-2">
         <ErrorText error={error} />
         {reload && (
           <Button variant="ghost" size="sm" onClick={reload}>
-            Try again
+            {t("tryAgain")}
           </Button>
         )}
       </div>
     );
   }
-  if (data === null) return <Loading label={label} />;
+  if (data === null) {
+    if (!fallback) return <Loading label={label} />;
+    return (
+      <div role="status" aria-label={label ?? t("loading")}>
+        {fallback}
+      </div>
+    );
+  }
   return (
     <div className={`transition-opacity ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
       {error && <ErrorText error={error} />}
@@ -284,6 +355,39 @@ export function Stat({ label, value, detail }: { label: string; value: ReactNode
       <p className="text-sm text-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p>
       {detail && <div className="mt-1 text-sm text-muted">{detail}</div>}
+    </div>
+  );
+}
+
+/** A KPI card: icon, label, value, and an optional footer (delta, link or sparkline). */
+export function StatCard({
+  icon,
+  label,
+  value,
+  footer,
+  className = "",
+}: {
+  icon?: ReactNode;
+  label: string;
+  value: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex min-w-0 flex-col rounded-2xl border border-border bg-card p-5 shadow-card ${className}`}>
+      <div className="flex items-center gap-2 text-sm text-muted">
+        {icon && (
+          <span
+            aria-hidden
+            className="flex size-7 items-center justify-center rounded-lg bg-foreground/[0.05] text-foreground/70 [&>svg]:size-4"
+          >
+            {icon}
+          </span>
+        )}
+        {label}
+      </div>
+      <div className="mt-3 truncate text-2xl font-semibold tracking-tight">{value}</div>
+      {footer && <div className="mt-auto pt-2 text-sm text-muted">{footer}</div>}
     </div>
   );
 }
