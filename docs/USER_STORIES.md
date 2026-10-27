@@ -340,7 +340,9 @@ demeden bir eve eklenmez.
 - Diyelim ki "ev için davet linki oluştur" yazdım. Ev ajanı linki oluşturur.
 - Kullanıcı id'siyle üye ekleme sadece geliştirme modunda görünür.
 - Kanıt: `POST/GET/DELETE /houses/{id}/invites`, `GET /invites/{code}`,
-  `POST /invites/{code}/accept`, sayfa `/invite/[code]`, `tests/test_house_invites.py`.
+  `POST /invites/{code}/accept`, sayfa `/invite/[code]`, `tests/test_house_invites.py`,
+  `frontend/src/features/invites/InviteView.test.tsx` (katılma, link durumu, girişe yönlendirme),
+  `frontend/src/features/invites/InviteCard.test.tsx` (etiketler, odak ve kopyalama bildirimi).
 
 ### US-HOUSE-03 Faturayı eşit böl
 
