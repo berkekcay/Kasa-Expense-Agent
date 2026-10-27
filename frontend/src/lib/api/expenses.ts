@@ -1,5 +1,5 @@
 // Personal expenses and the fixed category list (shared).
-import { del, patch, post, query, request, requestPage } from "./client";
+import { del, patch, post, query, request, requestBlob, requestPage } from "./client";
 
 export type ExpenseItem = {
   description: string;
@@ -62,20 +62,20 @@ export type ExpenseChanges = {
   note?: string | null;
 };
 
+const filterQuery = (f: ExpenseFilters) => ({
+  month: f.month || undefined,
+  category: f.category || undefined,
+  source: f.source || undefined,
+  scope: f.scope && f.scope !== "all" ? f.scope : undefined,
+});
+
 export const expensesApi = {
   listExpenses: (limit = 100) => request<Expense[]>(`/expenses?limit=${limit}`),
   /** One page of the user's expenses plus the total that match the filters. */
   listExpensePage: (f: ExpenseFilters = {}) =>
-    requestPage<Expense>(
-      `/expenses${query({
-        month: f.month || undefined,
-        category: f.category || undefined,
-        source: f.source || undefined,
-        scope: f.scope && f.scope !== "all" ? f.scope : undefined,
-        limit: f.limit,
-        offset: f.offset || undefined,
-      })}`,
-    ),
+    requestPage<Expense>(`/expenses${query({ ...filterQuery(f), limit: f.limit, offset: f.offset || undefined })}`),
+  /** Every expense that matches the filters as a UTF-8 CSV (no paging). */
+  exportExpensesCsv: (f: ExpenseFilters = {}) => requestBlob(`/expenses/export.csv${query(filterQuery(f))}`),
   createExpense: (body: NewExpense) => request<Expense>("/expenses", post(body)),
   updateExpense: (id: number, changes: ExpenseChanges) => request<Expense>(`/expenses/${id}`, patch(changes)),
   deleteExpense: (id: number) => request<void>(`/expenses/${id}`, del),

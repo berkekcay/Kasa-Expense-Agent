@@ -50,6 +50,40 @@ def list_expenses(
     return [ExpenseOut.from_model(e) for e in rows]
 
 
+@router.get(
+    "/expenses/export.csv",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}, "description": "UTF-8 CSV with a BOM"}},
+)
+def export_expenses(
+    db: DB,
+    user_id: CurrentUser,
+    month: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}$", description="YYYY-MM")] = None,
+    category: Annotated[
+        str | None, Query(max_length=50, description="a category from /categories, or none")
+    ] = None,
+    source: Annotated[str | None, Query(description="manual, receipt, statement or email")] = None,
+    scope: Annotated[
+        Literal["all", "personal", "house"],
+        Query(description="all (default): personal and house bills you paid; personal; house"),
+    ] = "all",
+) -> Response:
+    """Download the expenses `GET /expenses` would list with the same filters, all of them.
+
+    Columns: id, date, merchant, category, source, amount, amount_minor, currency,
+    original_amount, original_currency, fx_rate, house_id, my_share (your share of a house
+    bill), note. More than 10 000 matching expenses answers 422.
+    """
+    filters = expense_service.ExpenseFilters(month=month, category=category, source=source, scope=scope)
+    body = expense_service.export_expenses_csv(db, user_id, filters)
+    filename = f"kasa-expenses-{month}.csv" if month else "kasa-expenses.csv"
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.post("/expenses", response_model=ExpenseOut, status_code=201)
 def create_expense(body: ExpenseIn, db: DB, user_id: CurrentUser) -> ExpenseOut:
     data = expense_service.ExpenseInput(

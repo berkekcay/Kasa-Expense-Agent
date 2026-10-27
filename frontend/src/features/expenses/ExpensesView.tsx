@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
-import { api, type Expense, type ExpenseChanges, type ExpenseFilters } from "@/lib/api";
+import { api, saveBlob, type Expense, type ExpenseChanges, type ExpenseFilters } from "@/lib/api";
 import { CATEGORIES } from "@/lib/categories";
 import { capitalize, normalizeAmount } from "@/lib/format";
 import { dataChanged, useApi } from "@/lib/hooks";
@@ -40,8 +40,21 @@ export function ExpensesView() {
   const [editing, setEditing] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const filtering = Boolean(month || category || source || scope !== "all");
+
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const blob = await api.exportExpensesCsv(filters);
+      saveBlob(blob, month ? `kasa-expenses-${month}.csv` : "kasa-expenses.csv");
+    } catch (err) {
+      notify(errorMessage(err), "error");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function loadMore() {
     if (!first.data) return;
@@ -172,6 +185,15 @@ export function ExpensesView() {
               Clear filters
             </Button>
           )}
+          <Button
+            variant="ghost"
+            className="ml-auto"
+            onClick={exportCsv}
+            disabled={exporting || first.data?.total === 0}
+            title="Download every expense that matches these filters"
+          >
+            {exporting ? "Exporting" : "Export CSV"}
+          </Button>
         </div>
 
         <Card title="Expenses">

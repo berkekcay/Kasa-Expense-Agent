@@ -14,7 +14,9 @@ How every expense gets created (receipt, manual, house, email, statement):
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
+import io
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -26,7 +28,7 @@ from app.db.models import EXPENSE_SOURCES, Expense, ExpenseItem, User
 from app.services import clock
 from app.services.categories import CATEGORIES, normalize_category
 from app.services.errors import Conflict, InvalidInput, NotFound
-from app.services.money import MoneyError, normalize_currency, to_minor
+from app.services.money import MoneyError, format_minor, normalize_currency, to_minor
 
 # Items (with their per-item assignees) and shares are always loaded with an expense.
 _LOAD_CHILDREN = (
@@ -257,6 +259,80 @@ def count_expenses(db: Session, user_id: str, filters: ExpenseFilters | None = N
     """How many expenses match the filters (for paging, ignores limit/offset)."""
     stmt = select(func.count()).select_from(Expense).where(*_filtered(user_id, filters or ExpenseFilters()))
     return int(db.scalar(stmt) or 0)
+
+
+MAX_EXPORT_ROWS = 10_000
+EXPORT_COLUMNS = (
+    "id",
+    "date",
+    "merchant",
+    "category",
+    "source",
+    "amount",
+    "amount_minor",
+    "currency",
+    "original_amount",
+    "original_currency",
+    "fx_rate",
+    "house_id",
+    "my_share",
+    "note",
+)
+# A spreadsheet runs a cell starting with one of these as a formula. Merchant names and
+# notes come from receipts and emails, so they are escaped like any other untrusted text.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_text(value: str | None) -> str:
+    """Free text for a CSV cell, with a leading ' when a spreadsheet would read a formula."""
+    if not value:
+        return ""
+    return f"'{value}" if value.startswith(_FORMULA_PREFIXES) else value
+
+
+def _csv_row(e: Expense, user_id: str) -> list[str | int]:
+    my_share = next((s.amount_minor for s in e.shares if s.user_id == user_id), None)
+    return [
+        e.id,
+        e.expense_date.isoformat(),
+        _csv_text(e.merchant),
+        e.category or "",
+        e.source,
+        format_minor(e.total_minor),
+        e.total_minor,
+        e.currency,
+        "" if e.original_total_minor is None else format_minor(e.original_total_minor),
+        e.original_currency or "",
+        "" if e.fx_rate is None else str(e.fx_rate),
+        "" if e.house_id is None else e.house_id,
+        "" if my_share is None else format_minor(my_share),
+        _csv_text(e.note),
+    ]
+
+
+def export_expenses_csv(db: Session, user_id: str, filters: ExpenseFilters | None = None) -> str:
+    """The same expenses as `list_expenses` (own ones only, newest first), all pages, as CSV.
+
+    Amounts are decimal strings plus exact minor units. The text starts with a UTF-8 BOM so
+    Excel reads Turkish letters correctly; encode it as plain "utf-8". Raises InvalidInput
+    when more than MAX_EXPORT_ROWS match.
+    """
+    filters = filters or ExpenseFilters()
+    if count_expenses(db, user_id, filters) > MAX_EXPORT_ROWS:
+        raise InvalidInput(f"more than {MAX_EXPORT_ROWS} expenses match; narrow the filters to export")
+    stmt = (
+        select(Expense)
+        .where(*_filtered(user_id, filters))
+        .options(*_LOAD_CHILDREN)
+        .order_by(Expense.expense_date.desc(), Expense.id.desc())
+    )
+    out = io.StringIO()
+    out.write("\ufeff")
+    writer = csv.writer(out, lineterminator="\r\n")
+    writer.writerow(EXPORT_COLUMNS)
+    for e in db.scalars(stmt):
+        writer.writerow(_csv_row(e, user_id))
+    return out.getvalue()
 
 
 def get_expense(db: Session, user_id: str, expense_id: int) -> Expense:
