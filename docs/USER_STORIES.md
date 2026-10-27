@@ -681,7 +681,8 @@ emin olmak istiyorum.
 - Kanıt: her servis `user_id` ile filtreliyor,
   `tests/test_api.py::test_create_and_list_expenses_is_scoped_per_user`,
   `tests/test_expenses_api.py::test_only_own_expenses`,
-  `tests/test_report_guard.py::test_flatmate_sees_own_shares_only`.
+  `tests/test_report_guard.py::test_flatmate_sees_own_shares_only`,
+  `tests/test_privacy_refusal.py` (açık ret yanıtı ve kişisel veri sızmaması; sahte model).
 
 ### US-GUARD-02 Sohbet yalnızca benim satırlarımı okuyabilir
 
