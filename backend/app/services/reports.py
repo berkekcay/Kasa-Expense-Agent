@@ -429,7 +429,7 @@ def build_table(report: dict[str, Any], title: str = "") -> dict[str, Any]:
 
 
 def build_chart(report: dict[str, Any], chart_type: str, x: str, y: str, title: str = "") -> dict[str, Any]:
-    """Chart spec the frontend renders with recharts: {type, title, x, y, data}.
+    """Chart spec the frontend renders with ECharts: {type, title, x, y, data}.
     chart_type "table" gives `build_table` instead (x and y are not needed)."""
     if chart_type == "table":
         return build_table(report, title)

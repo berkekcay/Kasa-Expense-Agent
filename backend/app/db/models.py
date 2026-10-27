@@ -348,3 +348,39 @@ class Reminder(Base):
     status: Mapped[str] = mapped_column(String(20), default="scheduled", server_default="scheduled")
     created_at: Mapped[dt.datetime] = _now()
     cancel_reason: Mapped[str | None] = mapped_column(String(20))  # REMINDER_CANCEL_REASONS
+
+
+class ChatConversation(Base):
+    """One chat thread with Kasa. The ADK session lives in memory; when it is gone (a
+    restart, another instance) the next turn starts a new session and replays the last
+    messages from here as context."""
+
+    __tablename__ = "chat_conversations"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)  # random hex token
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(Unicode(200))
+    adk_session_id: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[dt.datetime] = _now()
+    updated_at: Mapped[dt.datetime] = _now()
+    messages: Mapped[list[ChatMessage]] = relationship(
+        back_populates="conversation", order_by="ChatMessage.id", cascade="all, delete-orphan"
+    )
+
+
+class ChatMessage(Base):
+    """A message in a conversation. `payload_json` holds what the UI shows besides the text:
+    chart, cards (expense saved, import ready) and their state, attached file names, agent."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("chat_conversations.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))  # the owner again, for RLS
+    role: Mapped[str] = mapped_column(String(10))  # "user" | "assistant"
+    text: Mapped[str] = mapped_column(UnicodeText)
+    payload_json: Mapped[str | None] = mapped_column(UnicodeText)
+    created_at: Mapped[dt.datetime] = _now()
+    conversation: Mapped[ChatConversation] = relationship(back_populates="messages")

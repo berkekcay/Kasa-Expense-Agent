@@ -11,20 +11,26 @@ from app.services import statements
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
-STATEMENT_TYPES = {"text/csv", "application/vnd.ms-excel", "application/pdf", "text/plain"}
-STATEMENT_EXTENSIONS = (".csv", ".txt", ".pdf")
+STATEMENT_TYPES = {
+    "text/csv",
+    "application/vnd.ms-excel",
+    "application/pdf",
+    "text/plain",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+STATEMENT_EXTENSIONS = (".csv", ".txt", ".pdf", ".xlsx")
 
 
 @router.post("/statement", response_model=ImportResultOut, status_code=201)
 async def upload_statement(file: UploadFile, db: DB, user_id: CurrentUser) -> ImportResultOut:
-    """CSV or PDF statement -> inbox items (status pending) for the user to review.
+    """CSV, Excel (.xlsx, first sheet) or PDF statement -> inbox items (status pending) for the user to review.
     413 above settings.max_upload_bytes, 415 for other file types, 422 for unreadable files
     (no header row, scanned PDF without text, password-protected PDF), 503 for a PDF while
     no LLM provider is configured."""
     content_type = (file.content_type or "").split(";")[0].strip().lower()
     filename = file.filename or "statement"
     if content_type not in STATEMENT_TYPES and not filename.lower().endswith(STATEMENT_EXTENSIONS):
-        raise HTTPException(status_code=415, detail="upload a CSV or PDF statement")
+        raise HTTPException(status_code=415, detail="upload a CSV, Excel (.xlsx) or PDF statement")
     limit = get_settings().max_upload_bytes
     data = await file.read(limit + 1)
     if len(data) > limit:

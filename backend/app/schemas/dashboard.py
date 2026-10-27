@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.budgets import BudgetStatusOut
 from app.schemas.subscriptions import SubscriptionOut
-from app.services.dashboard import DashboardSummary
+from app.services.dashboard import CategoryTotal, DashboardSummary, DayTotal
 from app.services.money import format_minor
 
 
@@ -23,6 +23,19 @@ class MonthTotalOut(BaseModel):
     month: dt.date = Field(description="First day of the month")
     total: str
     total_minor: int
+
+
+class DayTotalOut(BaseModel):
+    day: dt.date
+    total: str
+    total_minor: int
+
+
+class MerchantTotalOut(BaseModel):
+    merchant: str
+    total: str
+    total_minor: int
+    count: int = Field(description="Number of expenses")
 
 
 class HouseBalanceOut(BaseModel):
@@ -60,6 +73,10 @@ class DashboardOut(BaseModel):
     pending_inbox: int
     trend: list[MonthTotalOut] = Field(description="Last 6 months, oldest first, ending with `month`")
     recent_expenses: list[RecentExpenseOut] = Field(description="Newest 5 personal or shared expenses")
+    daily: list[DayTotalOut] = Field(description="My spending on every day of `month`, zeros included")
+    previous_daily: list[DayTotalOut] = Field(description="The same for the month before")
+    top_merchants: list[MerchantTotalOut] = Field(description="This month, largest first, at most 5")
+    previous_by_category: list[CategoryTotalOut] = Field(description="The month before, largest first")
 
     @classmethod
     def from_summary(cls, s: DashboardSummary) -> DashboardOut:
@@ -70,12 +87,7 @@ class DashboardOut(BaseModel):
             total_minor=s.total_minor,
             previous_month_total=format_minor(s.previous_month_total_minor),
             previous_month_total_minor=s.previous_month_total_minor,
-            by_category=[
-                CategoryTotalOut(
-                    category=c.category, total=format_minor(c.total_minor), total_minor=c.total_minor
-                )
-                for c in s.by_category
-            ],
+            by_category=[_category(c) for c in s.by_category],
             budgets=[BudgetStatusOut.from_status(b) for b in s.budgets],
             upcoming_subscriptions=[SubscriptionOut.from_model(x) for x in s.upcoming_subscriptions],
             house_balances=[
@@ -108,4 +120,24 @@ class DashboardOut(BaseModel):
                 )
                 for r in s.recent_expenses
             ],
+            daily=[_day(d) for d in s.daily],
+            previous_daily=[_day(d) for d in s.previous_daily],
+            top_merchants=[
+                MerchantTotalOut(
+                    merchant=m.merchant,
+                    total=format_minor(m.total_minor),
+                    total_minor=m.total_minor,
+                    count=m.count,
+                )
+                for m in s.top_merchants
+            ],
+            previous_by_category=[_category(c) for c in s.previous_by_category],
         )
+
+
+def _day(d: DayTotal) -> DayTotalOut:
+    return DayTotalOut(day=d.day, total=format_minor(d.total_minor), total_minor=d.total_minor)
+
+
+def _category(c: CategoryTotal) -> CategoryTotalOut:
+    return CategoryTotalOut(category=c.category, total=format_minor(c.total_minor), total_minor=c.total_minor)

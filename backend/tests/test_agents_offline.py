@@ -153,6 +153,7 @@ def test_every_runner_kind_builds(fake_gemini):
         "report_agent",
         "budget_agent",
         "inbox_agent",
+        "file_agent",
     }
 
 

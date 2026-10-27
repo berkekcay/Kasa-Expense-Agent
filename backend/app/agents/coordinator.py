@@ -10,6 +10,7 @@ from google.adk.agents import Agent
 from app.agents.budget_agent import build_budget_agent
 from app.agents.common import GUARDRAILS, chat_model, with_today
 from app.agents.email_agent import build_inbox_agent
+from app.agents.file_agent import build_file_agent
 from app.agents.house_agent import build_house_agent
 from app.agents.receipt_agent import build_receipt_agent
 from app.agents.report_agent import build_report_agent
@@ -31,6 +32,9 @@ For every request, call `transfer_to_agent` with exactly one of these agent name
   exchange rates and currency conversion (kur, döviz).
 - inbox_agent: expenses found in Gmail/e-mails or uploaded bank statements (ekstre) that
   wait for review, approving or rejecting them, whether Gmail is connected.
+- file_agent: anything about a spreadsheet the user attached in the chat (an
+  <attached_files> block is in the conversation): questions about it, charts from it,
+  "add these to my expenses". Also when the user asks to analyse an Excel or CSV file.
 
 Only greetings and "what can you do" are answered by you, in one or two sentences.
 Never say you will transfer; just call the tool.
@@ -50,5 +54,6 @@ def build_coordinator(sql_dialect: str) -> Agent:
             build_report_agent(sql_dialect),
             build_budget_agent(),
             build_inbox_agent(),
+            build_file_agent(),
         ],
     )

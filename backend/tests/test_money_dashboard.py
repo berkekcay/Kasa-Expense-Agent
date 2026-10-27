@@ -103,6 +103,28 @@ def test_dashboard_summary_numbers(db):
     ]
 
 
+def test_dashboard_daily_spending_merchants_and_last_month_categories(db):
+    me = "dash-daily"
+    _setup(db, me, "dash-daily-flatmate")
+    _add(db, me, "10.00", "market", dt.date(2026, 6, 15))
+    s = dashboard.dashboard_summary(db, me)
+
+    # One entry per day of the month, zeros included; the house bill counts my 50 share.
+    assert len(s.daily) == 30 and s.daily[0].day == JUNE and s.daily[-1].day == dt.date(2026, 6, 30)
+    assert (s.daily[0].total_minor, s.daily[14].total_minor) == (12000 + 8050 + 4000 + 5000, 1000)
+    assert sum(d.total_minor for d in s.daily) == s.total_minor
+    assert len(s.previous_daily) == 31
+    assert [(d.day.day, d.total_minor) for d in s.previous_daily if d.total_minor] == [(1, 30000), (26, 5999)]
+    assert [(m.merchant, m.total_minor, m.count) for m in s.top_merchants] == [
+        ("Shop", 12000 + 8050 + 4000 + 1000, 4),
+        ("Elektrik", 5000, 1),
+    ]
+    assert [(c.category, c.total_minor) for c in s.previous_by_category] == [
+        ("rent", 30000),
+        ("uncategorised", 5999),
+    ]
+
+
 def test_dashboard_for_a_new_user_is_all_zero(db):
     s = dashboard.dashboard_summary(db, "dash-nobody", dt.date(2026, 3, 17))
     assert s.month == dt.date(2026, 3, 1)
@@ -151,6 +173,15 @@ def test_dashboard_api_shape(client):
         True,
     )
     assert body["pending_inbox"] == 2
+    assert body["daily"][0] == {"day": "2026-06-01", "total": "290.50", "total_minor": 29050}
+    assert len(body["previous_daily"]) == 31
+    assert body["top_merchants"][0] == {
+        "merchant": "Shop",
+        "total": "240.50",
+        "total_minor": 24050,
+        "count": 3,
+    }
+    assert body["previous_by_category"][0] == {"category": "rent", "total": "300.00", "total_minor": 30000}
 
     past = client.get("/dashboard", params={"month": "2020-02-10"}, headers={"X-User-Id": me}).json()
     assert (

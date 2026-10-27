@@ -471,12 +471,29 @@ def _kind(filename: str, content_type: str, data: bytes) -> str:
     name = (filename or "").lower()
     if data[:5] == b"%PDF-" or content_type == "application/pdf" or name.endswith(".pdf"):
         return "pdf"
+    if data[:4] == b"PK" or name.endswith((".xlsx", ".xlsm")):
+        return "xlsx"
     return "csv"
 
 
-def _create_items(
+def _xlsx_as_csv(data: bytes) -> bytes:
+    """The first sheet of an Excel file as semicolon CSV, so the CSV header matching and
+    amount rules apply to Excel exports too."""
+    from app.services import sheets  # sheets imports this module
+
+    sheet = sheets.parse_file("statement.xlsx", data)[0]
+    out = io.StringIO()
+    writer = csv.writer(out, delimiter=";")
+    writer.writerow(sheet.columns)
+    writer.writerows([[c or "" for c in row] for row in sheet.rows])
+    return out.getvalue().encode("utf-8")
+
+
+def create_inbox_items(
     db: Session, user_id: str, lines: list[StatementLine], raws: list[str] | None, filename: str
 ) -> tuple[int, int]:
+    """One pending inbox item per line, skipping lines imported before. Returns
+    (created, duplicates)."""
     created = duplicates = 0
     seen: Counter[tuple] = Counter()
     for index, line in enumerate(lines):
@@ -523,11 +540,13 @@ async def import_statement(
         result.lines = len(lines)
         result.errors = errors
     else:
+        if _kind(filename, content_type, data) == "xlsx":
+            data = _xlsx_as_csv(data)
         parsed = _parse_csv(data)
         lines, raws = parsed.lines, parsed.raw_rows
         result.lines = parsed.rows
         result.skipped = parsed.skipped
         result.errors = parsed.errors
-    result.created, result.duplicates = _create_items(db, user_id, lines, raws, filename)
+    result.created, result.duplicates = create_inbox_items(db, user_id, lines, raws, filename)
     result.errors = result.errors[:50]
     return result

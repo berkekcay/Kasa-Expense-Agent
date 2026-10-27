@@ -305,3 +305,29 @@ def test_import_statement_service_directly(db):
     assert (result.lines, result.created, result.skipped) == (2, 1, 1)
     with session_for(user) as other:
         assert [i.title for i in inbox.list_items(other, user)] == ["MIGROS"]
+
+
+def test_xlsx_statement_reads_like_the_same_csv(client):
+    """An Excel export goes through the same header matching as CSV (first sheet)."""
+    import csv
+    import io
+
+    from openpyxl import Workbook
+
+    from app.services.statements import decode_text
+
+    text = decode_text((FIXTURES / "statement_garanti_like.csv").read_bytes())
+    book = Workbook()
+    for row in csv.reader(io.StringIO(text), delimiter=";"):
+        book.active.append(row)
+    buf = io.BytesIO()
+    book.save(buf)
+    r = upload(
+        client,
+        "stmt-xlsx",
+        "hareketler.xlsx",
+        buf.getvalue(),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    assert r.status_code == 201, r.text
+    assert r.json() == {"lines": 14, "created": 12, "duplicates": 0, "skipped": 3, "errors": []}

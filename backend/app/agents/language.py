@@ -21,17 +21,79 @@ _TURKISH_WORDS = frozenset(_TURKISH_WORD_LIST.split())
 _WORD = re.compile(r"[a-zA-ZçğıöşüÇĞİÖŞÜ]+")
 
 
-def detect_language(text: str) -> str:
-    """'tr' or 'en'. Turkish letters decide at once; otherwise two Turkish words do."""
+_ENGLISH_WORDS = frozenset(
+    [
+        "the",
+        "a",
+        "an",
+        "how",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "where",
+        "when",
+        "why",
+        "is",
+        "are",
+        "was",
+        "did",
+        "do",
+        "does",
+        "i",
+        "my",
+        "me",
+        "much",
+        "many",
+        "spend",
+        "spent",
+        "spending",
+        "show",
+        "chart",
+        "month",
+        "week",
+        "year",
+        "budget",
+        "house",
+        "owe",
+        "owes",
+        "paid",
+        "pay",
+        "add",
+        "save",
+        "this",
+        "last",
+        "in",
+        "on",
+        "for",
+        "of",
+        "to",
+        "and",
+    ]
+)
+
+
+def _signal(text: str) -> str | None:
+    """'tr' or 'en' when the message itself says which, else None."""
     if any(ch in _TURKISH_LETTERS for ch in text):
         return "tr"
     words = [w.lower() for w in _WORD.findall(text)]
     hits = sum(1 for w in words if w in _TURKISH_WORDS)
-    return "tr" if hits >= 2 or (hits == 1 and len(words) <= 2) else "en"
+    if hits >= 2 or (hits == 1 and len(words) <= 2):
+        return "tr"
+    if sum(1 for w in words if w in _ENGLISH_WORDS) >= 2:
+        return "en"
+    return None
 
 
-def reply_language_note(text: str) -> str:
+def detect_language(text: str, ui_locale: str | None = None) -> str:
+    """'tr' or 'en'. Turkish letters decide at once; otherwise two Turkish (or English)
+    words do. A message with no signal ("ok", "Netflix?") follows the UI language."""
+    return _signal(text) or (ui_locale if ui_locale in ("tr", "en") else "en")
+
+
+def reply_language_note(text: str, ui_locale: str | None = None) -> str:
     """The note appended to the user's message for the agents."""
-    if detect_language(text) == "tr":
+    if detect_language(text, ui_locale) == "tr":
         return "(Kasa: reply in Turkish.)"
     return "(Kasa: reply in English.)"

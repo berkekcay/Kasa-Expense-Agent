@@ -18,3 +18,5 @@ cryptography==50.0.2
 # HTTP client for Gmail / Calendar / TCMB calls, PDF text for statement imports
 httpx==0.28.1
 pypdf==6.20.0
+# Excel (.xlsx) files attached in the chat
+openpyxl==3.1.5

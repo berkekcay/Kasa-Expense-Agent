@@ -79,27 +79,39 @@ def base_currency() -> str:
 # --- spending -----------------------------------------------------------------------------
 
 
-def spending_by_category(
+@dataclass
+class SpendingRow:
+    """My spending at one merchant on one day in one category, in the target currency."""
+
+    day: dt.date
+    merchant: str
+    category: str | None
+    amount_minor: int
+    count: int  # expenses in this group
+
+
+def spending_rows(
     db: Session, user_id: str, start: dt.date, end: dt.date, *, currency: str | None = None
-) -> dict[str | None, int]:
-    """My spending per category (None = uncategorised) for expense dates in [start, end),
+) -> list[SpendingRow]:
+    """My spending for expense dates in [start, end), grouped by day, merchant and category,
     in `currency` (default: the base currency). See the module docstring for the rules."""
     target = fx.currency_code(currency) if currency else base_currency()
     in_range = (Expense.expense_date >= start, Expense.expense_date < end)
+    group = (Expense.expense_date, Expense.merchant, Expense.category, Expense.currency)
     personal = (
-        select(Expense.category, Expense.currency, Expense.expense_date, func.sum(Expense.total_minor))
+        select(*group, func.sum(Expense.total_minor), func.count())
         .where(Expense.owner_id == user_id, Expense.house_id.is_(None), *in_range)
-        .group_by(Expense.category, Expense.currency, Expense.expense_date)
+        .group_by(*group)
     )
     shares = (
-        select(Expense.category, Expense.currency, Expense.expense_date, func.sum(ExpenseShare.amount_minor))
+        select(*group, func.sum(ExpenseShare.amount_minor), func.count())
         .join(ExpenseShare, ExpenseShare.expense_id == Expense.id)
         .where(ExpenseShare.user_id == user_id, Expense.house_id.is_not(None), *in_range)
-        .group_by(Expense.category, Expense.currency, Expense.expense_date)
+        .group_by(*group)
     )
-    totals: dict[str | None, int] = defaultdict(int)
+    rows: list[SpendingRow] = []
     for stmt in (personal, shares):
-        for category, row_currency, day, amount in db.execute(stmt):
+        for day, merchant, category, row_currency, amount, count in db.execute(stmt):
             amount = int(amount or 0)
             if row_currency != target:
                 try:
@@ -107,7 +119,18 @@ def spending_by_category(
                 except DomainError as exc:
                     log.warning("skipping %s %s on %s for %s: %s", amount, row_currency, day, user_id, exc)
                     continue
-            totals[category] += amount
+            rows.append(SpendingRow(day, merchant, category, amount, int(count)))
+    return rows
+
+
+def spending_by_category(
+    db: Session, user_id: str, start: dt.date, end: dt.date, *, currency: str | None = None
+) -> dict[str | None, int]:
+    """My spending per category (None = uncategorised) for expense dates in [start, end),
+    in `currency` (default: the base currency). See the module docstring for the rules."""
+    totals: dict[str | None, int] = defaultdict(int)
+    for row in spending_rows(db, user_id, start, end, currency=currency):
+        totals[row.category] += row.amount_minor
     return dict(totals)
 
 

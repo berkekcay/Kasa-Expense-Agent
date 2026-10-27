@@ -13,12 +13,13 @@ instance); a DB-backed session service can replace it without touching the calle
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal
 
 from google.adk.agents import BaseAgent
+from google.adk.agents.run_config import RunConfig
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
@@ -27,6 +28,9 @@ from app.config import get_settings
 from app.db.session import get_engine
 
 APP_NAME = "kasa"
+# Upper bound on model calls in one turn (routing, tool loops, checker revisions). A model
+# stuck in a loop stops here instead of running up the bill.
+MAX_LLM_CALLS = 24
 
 RunnerKind = Literal["chat", "receipt", "email-parse", "statement-parse"]
 
@@ -110,11 +114,19 @@ def ensure_available() -> None:
     )
 
 
-async def run_agent(
-    kind: RunnerKind, user_id: str, parts: list[types.Part], session_id: str | None = None
-) -> AgentRun:
-    """Send one user message to a runner and collect the final text, every tool result
-    produced during the turn, and which agents spoke."""
+async def stream_agent(
+    kind: RunnerKind,
+    user_id: str,
+    parts: list[types.Part],
+    session_id: str | None = None,
+    new_session_parts: list[types.Part] | None = None,
+) -> AsyncIterator[dict[str, Any] | AgentRun]:
+    """Run one user message and yield progress as it happens, for the chat UI:
+    {"type": "agent", "agent"} when another agent takes over, {"type": "tool", "name"}
+    when a tool is called, {"type": "tool_done", "name", "status"} when it returns. The last
+    item is the finished AgentRun (final text, every tool result, which agents spoke).
+    `new_session_parts` go in front of the message only when no live session was found
+    (e.g. the earlier part of a saved conversation after a restart)."""
     ensure_available()
     runner = _runner(kind)
     keep_session = RUNNERS[kind][1]
@@ -125,21 +137,51 @@ async def run_agent(
         session = await sessions.get_session(app_name=runner.app_name, user_id=user_id, session_id=session_id)
     if session is None:
         session = await sessions.create_session(app_name=runner.app_name, user_id=user_id)
+        parts = [*(new_session_parts or []), *parts]
 
     run = AgentRun(session_id=session.id, text="")
     texts: list[str] = []
     try:
         async for event in runner.run_async(
-            user_id=user_id, session_id=session.id, new_message=types.Content(role="user", parts=parts)
+            user_id=user_id,
+            session_id=session.id,
+            new_message=types.Content(role="user", parts=parts),
+            run_config=RunConfig(max_llm_calls=MAX_LLM_CALLS),
         ):
             if event.author and event.author != "user" and (not run.agents or run.agents[-1] != event.author):
                 run.agents.append(event.author)
+                yield {"type": "agent", "agent": event.author}
+            for call in event.get_function_calls():
+                if call.name and call.name != "transfer_to_agent":
+                    yield {"type": "tool", "name": call.name}
             for response in event.get_function_responses():
-                run.tool_results.append((response.name or "", dict(response.response or {})))
+                result = dict(response.response or {})
+                run.tool_results.append((response.name or "", result))
+                if response.name != "transfer_to_agent":
+                    yield {
+                        "type": "tool_done",
+                        "name": response.name or "",
+                        "status": str(result.get("status", "")),
+                    }
             if event.is_final_response() and event.content and event.content.parts:
                 texts.extend(p.text for p in event.content.parts if p.text and not p.thought)
     finally:
         if not keep_session:
             await sessions.delete_session(app_name=runner.app_name, user_id=user_id, session_id=session.id)
     run.text = "\n".join(texts).strip()
-    return run
+    yield run
+
+
+async def run_agent(
+    kind: RunnerKind,
+    user_id: str,
+    parts: list[types.Part],
+    session_id: str | None = None,
+    new_session_parts: list[types.Part] | None = None,
+) -> AgentRun:
+    """Send one user message to a runner and collect the final text, every tool result
+    produced during the turn, and which agents spoke."""
+    async for item in stream_agent(kind, user_id, parts, session_id, new_session_parts):
+        if isinstance(item, AgentRun):
+            return item
+    raise RuntimeError("agent run ended without a result")  # pragma: no cover

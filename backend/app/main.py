@@ -85,6 +85,7 @@ def create_app() -> FastAPI:
         internal,
     ):
         app.include_router(module.router)
+    app.include_router(agents.files_router)  # chat files and imports, no LLM needed
     return app
 
 

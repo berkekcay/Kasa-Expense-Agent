@@ -9,6 +9,7 @@ house's currency.
 from __future__ import annotations
 
 import datetime as dt
+from collections import defaultdict
 from dataclasses import dataclass, field
 
 from sqlalchemy import exists, func, or_, select
@@ -21,6 +22,7 @@ from app.services.budgets import BudgetStatus
 TREND_MONTHS = 6
 RECENT_EXPENSES = 5
 UPCOMING_DAYS = 30
+TOP_MERCHANTS = 5
 
 
 @dataclass
@@ -33,6 +35,19 @@ class CategoryTotal:
 class MonthTotal:
     month: dt.date  # first day of the month
     total_minor: int
+
+
+@dataclass
+class DayTotal:
+    day: dt.date
+    total_minor: int
+
+
+@dataclass
+class MerchantTotal:
+    merchant: str
+    total_minor: int
+    count: int  # expenses
 
 
 @dataclass
@@ -62,6 +77,38 @@ class DashboardSummary:
     pending_inbox: int = 0
     trend: list[MonthTotal] = field(default_factory=list)  # oldest first, ends with `month`
     recent_expenses: list[RecentExpense] = field(default_factory=list)
+    daily: list[DayTotal] = field(default_factory=list)  # every day of `month`, zeros included
+    previous_daily: list[DayTotal] = field(default_factory=list)  # every day of the month before
+    top_merchants: list[MerchantTotal] = field(default_factory=list)  # this month, largest first
+    previous_by_category: list[CategoryTotal] = field(default_factory=list)  # the month before
+
+
+def _by_category(rows: list[budgets.SpendingRow]) -> list[CategoryTotal]:
+    totals: dict[str, int] = defaultdict(int)
+    for row in rows:
+        totals[row.category or "uncategorised"] += row.amount_minor
+    return sorted(
+        (CategoryTotal(category, total) for category, total in totals.items() if total),
+        key=lambda c: (-c.total_minor, c.category),
+    )
+
+
+def _daily(rows: list[budgets.SpendingRow], first: dt.date) -> list[DayTotal]:
+    totals: dict[dt.date, int] = defaultdict(int)
+    for row in rows:
+        totals[row.day] += row.amount_minor
+    days = (budgets.add_months(first, 1) - first).days
+    return [DayTotal(day, totals[day]) for day in (first + dt.timedelta(days=n) for n in range(days))]
+
+
+def _top_merchants(rows: list[budgets.SpendingRow], limit: int) -> list[MerchantTotal]:
+    totals: dict[str, int] = defaultdict(int)
+    counts: dict[str, int] = defaultdict(int)
+    for row in rows:
+        totals[row.merchant] += row.amount_minor
+        counts[row.merchant] += row.count
+    ranked = sorted(totals.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [MerchantTotal(merchant, total, counts[merchant]) for merchant, total in ranked[:limit] if total]
 
 
 def _house_balances(db: Session, user_id: str) -> list[HouseBalance]:
@@ -115,31 +162,40 @@ def _pending_inbox(db: Session, user_id: str) -> int:
 def dashboard_summary(db: Session, user_id: str, month: dt.date | None = None) -> DashboardSummary:
     """Everything the home page shows for the month containing `month` (default: now)."""
     start = budgets.month_start(month or clock.today())
+    previous = budgets.add_months(start, -1)
     oldest = budgets.add_months(start, -(TREND_MONTHS - 1))
 
+    # This month and the one before need per-day and per-merchant detail; older months only
+    # need their total.
+    detail = {
+        first: budgets.spending_rows(db, user_id, first, budgets.add_months(first, 1))
+        for first in (previous, start)
+    }
     trend: list[MonthTotal] = []
-    current: dict[str | None, int] = {}
     for offset in range(TREND_MONTHS):
         first = budgets.add_months(oldest, offset)
-        spent = budgets.spending_by_category(db, user_id, first, budgets.add_months(first, 1))
-        trend.append(MonthTotal(first, sum(spent.values())))
-        if first == start:
-            current = spent
+        if first in detail:
+            total = sum(row.amount_minor for row in detail[first])
+        else:
+            total = sum(
+                budgets.spending_by_category(db, user_id, first, budgets.add_months(first, 1)).values()
+            )
+        trend.append(MonthTotal(first, total))
 
-    by_category = sorted(
-        (CategoryTotal(category or "uncategorised", total) for category, total in current.items() if total),
-        key=lambda c: (-c.total_minor, c.category),
-    )
     return DashboardSummary(
         month=start,
         currency=budgets.base_currency(),
         total_minor=trend[-1].total_minor,
         previous_month_total_minor=trend[-2].total_minor,
-        by_category=by_category,
+        by_category=_by_category(detail[start]),
         budgets=budgets.budget_status(db, user_id, start),
         upcoming_subscriptions=subscriptions.upcoming_charges(db, user_id, within_days=UPCOMING_DAYS),
         house_balances=_house_balances(db, user_id),
         pending_inbox=_pending_inbox(db, user_id),
         trend=trend,
         recent_expenses=_recent_expenses(db, user_id, RECENT_EXPENSES),
+        daily=_daily(detail[start], start),
+        previous_daily=_daily(detail[previous], previous),
+        top_merchants=_top_merchants(detail[start], TOP_MERCHANTS),
+        previous_by_category=_by_category(detail[previous]),
     )
