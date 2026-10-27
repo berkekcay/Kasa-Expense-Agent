@@ -65,7 +65,8 @@ flowchart TB
 
     user --> pages
     pages -->|"JSON over HTTPS, Firebase token or X-User-Id"| rest
-    rest -->|"POST /chat, POST /receipts"| coord
+    rest -->|"POST /chat"| coord
+    rest -->|"POST /receipts"| receipt
     rest -->|"everything else"| services
     coord --> receipt & house & report & budget & inbox
     report -->|"run_report asks"| checker

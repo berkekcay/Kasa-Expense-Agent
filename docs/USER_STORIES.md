@@ -423,8 +423,8 @@ product works without the team's Ollama server.
   `KASA_LIVE_TESTS=1 pytest -m live -s` and `python -m evals.run_evals`, then the live tests
   pass and the evals score at least as well as on Ollama.
 - Evidence: `app/agents/common.py` (`build_model`), `app/config.py`.
-- Gap: the default model is now `gemini-3.5-flash-lite`, because new keys cannot use the 2.5
-  models. No live Gemini call has been made yet, receipt vision included. A separate issue
+- Gap: the default model is now `gemini-3.5-flash-lite`, because new keys may not have access
+  to the 2.5 models. No live Gemini call has been made yet, receipt vision included. A separate issue
   covers it.
 
 ## Epic: inbox and imports
@@ -547,8 +547,9 @@ As the product owner, I want SQL Server row-level security as a last line of def
 a bug in one query cannot show another user's rows.
 
 - Sprint 2 · **Partial** · Owner: Backend, Agents 3 / QA (cloud)
-- Given a session with `SESSION_CONTEXT('user_id')` set, then every table returns only that
-  user's rows (expenses also to house members).
+- Given a session with `SESSION_CONTEXT('user_id')` set, then every user-owned table returns only
+  that user's rows, and house tables only the houses they belong to (house bills also go to
+  members). `fx_rates` is shared reference data.
 - Evidence: `alembic/versions/0001_sprint1_baseline.py`, `0002_sprints_2_4.py`,
   `app/db/session.py`, `tests/test_migrations.py::test_sql_server_ddl_renders_offline`,
   `tests/test_migrations.py::test_sql_server_ddl_fits_azure_sql_database`.
@@ -604,7 +605,8 @@ control of my data (KVKK).
 As Elif, I want to sign in with my Google account so that my data is mine on every device.
 
 - Sprint 2 · **Partial** · Owner: Backend, Frontend
-- Given `FIREBASE_PROJECT_ID` is set, then every request needs a Firebase ID token, and my
+- Given `FIREBASE_PROJECT_ID` is set, then every protected app endpoint needs a Firebase
+  ID token (not `/health`, the Google OAuth callback or `/internal/*`, which has its own check), and my
   name and email are saved from it.
 - Evidence: `app/auth.py`, `frontend/src/lib/auth.ts`, the "Sign in with Google" button in the
   nav bar, `tests/test_foundation_api.py` (`test_requires_bearer_token`,

@@ -86,6 +86,22 @@ def test_refuses_a_user_with_data_unless_reset(client, no_tcmb, capsys):
     assert len(get(client, user, "/inbox").json()) == 3
 
 
+def test_reset_refuses_when_someone_else_shares_the_house(client, no_tcmb, capsys):
+    user = "seed-demo-d"
+    assert seed_demo.main(["--user", user]) == 0
+    house_id = get(client, user, "/houses").json()[0]["id"]
+    added = client.post(
+        f"/houses/{house_id}/members", json={"user_id": "not-a-demo-user"}, headers={"X-User-Id": user}
+    )
+    assert added.status_code == 201, added.text
+    count = get(client, user, "/expenses").headers["X-Total-Count"]
+
+    assert seed_demo.main(["--user", user, "--reset"]) == 1
+    assert "not-a-demo-user" in capsys.readouterr().err
+    assert get(client, user, "/expenses").headers["X-Total-Count"] == count
+    assert len(get(client, "not-a-demo-user", "/houses").json()) == 1
+
+
 def test_a_usd_expense_added_live_converts_without_tcmb(client, db, no_tcmb, monkeypatch):
     user = "seed-demo-c"
     assert seed_demo.main(["--user", user]) == 0

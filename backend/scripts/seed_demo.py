@@ -116,6 +116,17 @@ def existing_data(db: Session, people: People) -> dict[str, int]:
     return {name: int(n) for name, n in counts.items() if n}
 
 
+def outside_members(db: Session, people: People) -> list[str]:
+    """Members of the demo people's houses who are not demo people. `--reset` would delete
+    those houses with their bills, so it refuses while anyone else is in them."""
+    ids = people.all
+    house_ids = select(HouseMember.house_id).where(HouseMember.user_id.in_(ids))
+    stmt = select(HouseMember.user_id).where(
+        HouseMember.house_id.in_(house_ids), HouseMember.user_id.not_in(ids)
+    )
+    return sorted(set(db.scalars(stmt)))
+
+
 def reset(db: Session, people: People) -> None:
     """Delete what `existing_data` counts, children first (SQLite enforces foreign keys)."""
     ids = people.all
@@ -365,6 +376,14 @@ def main(argv: list[str] | None = None) -> int:
             print("Run again with --reset to delete it and seed from scratch.", file=sys.stderr)
             return 1
         if found:
+            others = outside_members(db, people)
+            if others:
+                print(
+                    f"A house of {user_id!r} also has {', '.join(others)}, so --reset would delete "
+                    "their bills too. Nothing was changed. Use another --user.",
+                    file=sys.stderr,
+                )
+                return 1
             reset(db, people)
             print(f"Deleted the old demo data of {user_id!r}.")
         summary = seed(db, user_id, name=args.name, today=args.today)

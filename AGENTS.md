@@ -27,13 +27,13 @@ uvicorn app.main:app --reload --port 8000
 python -m scripts.seed_demo --user demo [--reset]
 alembic revision --autogenerate --rev-id 0004_short_name -m "what changed"
 
-cd frontend
+cd ../frontend
 npm ci && npm run lint && npm run build                 # what CI runs
 npm run dev                                             # http://localhost:3000
 ```
 
-Tests never call a real model or Google. Keep it that way: use the fakes in `tests/` and
-`tests/fixtures/`.
+Tests that are not marked `live` never call a real model or Google. Keep it that way: use the
+fakes in `tests/` and `tests/fixtures/`.
 
 ## Rules that must not break
 
