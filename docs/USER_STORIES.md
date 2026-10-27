@@ -1,723 +1,809 @@
-# Kasa user stories
+# Kasa kullanıcı hikayeleri
 
-This file lists what Kasa does for its users, who owns each part, and how far each part is.
-Every status was checked against the code and the tests on `main` on 2026-10-27. Each story
-names the endpoint, page or test file that proves it, so anyone can check it again.
+Bu dosya Kasa'nın kullanıcıları için neler yaptığını, her parçanın sahibini ve her parçanın ne
+kadar ilerlediğini listeler. Tüm durumları 2026-10-27'de `main` üzerindeki kod ve testlerle
+karşılaştırdık. Her story onu kanıtlayan endpoint'i, sayfayı ya da test dosyasını yazıyor, yani
+isteyen herkes tekrar kontrol edebilir.
 
-Status:
+Durumlar:
 
-- **Done**: the code is on `main`, automated tests cover it, and it works without any outside
-  service.
-- **Partial**: the code exists, but one part has never run against the real service (Gemini,
-  Google, Azure SQL, Firebase, Cloud Run), or there is a known gap. The note says which.
-- **Not started**: there is no code for it yet.
+- **Bitti**: kod `main` üzerinde, otomatik testler kapsıyor ve hiçbir dış servise ihtiyaç
+  duymadan çalışıyor.
+- **Kısmen**: kod var, ama bir parçası gerçek servise karşı hiç çalışmadı (Gemini, Google,
+  Azure SQL, Firebase, Cloud Run) ya da bilinen bir eksik var. Notta hangisi olduğu yazıyor.
+- **Başlanmadı**: henüz hiç kod yok.
 
-Partial and Not started stories become GitHub issues. The list is at the end.
+Kısmen ve Başlanmadı durumundaki story'ler GitHub issue'su oluyor. Liste en sonda,
+[Açık story'ler](#açık-storyler) bölümünde.
 
-## Sprints
+Veritabanı hakkında bir not: Kasa bugün SQLite ile çalışıyor (geliştirme, testler ve demo).
+Production için ileride Azure SQL Database (Microsoft SQL Server) kullanmayı planlıyoruz.
+Migration'lar, row-level security (RLS) ve bağlantı kodu yazıldı ve offline test edildi, ama henüz
+bir Azure veritabanı yok. Planın tamamı [DATABASE.md](DATABASE.md) dosyasında.
 
-The README has a Sprint 1 checklist, a Sprint 2 foundation list and four tracks for sprints 2
-to 4 (HOUSE, MONEY, INGEST, REPORT). It does not say which track belongs to which sprint, so
-this file uses the following plan. The team can move stories between sprints.
+## Sprintler
 
-| Sprint | Scope |
+README'de bir Sprint 1 kontrol listesi, bir Sprint 2 temel listesi ve sprint 2 ile 4 arası için
+dört track var (HOUSE, MONEY, INGEST, REPORT). README hangi track'in hangi sprint'e ait olduğunu
+söylemiyor, bu yüzden bu dosya aşağıdaki planı kullanıyor. Ekip story'leri sprint'ler arasında
+taşıyabilir.
+
+| Sprint | Kapsam |
 | --- | --- |
-| 1 | The README "Sprint 1 checklist": receipt photo, manual expenses, one house with equal splits, balances, settle-up, chat with a chart |
-| 2 | The "Sprint 2 foundation" (migrations, data model, recorded payments, categories, Firebase option, Ollama switch, CI) and the HOUSE track |
-| 3 | The MONEY and INGEST tracks |
-| 4 | The REPORT track (checker agent, evals), the deployment kit, the API gap fixes, and everything still open |
+| 1 | README'deki "Sprint 1 checklist": fiş fotoğrafı, elle harcama, eşit bölüşümlü tek ev, bakiyeler, hesaplaşma, grafikli sohbet |
+| 2 | "Sprint 2 foundation" (migration'lar, veri modeli, kayıtlı ödemeler, kategoriler, Firebase seçeneği, Ollama geçişi, CI) ve HOUSE track'i |
+| 3 | MONEY ve INGEST track'leri |
+| 4 | REPORT track'i (checker ajanı, eval'ler), deploy kiti, API eksiklerinin giderilmesi ve hâlâ açık kalan her şey |
 
-## Roles
+## Roller
 
-Owner roles come from the project page. The names of the people are in [TEAM.md](TEAM.md).
+Sahip rolleri proje sayfasından geliyor. Kişilerin isimleri [TEAM.md](TEAM.md) dosyasında.
 
-| Short name | Role | Main areas |
+| Kısa ad | Rol | Ana alanlar |
 | --- | --- | --- |
-| Product owner | Product owner and architecture | user stories, architecture, demo, priorities; also co-owns Backend, Frontend and the database |
-| Backend | Database and backend | data model, migrations, RLS, REST API, Google OAuth and Gmail plumbing |
-| Agents 1 | Agent developer #1 | coordinator, receipt agent, budget agent (MONEY track), inbox and statement parsing agents |
-| Agents 2 | Agent developer #2 | house agent, splits, balances, settle-up, Calendar reminders (HOUSE track) |
-| Agents 3 / QA | Agent developer #3, QA and cloud | report agent, checker agent, evals, CI, Cloud Run and Azure SQL deploy |
-| Frontend | Frontend | Next.js pages and components |
+| Product owner | Product owner ve mimari | user story'ler, mimari, demo, öncelikler; ayrıca Backend, Frontend ve veritabanının ortak sahibi |
+| Backend | Veritabanı ve backend | veri modeli, migration'lar, RLS, REST API, Google OAuth ve Gmail altyapısı |
+| Agents 1 | Ajan geliştirici #1 | coordinator, fiş ajanı, bütçe ajanı (MONEY track'i), gelen kutusu ve ekstre okuma ajanları |
+| Agents 2 | Ajan geliştirici #2 | ev ajanı, bölüşümler, bakiyeler, hesaplaşma, Calendar hatırlatmaları (HOUSE track'i) |
+| Agents 3 / QA | Ajan geliştirici #3, QA ve cloud | rapor ajanı, checker ajanı, eval'ler, CI, Cloud Run ve Azure SQL deploy |
+| Frontend | Frontend | Next.js sayfaları ve bileşenleri |
 
-The project page does not name an owner for the inbox and statement agents. This file gives
-them to Agents 1 because they parse purchases like the receipt agent does.
+Proje sayfası gelen kutusu ve ekstre ajanları için bir sahip belirtmiyor. Bu dosya onları
+Agents 1'e veriyor, çünkü bu ajanlar da fiş ajanı gibi alışveriş okuyor.
 
-## Personas
+## Durum özeti
 
-**Elif, a student living alone.** First year, lives in a studio in Kadıköy on a KYK
-scholarship and some family money. Pays for groceries, transport, coffee and two or three
-subscriptions. She wants to see where the money goes each month and to get a warning before a
-category runs out. She writes in Turkish and sometimes in English.
+Her story için bir satır. "Yapan" sütunu kodu kimin yazdığını, "Kalan iş" sütunu kalan işin
+kime ait olduğunu ve varsa issue numarasını gösteriyor.
 
-**Ali, a student in a shared flat.** Shares a flat in Moda with two friends. Rent, bills and
-house shopping are paid by whoever is at the shop or has money that week. He does not want to
-keep a spreadsheet. He wants to know what he owes and to whom, and to pay it in as few
-transfers as possible.
+| Story | Başlık | Sprint | Durum | Yapan | Kalan iş |
+| --- | --- | --- | --- | --- | --- |
+| US-CAPTURE-01 | Harcamayı elle ekle | 1 | Bitti | Berke | - |
+| US-CAPTURE-02 | Fişi fotoğraftan kaydet | 1 | Kısmen | Berke | Yusuf (#4): fiş okumayı Gemini'de doğrulamak |
+| US-CAPTURE-03 | Alışverişi sohbete yaz | 1 | Kısmen | Berke | Yusuf: Gemini'de doğrulamak |
+| US-CAPTURE-04 | Başka para biriminde öde | 3 | Bitti | Berke | - |
+| US-CAPTURE-05 | Harcamayı düzelt ya da sil | 4 | Bitti | Berke | - |
+| US-CAPTURE-06 | Harcamalarımı filtrele | 4 | Bitti | Berke | - |
+| US-BUDGET-01 | Aylık bütçe koy | 3 | Bitti | Berke | - |
+| US-BUDGET-02 | Bütçe dolmak üzereyken uyar | 3 | Bitti | Berke | - |
+| US-BUDGET-03 | Ayımı tek bakışta gör | 3 | Bitti | Berke | - |
+| US-BUDGET-04 | Aboneliklerimi bul | 3 | Bitti | Berke | - |
+| US-BUDGET-05 | Bütçe, abonelik ve kurları sohbette sor | 3 | Kısmen | Berke | Yusuf: cevap dili, Gemini'de doğrulamak |
+| US-HOUSE-01 | Ev oluştur, ev arkadaşlarını ekle | 1 | Bitti | Berke | - |
+| US-HOUSE-02 | Ev arkadaşını linkle davet et | 4 | Başlanmadı | - | Ömer (#6), Zehra (#11) |
+| US-HOUSE-03 | Faturayı eşit böl | 1 | Bitti | Berke | - |
+| US-HOUSE-04 | Yüzdeyle, tutarla ya da kalem kalem böl | 2 | Bitti | Berke | - |
+| US-HOUSE-05 | Kimin kime borçlu olduğunu gör | 1 | Bitti | Berke | - |
+| US-HOUSE-06 | Ev arkadaşları arasındaki ödemeyi kaydet | 2 | Bitti | Berke | - |
+| US-HOUSE-07 | Herkese hesaplaşmayı hatırlat | 3 | Kısmen | Berke | Ömer: Calendar'ı gerçek Google'a karşı çalıştırmak |
+| US-HOUSE-08 | Evden ayrıl, üyeyi çıkar, faturayı sil | 4 | Bitti | Berke | - |
+| US-HOUSE-09 | Evi sohbetten yönet | 2 | Kısmen | Berke | Ömer: Gemini'de doğrulamak |
+| US-ASK-01 | Harcamalarımı sor, grafik al | 1 | Kısmen | Berke | Yusuf: Gemini'de doğrulamak |
+| US-ASK-02 | Toplamlar ev faturasında yalnızca benim payımı sayar | 4 | Bitti | Berke | - |
+| US-ASK-03 | Her sorguyu ikinci bir ajan kontrol eder | 4 | Bitti | Berke | - |
+| US-ASK-04 | Sohbet benim dilimde cevap verir | 4 | Kısmen | Berke | Yusuf (#5) |
+| US-ASK-05 | Doğru uzman ajan cevap verir | 1 | Kısmen | Berke | Yusuf (#4) |
+| US-ASK-06 | Kasa Gemini'de çalışır | 4 | Kısmen | Berke | Yusuf (#4) |
+| US-INBOX-01 | CSV banka ekstresi yükle | 3 | Bitti | Berke | - |
+| US-INBOX-02 | PDF ekstre yükle | 3 | Kısmen | Berke | Yusuf: canlı bir çalıştırma kaydetmek |
+| US-INBOX-03 | Gelen kutusundaki kalemleri incele ve onayla | 3 | Bitti | Berke | - |
+| US-INBOX-04 | Alışverişleri Gmail'den al | 3 | Kısmen | Berke | Mustafa: gerçek Gmail OAuth |
+| US-INBOX-05 | Gelen kutusunu sohbette sor | 3 | Kısmen | Berke | Yusuf: Gemini'de doğrulamak |
+| US-GUARD-01 | Yalnızca kendi verimi görürüm | 1 | Bitti | Berke | - |
+| US-GUARD-02 | Sohbet yalnızca benim satırlarımı okur | 1 | Bitti | Berke | - |
+| US-GUARD-03 | Fiş ve e-postadaki metin veridir, emir değil | 3 | Bitti | Berke | - |
+| US-GUARD-04 | Kullanıcı ayrımını veritabanı da uygular | 2 | Kısmen | Berke | Mustafa (#12): Azure SQL kurulumu ve RLS testi |
+| US-GUARD-05 | Para hep kuruşu kuruşuna doğru | 1 | Bitti | Berke | - |
+| US-GUARD-06 | Kodda ve loglarda gizli bilgi yok | 2 | Bitti | Berke | - |
+| US-GUARD-07 | Kullanıcı başına sohbet sınırı | 4 | Başlanmadı | - | Mustafa (#9) |
+| US-GUARD-08 | Hesabımı ve verilerimi sil | 4 | Başlanmadı | - | Mustafa, Zehra (#13) |
+| US-ACCOUNT-01 | Google ile giriş yap | 2 | Kısmen | Berke | Mustafa, Zehra: Firebase ile gerçek giriş |
+| US-ACCOUNT-02 | Dev modunda herhangi bir kullanıcı ol | 1 | Bitti | Berke | - |
+| US-ACCOUNT-03 | Görünen adımı değiştir | 4 | Bitti | Berke | - |
+| US-ACCOUNT-04 | Kasa'yı herkese açık bir adreste aç | 4 | Kısmen | Berke | Mustafa, Yusuf: ilk Cloud Run deploy'u |
 
-**Deniz, the flat's "accountant".** Lives with Ali and Ayşe and pays the rent every month,
-then collects the shares. Deniz enters the bills, picks how each one is split (equal, by
-room size, by item), records the money that comes back and reminds people to settle up. Deniz
-also imports the bank statement once a month so no purchase is forgotten. The demo user in
-[DEMO.md](DEMO.md) is Deniz.
+## Personalar
 
-## Epic: capture expenses
+**Elif, yalnız yaşayan bir öğrenci.** Birinci sınıf. Kadıköy'de bir stüdyo dairede KYK bursu ve
+ailesinden gelen biraz parayla yaşıyor. Market, ulaşım, kahve ve iki üç abonelik için ödeme
+yapıyor. Her ay paranın nereye gittiğini görmek ve bir kategori bitmeden önce uyarı almak
+istiyor. Türkçe yazıyor, bazen de İngilizce.
 
-### US-CAPTURE-01 Add an expense by hand
+**Ali, ortak evde yaşayan bir öğrenci.** Moda'da iki arkadaşıyla bir daireyi paylaşıyor. Kira,
+faturalar ve ev alışverişini o hafta markette kim varsa ya da kimin parası varsa o ödüyor. Excel
+tablosu tutmak istemiyor. Kime ne kadar borçlu olduğunu bilmek ve bunu olabildiğince az
+havaleyle kapatmak istiyor.
 
-As Elif, I want to add an expense by hand so that purchases without a receipt are counted.
+**Deniz, evin "muhasebecisi".** Ali ve Ayşe ile yaşıyor. Her ay kirayı ödüyor, sonra payları
+topluyor. Faturaları Deniz giriyor, her birinin nasıl bölüneceğini seçiyor (eşit, oda
+büyüklüğüne göre, kaleme göre), geri gelen parayı kaydediyor ve herkese hesaplaşmayı
+hatırlatıyor. Hiçbir alışveriş unutulmasın diye ayda bir de banka ekstresini yüklüyor.
+[DEMO.md](DEMO.md) dosyasındaki demo kullanıcısı Deniz.
 
-- Sprint 1 · **Done** · Owner: Backend (API), Frontend (form)
-- Given I am on the Expenses page, when I enter "Migros", "84,90" and save, then the expense
-  appears at the top of the list with a category Kasa picked ("groceries").
-- Given I enter a category in Turkish ("market") or leave it empty, when I save, then it is
-  stored as one of the 12 fixed categories.
-- Given I enter 0, a negative amount or more than two decimals, when I save, then I get a clear
-  error and nothing is saved.
-- Evidence: `POST /expenses`, `GET /categories`, page `/expenses`,
+## Epik: harcama kaydı
+
+### US-CAPTURE-01 Harcamayı elle ekle
+
+Elif olarak, harcamayı elle eklemek istiyorum, böylece fişi olmayan alışverişler de sayılır.
+
+- Sprint 1 · **Bitti** · Sahip: Backend (API), Frontend (form) · Yapan: Berke
+- Diyelim ki Harcamalar sayfasındayım. "Migros" ve "84,90" girip kaydettiğimde, harcama
+  listenin en üstünde Kasa'nın seçtiği bir kategoriyle ("groceries") görünür.
+- Diyelim ki kategoriyi Türkçe yazdım ("market") ya da boş bıraktım. Kaydettiğimde, kategori 12
+  sabit kategoriden biri olarak saklanır.
+- Diyelim ki 0, negatif bir tutar ya da ikiden fazla ondalık girdim. Kaydettiğimde anlaşılır bir
+  hata alırım ve hiçbir şey kaydedilmez.
+- Kanıt: `POST /expenses`, `GET /categories`, sayfa `/expenses`,
   `tests/test_api.py::test_create_and_list_expenses_is_scoped_per_user`,
   `tests/test_api.py::test_expense_validation`,
   `tests/test_foundation_api.py::test_categories_endpoint_and_normalised_storage`.
 
-### US-CAPTURE-02 Save a receipt from a photo
+### US-CAPTURE-02 Fişi fotoğraftan kaydet
 
-As Elif, I want to take a photo of a receipt so that the merchant, date, lines and total are
-saved without typing.
+Elif olarak, fişin fotoğrafını çekmek istiyorum, böylece mağaza, tarih, kalemler ve toplam hiç
+yazmadan kaydedilir.
 
-- Sprint 1 · **Partial** · Owner: Agents 1 (receipt agent), Frontend (upload page)
-- Given the server has an LLM provider, when I upload `receipt_market.png`, then an expense
-  "ÖZDEMİR MARKET" of 239.35 TRY dated 2026-10-05 is saved with its five lines.
-- Given the lines do not add up to the total, when it is saved, then I see a warning.
-- Given no LLM provider is configured, when I open the page, then it says receipt reading is
-  off and the API answers 503.
-- Evidence: `POST /receipts`, page `/receipts`,
-  `tests/test_agents_offline.py::test_receipt_upload_saves_expense_via_agent` (scripted fake
-  model), `tests/test_live.py::test_live_receipt_image` (live only).
-- Gap: passed live on Ollama (`qwen3-vl:8b`). Never run on Gemini, so receipt vision with
-  `gemini-3.5-flash-lite` is not verified.
+- Sprint 1 · **Kısmen** · Sahip: Agents 1 (fiş ajanı), Frontend (yükleme sayfası) · Yapan: Berke
+- Diyelim ki sunucuda bir LLM sağlayıcısı var. `receipt_market.png` dosyasını yüklediğimde,
+  2026-10-05 tarihli, 239.35 TRY tutarında "ÖZDEMİR MARKET" harcaması beş kalemiyle birlikte
+  kaydedilir.
+- Diyelim ki kalemlerin toplamı fişteki toplamı tutmuyor. Kaydedildiğinde bir uyarı görürüm.
+- Diyelim ki hiçbir LLM sağlayıcısı ayarlı değil. Sayfayı açtığımda fiş okumanın kapalı olduğu
+  yazar ve API 503 döner.
+- Kanıt: `POST /receipts`, sayfa `/receipts`,
+  `tests/test_agents_offline.py::test_receipt_upload_saves_expense_via_agent` (senaryolu sahte
+  model), `tests/test_live.py::test_live_receipt_image` (yalnızca canlı).
+- Eksik: Ollama'da (`qwen3-vl:8b`) canlı olarak geçti. Gemini'de hiç çalışmadı, yani
+  `gemini-3.5-flash-lite` ile fiş okuma doğrulanmadı.
 
-### US-CAPTURE-03 Tell the chat about a purchase
+### US-CAPTURE-03 Alışverişi sohbete yaz
 
-As Elif, I want to write "Bugün Migros'ta 245,90 TL harcadım" so that the expense is saved
-from one sentence.
+Elif olarak, "Bugün Migros'ta 245,90 TL harcadım" yazmak istiyorum, böylece harcama tek bir
+cümleyle kaydedilir.
 
-- Sprint 1 · **Partial** · Owner: Agents 1
-- Given I send that message, when the coordinator routes it, then the receipt agent calls
-  `save_expense` and the answer confirms the amount in Turkish.
-- Given I ask "son harcamalarım neler?", then the receipt agent lists my latest expenses.
-- Evidence: `POST /chat`, page `/chat`, `app/agents/tools/receipt_tools.py`, eval case
-  `route-receipt-tr` in `backend/evals/cases.jsonl` (passed on Ollama, `evals/latest.md`).
-- Gap: not verified on Gemini.
+- Sprint 1 · **Kısmen** · Sahip: Agents 1 · Yapan: Berke
+- Diyelim ki bu mesajı gönderdim. Coordinator mesajı yönlendirdiğinde, fiş ajanı
+  `save_expense` aracını çağırır ve cevap tutarı Türkçe olarak onaylar.
+- Diyelim ki "son harcamalarım neler?" diye sordum. Fiş ajanı son harcamalarımı listeler.
+- Kanıt: `POST /chat`, sayfa `/chat`, `app/agents/tools/receipt_tools.py`,
+  `backend/evals/cases.jsonl` içindeki `route-receipt-tr` eval vakası (Ollama'da geçti,
+  `evals/latest.md`).
+- Eksik: Gemini'de doğrulanmadı.
 
-### US-CAPTURE-04 Pay in another currency
+### US-CAPTURE-04 Başka para biriminde öde
 
-As Elif, I want to enter a purchase in USD or EUR so that it is converted to TL with the
-official TCMB rate of that day.
+Elif olarak, USD ya da EUR ile yaptığım bir alışverişi girmek istiyorum, böylece o günün resmi
+TCMB kuruyla TL'ye çevrilir.
 
-- Sprint 3 · **Done** · Owner: Agents 1 (MONEY track), Backend
-- Given I add 15.00 USD, when I save, then the total is stored in TRY with the original
-  amount, the rate and the bulletin date, and I see "Converted 15.00 USD to ... TRY at TCMB
-  rate ... (date)".
-- Given the day is a weekend or a holiday, when I save, then the latest earlier bulletin is
-  used. Given TCMB cannot be reached, then a cached rate from the last 7 days is used, or the
-  save is refused with a clear message.
-- Given a house uses EUR, when a bill is added in TRY, then it is converted to EUR before it
-  is split.
-- Evidence: `POST /expenses`, `GET /fx/rates`, `GET /fx/convert`, page `/expenses`,
+- Sprint 3 · **Bitti** · Sahip: Agents 1 (MONEY track'i), Backend · Yapan: Berke
+- Diyelim ki 15.00 USD ekledim. Kaydettiğimde, toplam TRY olarak saklanır; asıl tutar, kur ve
+  bülten tarihi de saklanır. Ekranda "Converted 15.00 USD to ... TRY at TCMB rate ... (date)"
+  mesajını görürüm.
+- Diyelim ki gün hafta sonu ya da tatil. Kaydettiğimde ondan önceki en son bülten kullanılır.
+  TCMB'ye ulaşılamıyorsa son 7 günden önbellekteki bir kur kullanılır, o da yoksa kayıt anlaşılır
+  bir mesajla reddedilir.
+- Diyelim ki bir ev EUR kullanıyor. TRY ile bir fatura eklendiğinde, bölünmeden önce EUR'ya
+  çevrilir.
+- Kanıt: `POST /expenses`, `GET /fx/rates`, `GET /fx/convert`, sayfa `/expenses`,
   `tests/test_foundation_api.py::test_foreign_currency_expense_is_converted_with_a_warning`,
   `tests/test_money_fx.py::test_foreign_expense_through_the_api_and_a_house_in_euros`,
   `tests/test_money_fx.py::test_holiday_walks_back_and_remembers_the_missing_day`.
 
-### US-CAPTURE-05 Fix or delete an expense
+### US-CAPTURE-05 Harcamayı düzelt ya da sil
 
-As Elif, I want to change the merchant, category, date or note of an expense, or delete it, so
-that mistakes do not stay in my numbers.
+Elif olarak, bir harcamanın mağazasını, kategorisini, tarihini ya da notunu değiştirmek ya da
+onu silmek istiyorum, böylece hatalar rakamlarımda kalmaz.
 
-- Sprint 4 · **Done** · Owner: Backend, Frontend
-- Given my own expense, when I edit the category, then only that field changes. Amounts cannot
-  be edited; I delete and add again.
-- Given a house bill, when I try to delete it from my expense list, then I get 409 and a
-  pointer to the house endpoint, so balances stay right.
-- Given someone else's expense id, when I edit or delete it, then I get 404.
-- Evidence: `PATCH /expenses/{id}`, `DELETE /expenses/{id}`, page `/expenses`,
+- Sprint 4 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki kendi harcamamın kategorisini düzenliyorum. Yalnızca o alan değişir. Tutar
+  düzenlenemez; silip yeniden eklerim.
+- Diyelim ki bir ev faturası var. Onu kendi harcama listemden silmeye çalıştığımda 409 alırım ve
+  cevap beni ev endpoint'ine yönlendirir, böylece bakiyeler doğru kalır.
+- Diyelim ki başkasının harcama id'sini kullanıyorum. Düzenlemeye ya da silmeye çalıştığımda 404
+  alırım.
+- Kanıt: `PATCH /expenses/{id}`, `DELETE /expenses/{id}`, sayfa `/expenses`,
   `tests/test_expenses_api.py` (`test_patch_changes_only_the_given_fields`,
   `test_house_expense_is_409_and_points_to_the_house_endpoint`, `test_others_get_404`).
 
-### US-CAPTURE-06 Filter my expenses
+### US-CAPTURE-06 Harcamalarımı filtrele
 
-As Elif, I want to filter by month, category, source and personal or house so that I can find
-one purchase quickly.
+Elif olarak, aya, kategoriye, kaynağa ve kişisel ya da ev harcaması olmasına göre filtrelemek
+istiyorum, böylece bir alışverişi hızlıca bulurum.
 
-- Sprint 4 · **Done** · Owner: Backend, Frontend
-- Given 150 expenses, when I filter by "2026-10" and "food", then only those come back, newest
-  first, and the total count is in the `X-Total-Count` header for paging.
-- Evidence: `GET /expenses?month=&category=&source=&scope=&limit=&offset=`, page `/expenses`,
+- Sprint 4 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki 150 harcamam var. "2026-10" ve "food" ile filtrelediğimde yalnızca bunlar gelir, en
+  yenisi en üstte. Sayfalama için toplam sayı `X-Total-Count` header'ında döner.
+- Kanıt: `GET /expenses?month=&category=&source=&scope=&limit=&offset=`, sayfa `/expenses`,
   `tests/test_expenses_api.py::test_month_category_source_and_scope`,
   `tests/test_expenses_api.py::test_paging_keeps_the_total`.
 
-## Epic: personal budgets
+## Epik: kişisel bütçeler
 
-### US-BUDGET-01 Set a monthly budget
+### US-BUDGET-01 Aylık bütçe koy
 
-As Elif, I want a monthly limit per category, or overall, so that I know how much is left.
+Elif olarak, kategori başına ya da genel bir aylık limit koymak istiyorum, böylece ne kadar
+kaldığını bilirim.
 
-- Sprint 3 · **Done** · Owner: Agents 1 (MONEY track), Frontend
-- Given I set groceries to 3000 TL, when I set it again to 3500 TL, then the same budget is
-  updated (one per category).
-- Given I write "Ulaşım için aylık 1500 TL bütçe koy" in the chat, then the budget agent sets
-  it for me.
-- Evidence: `GET /budgets`, `PUT /budgets`, `DELETE /budgets/{id}`, `GET /budgets/status`,
-  page `/budgets`, `tests/test_money_budgets.py::test_set_budget_upserts_and_normalises`,
+- Sprint 3 · **Bitti** · Sahip: Agents 1 (MONEY track'i), Frontend · Yapan: Berke
+- Diyelim ki market bütçesini 3000 TL yaptım. Tekrar 3500 TL yaptığımda aynı bütçe güncellenir
+  (her kategori için bir bütçe).
+- Diyelim ki sohbete "Ulaşım için aylık 1500 TL bütçe koy" yazdım. Bütçe ajanı bütçeyi benim
+  için koyar.
+- Kanıt: `GET /budgets`, `PUT /budgets`, `DELETE /budgets/{id}`, `GET /budgets/status`,
+  sayfa `/budgets`, `tests/test_money_budgets.py::test_set_budget_upserts_and_normalises`,
   `tests/test_money_budgets.py::test_budget_api`,
   `tests/test_money_tools.py::test_set_budget_and_status_tools`.
 
-### US-BUDGET-02 Warn me when a budget is close or exceeded
+### US-BUDGET-02 Bütçe dolmak üzereyken ya da aşıldığında uyar
 
-As Elif, I want a warning when an expense takes a budget past 80% or over the limit so that I
-can slow down in time.
+Elif olarak, bir harcama bütçeyi %80'in üstüne ya da limitin üstüne çıkardığında uyarı almak
+istiyorum, böylece zamanında yavaşlayabilirim.
 
-- Sprint 3 · **Done** · Owner: Agents 1, Backend
-- Given entertainment is at 84% of 1200 TL, when I add a 15 USD purchase in entertainment,
-  then the response says the entertainment budget is exceeded, with the amounts.
-- Given a budget is already at "warning", when I add a small expense that keeps it there,
-  then I am not warned again.
-- Given I pay a house bill for three people, then only my share counts toward my budget.
-- Evidence: `POST /expenses` (warnings), dashboard budget meters,
+- Sprint 3 · **Bitti** · Sahip: Agents 1, Backend · Yapan: Berke
+- Diyelim ki eğlence bütçesi 1200 TL'nin %84'ünde. Eğlence kategorisinde 15 USD'lik bir alışveriş
+  eklediğimde, cevap eğlence bütçesinin aşıldığını tutarlarla birlikte söyler.
+- Diyelim ki bir bütçe zaten "warning" seviyesinde. Onu aynı seviyede tutan küçük bir harcama
+  eklediğimde tekrar uyarılmam.
+- Diyelim ki üç kişilik bir ev faturasını ben ödedim. Bütçeme yalnızca kendi payım sayılır.
+- Kanıt: `POST /expenses` (uyarılar), dashboard'daki bütçe göstergeleri,
   `tests/test_money_budgets.py::test_alerts_only_when_crossing_a_level`,
   `tests/test_money_budgets.py::test_status_counts_personal_and_own_house_shares_only`,
   `tests/test_integration.py::test_house_bill_warns_on_payers_share_only`.
 
-### US-BUDGET-03 See my month at a glance
+### US-BUDGET-03 Ayımı tek bakışta gör
 
-As Elif, I want one page with this month's total, the categories, a six month trend, budgets,
-house balances and upcoming charges so that I do not have to ask.
+Elif olarak, bu ayın toplamını, kategorileri, altı aylık eğilimi, bütçeleri, ev bakiyelerini ve
+yaklaşan ödemeleri tek sayfada görmek istiyorum, böylece sormama gerek kalmaz.
 
-- Sprint 3 · **Done** · Owner: Agents 1 (MONEY track), Frontend
-- Given I have expenses, when I open the dashboard, then I see the total, the change from last
-  month, bars per category and a line for six months.
-- Given items wait in the inbox, then a banner links to the inbox.
-- Evidence: `GET /dashboard`, page `/`, `tests/test_money_dashboard.py`.
+- Sprint 3 · **Bitti** · Sahip: Agents 1 (MONEY track'i), Frontend · Yapan: Berke
+- Diyelim ki harcamalarım var. Dashboard'u açtığımda toplamı, geçen aya göre değişimi, kategori
+  başına çubukları ve altı aylık bir çizgiyi görürüm.
+- Diyelim ki gelen kutusunda bekleyen kalemler var. Bir banner gelen kutusuna link verir.
+- Kanıt: `GET /dashboard`, sayfa `/`, `tests/test_money_dashboard.py`.
 
-### US-BUDGET-04 Find my subscriptions
+### US-BUDGET-04 Aboneliklerimi bul
 
-As Elif, I want Kasa to find my monthly charges (Netflix, Spotify) so that I see what I pay
-every month and what is due soon.
+Elif olarak, Kasa'nın aylık ödemelerimi (Netflix, Spotify) bulmasını istiyorum, böylece her ay
+neye para verdiğimi ve neyin yakında çekileceğini görürüm.
 
-- Sprint 3 · **Done** · Owner: Agents 1 (MONEY track), Frontend
-- Given three monthly Netflix charges of 229.99 TL, when detection runs, then a monthly
-  "Netflix" subscription appears with the next expected date.
-- Given I buy groceries every month, then that is not a subscription.
-- Given I dismiss a subscription, then it never comes back.
-- Evidence: `GET /subscriptions`, `POST /subscriptions/detect`, `GET /subscriptions/upcoming`,
-  `POST /subscriptions/{id}/dismiss`, page `/subscriptions`, `tests/test_money_subscriptions.py`,
+- Sprint 3 · **Bitti** · Sahip: Agents 1 (MONEY track'i), Frontend · Yapan: Berke
+- Diyelim ki üç ay boyunca 229.99 TL'lik Netflix ödemesi var. Tespit çalıştığında, bir sonraki
+  beklenen tarihiyle aylık bir "Netflix" aboneliği görünür.
+- Diyelim ki her ay market alışverişi yapıyorum. Bu bir abonelik sayılmaz.
+- Diyelim ki bir aboneliği kapattım (dismiss). Bir daha geri gelmez.
+- Kanıt: `GET /subscriptions`, `POST /subscriptions/detect`, `GET /subscriptions/upcoming`,
+  `POST /subscriptions/{id}/dismiss`, sayfa `/subscriptions`, `tests/test_money_subscriptions.py`,
   `tests/test_integration.py::test_monthly_groceries_are_not_subscriptions`.
 
-### US-BUDGET-05 Ask about budgets, subscriptions and rates in chat
+### US-BUDGET-05 Bütçe, abonelik ve kurları sohbette sor
 
-As Elif, I want to ask "Am I over any budget?", "Spotify aboneliğim ne kadar tutuyor?" or "100
-dolar kaç TL?" so that I get the answer without opening pages.
+Elif olarak, "Am I over any budget?", "Spotify aboneliğim ne kadar tutuyor?" ya da "100 dolar kaç
+TL?" diye sormak istiyorum, böylece sayfa açmadan cevabı alırım.
 
-- Sprint 3 · **Partial** · Owner: Agents 1
-- Given I ask one of these, then the coordinator sends it to the budget agent and the answer
-  quotes amounts from its tools.
-- Evidence: `POST /chat`, `app/agents/budget_agent.py`, `app/agents/tools/budget_tools.py`,
+- Sprint 3 · **Kısmen** · Sahip: Agents 1 · Yapan: Berke
+- Diyelim ki bunlardan birini sordum. Coordinator soruyu bütçe ajanına gönderir ve cevaptaki
+  tutarlar ajanın araçlarından gelir.
+- Kanıt: `POST /chat`, `app/agents/budget_agent.py`, `app/agents/tools/budget_tools.py`,
   `tests/test_money_tools.py::test_chat_routes_to_budget_agent_and_saves_for_the_caller`,
-  eval cases `route-budget-set-tr` and `route-subscriptions-en`.
-- Gap: on Ollama, `route-subscriptions-en` answered an English question in Turkish
-  (`evals/latest.md`). Not verified on Gemini.
+  `route-budget-set-tr` ve `route-subscriptions-en` eval vakaları.
+- Eksik: Ollama'da `route-subscriptions-en` İngilizce bir soruya Türkçe cevap verdi
+  (`evals/latest.md`). Gemini'de doğrulanmadı.
 
-## Epic: shared houses
+## Epik: ortak evler
 
-### US-HOUSE-01 Create a house and add flatmates
+### US-HOUSE-01 Ev oluştur, ev arkadaşlarını ekle
 
-As Deniz, I want to create "Moda evi" and add Ali and Ayşe so that we can share bills.
+Deniz olarak, "Moda evi"ni oluşturup Ali ile Ayşe'yi eklemek istiyorum, böylece faturaları
+paylaşabiliriz.
 
-- Sprint 1 · **Done** · Owner: Agents 2 (HOUSE track), Backend, Frontend
-- Given I create a house, then I am its first member. Given I add "ayse", then she is a
-  member and sees the house when she signs in.
-- Given someone who is not a member asks for the house, then they get 404 (house ids cannot be
-  probed).
-- Evidence: `POST /houses`, `GET /houses`, `POST /houses/{id}/members`, page `/houses`
-  (Members tab), `tests/test_api.py::test_house_access_is_members_only`.
+- Sprint 1 · **Bitti** · Sahip: Agents 2 (HOUSE track'i), Backend, Frontend · Yapan: Berke
+- Diyelim ki bir ev oluşturdum. Evin ilk üyesi ben olurum. "ayse"yi eklediğimde üye olur ve giriş
+  yaptığında evi görür.
+- Diyelim ki üye olmayan biri evi istiyor. 404 alır (ev id'leri yoklanarak bulunamaz).
+- Kanıt: `POST /houses`, `GET /houses`, `POST /houses/{id}/members`, sayfa `/houses`
+  (Members sekmesi), `tests/test_api.py::test_house_access_is_members_only`.
 
-### US-HOUSE-02 Invite a flatmate with a link
+### US-HOUSE-02 Ev arkadaşını linkle davet et
 
-As Deniz, I want to send an invite link that Ali accepts so that nobody is added to a house
-without saying yes.
+Deniz olarak, Ali'nin kabul edeceği bir davet linki göndermek istiyorum, böylece kimse "evet"
+demeden bir eve eklenmez.
 
-- Sprint 4 · **Not started** · Owner: Backend, Frontend
-- Given I create an invite, when Ali opens the link while signed in, then he joins the house.
-- Given nobody accepts, then nobody is added.
-- Today any member can add any user id (`app/services/houses.py`, `add_member`: "Later: invite
-  links + Firebase accounts").
+- Sprint 4 · **Başlanmadı** · Sahip: Backend, Frontend
+- Diyelim ki bir davet oluşturdum. Ali giriş yapmışken linki açtığında eve katılır.
+- Diyelim ki kimse kabul etmedi. Kimse eklenmez.
+- Bugün herhangi bir üye herhangi bir kullanıcı id'sini ekleyebiliyor (`app/services/houses.py`,
+  `add_member`: "Later: invite links + Firebase accounts").
 
-### US-HOUSE-03 Split a bill equally
+### US-HOUSE-03 Faturayı eşit böl
 
-As Deniz, I want to split the internet bill equally so that everyone pays the same.
+Deniz olarak, internet faturasını eşit bölmek istiyorum, böylece herkes aynı tutarı öder.
 
-- Sprint 1 · **Done** · Owner: Agents 2
-- Given a 100.00 TL bill for three people, when it is saved, then the shares are 33.34,
-  33.33 and 33.33 and always add up to the total.
-- Given I choose only two of the three people, then only they share it.
-- Evidence: `POST /houses/{id}/expenses`, page `/houses` (Add expense, Equal),
+- Sprint 1 · **Bitti** · Sahip: Agents 2 · Yapan: Berke
+- Diyelim ki üç kişi için 100.00 TL'lik bir fatura var. Kaydedildiğinde paylar 33.34, 33.33 ve
+  33.33 olur ve toplamları her zaman faturayı tutar.
+- Diyelim ki üç kişiden yalnızca ikisini seçtim. Faturayı yalnızca o ikisi paylaşır.
+- Kanıt: `POST /houses/{id}/expenses`, sayfa `/houses` (Add expense, Equal),
   `tests/test_settlement.py`, `tests/test_api.py::test_house_equal_split_balances_and_settle_up`.
 
-### US-HOUSE-04 Split by percent, exact amounts or per item
+### US-HOUSE-04 Yüzdeyle, tutarla ya da kalem kalem böl
 
-As Deniz, I want to split electricity 40/30/30 by room size, groceries by exact amounts, or a
-Migros receipt by who had which line so that splits are fair.
+Deniz olarak, elektriği oda büyüklüğüne göre 40/30/30, marketi kesin tutarlarla ya da bir Migros
+fişini kimin hangi kalemi aldığına göre bölmek istiyorum, böylece bölüşüm adil olur.
 
-- Sprint 2 · **Done** · Owner: Agents 2, Frontend
-- Given percents that add up to 100, when I save, then each share is that percent of the total
-  and the shares add up exactly. Given percents that add up to 90, then I get an error.
-- Given exact amounts that do not add up to the total, then the error says how much is
-  missing or too much.
-- Given per item lines with people ticked, then each line is shared by its people, and tax or
-  a discount is spread in proportion.
-- Evidence: `POST /houses/{id}/expenses/split`, page `/houses` (Add expense),
+- Sprint 2 · **Bitti** · Sahip: Agents 2, Frontend · Yapan: Berke
+- Diyelim ki toplamı 100 olan yüzdeler girdim. Kaydettiğimde her pay toplamın o yüzdesi olur ve
+  paylar tam olarak toplamı tutar. Yüzdelerin toplamı 90 ise hata alırım.
+- Diyelim ki girdiğim kesin tutarlar toplamı tutmuyor. Hata mesajı ne kadar eksik ya da fazla
+  olduğunu söyler.
+- Diyelim ki kalem kalem bölüşümde her satırda kişileri işaretledim. Her satırı işaretli kişiler
+  paylaşır; vergi ya da indirim de orantılı olarak dağıtılır.
+- Kanıt: `POST /houses/{id}/expenses/split`, sayfa `/houses` (Add expense),
   `tests/test_house_api.py` (`test_percent_split`, `test_exact_split_and_paid_by`,
   `test_items_split_stores_assignees_and_lists_them`), `tests/test_house_splits.py`.
 
-### US-HOUSE-05 See who owes whom
+### US-HOUSE-05 Kimin kime borçlu olduğunu gör
 
-As Ali, I want to see my balance and the transfers that settle the house so that I know whom
-to pay and how much.
+Ali olarak, bakiyemi ve evdeki hesabı kapatacak havaleleri görmek istiyorum, böylece kime ne
+kadar ödeyeceğimi bilirim.
 
-- Sprint 1 · **Done** · Owner: Agents 2, Frontend
-- Given the bills and payments of the house, when I open Balances, then every member's net
-  balance is shown and the balances add up to zero.
-- Given any group of n people, then settle-up suggests at most n - 1 transfers.
-- Evidence: `GET /houses/{id}/balances`, page `/houses` (Balances), dashboard "House
+- Sprint 1 · **Bitti** · Sahip: Agents 2, Frontend · Yapan: Berke
+- Diyelim ki evin faturaları ve ödemeleri var. Balances sekmesini açtığımda her üyenin net
+  bakiyesi görünür ve bakiyelerin toplamı sıfırdır.
+- Diyelim ki n kişilik bir grup var. Hesaplaşma en fazla n - 1 havale önerir.
+- Kanıt: `GET /houses/{id}/balances`, sayfa `/houses` (Balances), dashboard'daki "House
   balances", `tests/test_settlement.py::test_random_groups_settle_exactly_with_at_most_n_minus_1_transfers`.
 
-### US-HOUSE-06 Record a payment between flatmates
+### US-HOUSE-06 Ev arkadaşları arasındaki ödemeyi kaydet
 
-As Deniz, I want to record "Ali paid me 6000 TL" so that the balances go down.
+Deniz olarak, "Ali bana 6000 TL ödedi" diye kaydetmek istiyorum, böylece bakiyeler düşer.
 
-- Sprint 2 · **Done** · Owner: Agents 2, Frontend
-- Given Ali owes me 6128.33 TL, when I record 6000 TL from Ali to me, then he owes 128.33 TL.
-- Given I type 60000 by mistake, then the payment is refused and the message names the largest
-  amount that fits, unless I tick "advance or loan".
-- Given I recorded a payment, then only I can undo it.
-- Evidence: `POST /houses/{id}/settlements`, `GET /houses/{id}/settlements`,
-  `DELETE /houses/{id}/settlements/{id}`, page `/houses` (Balances, Payments),
+- Sprint 2 · **Bitti** · Sahip: Agents 2, Frontend · Yapan: Berke
+- Diyelim ki Ali bana 6128.33 TL borçlu. Ali'den bana 6000 TL kaydettiğimde, borcu 128.33 TL
+  olur.
+- Diyelim ki yanlışlıkla 60000 yazdım. Ödeme reddedilir ve mesaj sığabilecek en büyük tutarı
+  söyler. "advance or loan" kutusunu işaretlersem kabul edilir.
+- Diyelim ki bir ödeme kaydettim. Onu yalnızca ben geri alabilirim.
+- Kanıt: `POST /houses/{id}/settlements`, `GET /houses/{id}/settlements`,
+  `DELETE /houses/{id}/settlements/{id}`, sayfa `/houses` (Balances, Payments),
   `tests/test_house_api.py::test_overpayment_is_refused_unless_allowed`,
   `tests/test_house_api.py::test_delete_payment_by_creator_only`,
   `tests/test_foundation_api.py::test_recorded_payments_reduce_balances`.
 
-### US-HOUSE-07 Remind everyone to settle up
+### US-HOUSE-07 Herkese hesaplaşmayı hatırlat
 
-As Deniz, I want reminders with a due date, also in Google Calendar, so that I do not have to
-chase people.
+Deniz olarak, son tarihi olan ve Google Calendar'a da düşen hatırlatmalar istiyorum, böylece
+kimsenin peşinden koşmam gerekmez.
 
-- Sprint 3 · **Partial** · Owner: Agents 2
-- Given open transfers, when I create reminders for a date, then one reminder per transfer is
-  saved. Given a connected Google account, then each becomes an all day Calendar event with
-  both flatmates invited.
-- Given the balances change, when I create reminders again, then old ones are cancelled as
-  "outdated".
-- Evidence: `POST /houses/{id}/reminders`, `GET /houses/{id}/reminders`,
-  `PATCH /houses/{id}/reminders/{id}`, page `/houses` (Reminders),
+- Sprint 3 · **Kısmen** · Sahip: Agents 2 · Yapan: Berke
+- Diyelim ki açık havaleler var. Bir tarih için hatırlatma oluşturduğumda her havale için bir
+  hatırlatma kaydedilir. Bağlı bir Google hesabı varsa her biri iki ev arkadaşının da davetli
+  olduğu tüm günlük bir Calendar etkinliği olur.
+- Diyelim ki bakiyeler değişti. Hatırlatmaları tekrar oluşturduğumda eskiler "outdated" olarak
+  iptal edilir.
+- Kanıt: `POST /houses/{id}/reminders`, `GET /houses/{id}/reminders`,
+  `PATCH /houses/{id}/reminders/{id}`, sayfa `/houses` (Reminders),
   `tests/test_house_reminders.py`.
-- Gap: Calendar calls are tested with fakes only. They have never run against Google, because
-  no OAuth client is set up.
+- Eksik: Calendar çağrıları yalnızca sahte servislerle test edildi. Ortada bir OAuth client
+  olmadığı için gerçek Google'a karşı hiç çalışmadılar.
 
-### US-HOUSE-08 Leave a house, remove a member, delete a bill
+### US-HOUSE-08 Evden ayrıl, üyeyi çıkar, faturayı sil
 
-As Ali, I want to leave the house when I move out, and as the payer, delete a wrong bill, so
-that the house stays correct.
+Ali olarak, taşındığımda evden ayrılmak, faturayı ödeyen kişi olarak da yanlış bir faturayı
+silmek istiyorum, böylece evin hesabı doğru kalır.
 
-- Sprint 4 · **Done** · Owner: Agents 2, Frontend
-- Given my balance is zero, when I leave, then I am removed and past bills stay. Given it is
-  not zero, then I get 409 with the amount to settle first. The last member cannot leave.
-- Given I paid a bill, when I delete it, then its shares go and balances follow. Others get 403.
-- Evidence: `DELETE /houses/{id}/members/{user_id}`, `DELETE /houses/{id}/expenses/{id}`,
-  page `/houses` (Members, Expenses), `tests/test_house_members.py`.
+- Sprint 4 · **Bitti** · Sahip: Agents 2, Frontend · Yapan: Berke
+- Diyelim ki bakiyem sıfır. Ayrıldığımda evden çıkarılırım ve geçmiş faturalar yerinde kalır.
+  Bakiyem sıfır değilse önce kapatmam gereken tutarla birlikte 409 alırım. Son üye evden
+  ayrılamaz.
+- Diyelim ki bir faturayı ben ödedim. Sildiğimde payları da silinir ve bakiyeler buna göre
+  değişir. Diğerleri 403 alır.
+- Kanıt: `DELETE /houses/{id}/members/{user_id}`, `DELETE /houses/{id}/expenses/{id}`,
+  sayfa `/houses` (Members, Expenses), `tests/test_house_members.py`.
 
-### US-HOUSE-09 Run the house from the chat
+### US-HOUSE-09 Evi sohbetten yönet
 
-As Deniz, I want to write "Evdeki 300 TL'lik su faturasını ben ödedim, 3 kişi arasında eşit
-bölüştür" or "Ayşe bana 150 TL ödedi" so that I do not fill in forms.
+Deniz olarak, "Evdeki 300 TL'lik su faturasını ben ödedim, 3 kişi arasında eşit bölüştür" ya da
+"Ayşe bana 150 TL ödedi" yazmak istiyorum, böylece form doldurmam.
 
-- Sprint 2 · **Partial** · Owner: Agents 2
-- Given that message, then the house agent finds my house, splits the bill or records the
-  payment with tools and confirms in Turkish. Names like "Ayşe" are matched to members.
-- Evidence: `POST /chat`, `app/agents/house_agent.py`, `app/agents/tools/house_tools.py`,
-  `tests/test_house_tools.py`, `tests/test_live.py::test_live_chat_house_equal_split` (live
-  only), eval cases `route-house-split-tr` and `route-house-balance-tr`.
-- Gap: passed on Ollama, not verified on Gemini.
+- Sprint 2 · **Kısmen** · Sahip: Agents 2 · Yapan: Berke
+- Diyelim ki bu mesajı yazdım. Ev ajanı evimi bulur, araçlarla faturayı böler ya da ödemeyi
+  kaydeder ve Türkçe onaylar. "Ayşe" gibi isimler üyelerle eşleştirilir.
+- Kanıt: `POST /chat`, `app/agents/house_agent.py`, `app/agents/tools/house_tools.py`,
+  `tests/test_house_tools.py`, `tests/test_live.py::test_live_chat_house_equal_split` (yalnızca
+  canlı), `route-house-split-tr` ve `route-house-balance-tr` eval vakaları.
+- Eksik: Ollama'da geçti, Gemini'de doğrulanmadı.
 
-## Epic: ask in plain language
+## Epik: düz dille sor
 
-### US-ASK-01 Ask about my spending and get a chart
+### US-ASK-01 Harcamalarımı sor, grafik al
 
-As Elif, I want to ask "Bu ay kategoriye göre ne kadar harcadım? Grafik çiz" so that I get the
-numbers and a chart.
+Elif olarak, "Bu ay kategoriye göre ne kadar harcadım? Grafik çiz" diye sormak istiyorum,
+böylece hem rakamları hem de bir grafik alırım.
 
-- Sprint 1 · **Partial** · Owner: Agents 3 / QA (report agent), Frontend (chart)
-- Given my expenses, when I ask that, then the report agent writes one SELECT, the guard and
-  the checker pass it, and the answer comes back with a bar chart that the chat page draws.
-- Given I ask for a trend, then I get a line chart. Given a plain list, then a table.
-- Evidence: `POST /chat` (`chart` in the response), page `/chat`,
+- Sprint 1 · **Kısmen** · Sahip: Agents 3 / QA (rapor ajanı), Frontend (grafik) · Yapan: Berke
+- Diyelim ki harcamalarım var. Bunu sorduğumda rapor ajanı tek bir SELECT yazar, guard ve
+  checker onu onaylar, cevap da sohbet sayfasının çizdiği bir çubuk grafikle gelir.
+- Diyelim ki bir eğilim sordum. Çizgi grafik alırım. Düz bir liste istersem tablo alırım.
+- Kanıt: `POST /chat` (cevaptaki `chart`), sayfa `/chat`,
   `tests/test_agents_offline.py::test_chat_routes_to_report_agent_and_returns_chart`,
-  `tests/test_reports.py`, `tests/test_report_guard.py`, eval cases `report-*` (6 of 6 passed
-  on Ollama).
-- Gap: not verified on Gemini.
+  `tests/test_reports.py`, `tests/test_report_guard.py`, `report-*` eval vakaları (Ollama'da 6
+  vakanın 6'sı geçti).
+- Eksik: Gemini'de doğrulanmadı.
 
-### US-ASK-02 Totals count only my share of house bills
+### US-ASK-02 Toplamlar ev faturalarında yalnızca benim payımı sayar
 
-As Deniz, I want "how much did I spend" to count my share of the rent, not the whole rent I
-paid, so that the chat, the dashboard and the budgets give the same number.
+Deniz olarak, "ne kadar harcadım" sorusunun ödediğim kiranın tamamını değil, kiradaki payımı
+saymasını istiyorum, böylece sohbet, dashboard ve bütçeler aynı rakamı verir.
 
-- Sprint 4 · **Done** · Owner: Agents 3 / QA
-- Given I paid 18000 TL rent for three people, when I ask how much I spent this month, then
-  6000 TL of it counts.
-- Given the model sums whole house bills, then the guard sends the query back for a rewrite.
-- Evidence: relation `my_spending` in `app/services/reports.py`,
+- Sprint 4 · **Bitti** · Sahip: Agents 3 / QA · Yapan: Berke
+- Diyelim ki üç kişi için 18000 TL kira ödedim. Bu ay ne kadar harcadığımı sorduğumda bunun
+  6000 TL'si sayılır.
+- Diyelim ki model ev faturalarının tamamını topluyor. Guard sorguyu yeniden yazılması için geri
+  gönderir.
+- Kanıt: `app/services/reports.py` içindeki `my_spending` ilişkisi,
   `tests/test_integration.py::test_my_spending_matches_dashboard_and_blocks_double_counting`,
   `tests/test_report_guard.py` (`test_house_shares_use_my_share_not_the_bill`).
 
-### US-ASK-03 A second agent checks every query
+### US-ASK-03 Her sorguyu ikinci bir ajan kontrol eder
 
-As the product owner, I want a checker agent to compare each query with the question so that
-wrong months or wrong filters are fixed before the answer is shown.
+Product owner olarak, bir checker ajanının her sorguyu soruyla karşılaştırmasını istiyorum,
+böylece yanlış ay ya da yanlış filtre cevap gösterilmeden düzeltilir.
 
-- Sprint 4 · **Done** · Owner: Agents 3 / QA
-- Given a query that does not match the question, then the checker answers "revise" with a
-  reason, and the report agent fixes it (at most twice).
-- Given the checker fails or times out, then the query runs on the static guard alone and the
-  result says so.
-- Evidence: `app/agents/checker_agent.py`, `app/agents/tools/report_tools.py`,
+- Sprint 4 · **Bitti** · Sahip: Agents 3 / QA · Yapan: Berke
+- Diyelim ki bir sorgu soruyla uyuşmuyor. Checker gerekçesiyle birlikte "revise" der ve rapor
+  ajanı sorguyu düzeltir (en fazla iki kez).
+- Diyelim ki checker hata verdi ya da zaman aşımına uğradı. Sorgu yalnızca statik guard ile
+  çalışır ve sonuç bunu belirtir.
+- Kanıt: `app/agents/checker_agent.py`, `app/agents/tools/report_tools.py`,
   `tests/test_report_checker.py`.
 
-### US-ASK-04 The chat answers in my language
+### US-ASK-04 Sohbet benim dilimde cevap verir
 
-As Elif, I want an English question to get an English answer and a Turkish one a Turkish
-answer.
+Elif olarak, İngilizce soruya İngilizce, Türkçe soruya Türkçe cevap almak istiyorum.
 
-- Sprint 4 · **Partial** · Owner: Agents 1 (coordinator), Agents 3 / QA (evals)
-- Given "How much did I spend on groceries last month?", then the answer is in English.
-- Evidence: `app/agents/language.py`, `tests/test_integration.py::test_reply_language_detection`,
-  the `lang` check in `evals/run_evals.py`.
-- Gap: one of six routing cases failed the language check on Ollama. Not measured on Gemini.
+- Sprint 4 · **Kısmen** · Sahip: Agents 1 (coordinator), Agents 3 / QA (eval'ler) · Yapan: Berke
+- Diyelim ki "How much did I spend on groceries last month?" diye sordum. Cevap İngilizce gelir.
+- Kanıt: `app/agents/language.py`, `tests/test_integration.py::test_reply_language_detection`,
+  `evals/run_evals.py` içindeki `lang` kontrolü.
+- Eksik: Ollama'da altı yönlendirme vakasından biri dil kontrolünü geçemedi. Gemini'de
+  ölçülmedi.
 
-### US-ASK-05 The right specialist answers
+### US-ASK-05 Doğru uzman ajan cevap verir
 
-As any user, I want each message to reach the agent that can handle it (receipt, house,
-report, budget, inbox) so that I can ask anything in one chat.
+Herhangi bir kullanıcı olarak, her mesajın onu işleyebilecek ajana (fiş, ev, rapor, bütçe,
+gelen kutusu) gitmesini istiyorum, böylece her şeyi tek bir sohbette sorabilirim.
 
-- Sprint 1 · **Partial** · Owner: Agents 1 (coordinator), Agents 3 / QA (evals)
-- Given a payment between flatmates ("Ali'ye 200 TL gönderdim"), then it goes to the house
-  agent, never to the receipt agent.
-- Evidence: `app/agents/coordinator.py`, `tests/test_agents_offline.py::test_every_runner_kind_builds`,
-  eval cases `route-*` (5 of 6 passed on Ollama; the failure was the reply language).
-- Gap: not verified on Gemini.
+- Sprint 1 · **Kısmen** · Sahip: Agents 1 (coordinator), Agents 3 / QA (eval'ler) · Yapan: Berke
+- Diyelim ki ev arkadaşları arasında bir ödeme yazdım ("Ali'ye 200 TL gönderdim"). Mesaj ev
+  ajanına gider, asla fiş ajanına gitmez.
+- Kanıt: `app/agents/coordinator.py`, `tests/test_agents_offline.py::test_every_runner_kind_builds`,
+  `route-*` eval vakaları (Ollama'da 6 vakanın 5'i geçti; kalan vaka cevap dili yüzünden
+  kaldı).
+- Eksik: Gemini'de doğrulanmadı.
 
-### US-ASK-06 Kasa runs on Gemini
+### US-ASK-06 Kasa Gemini'de çalışır
 
-As the product owner, I want the agents to run on Gemini with a free AI Studio key so that the
-product works without the team's Ollama server.
+Product owner olarak, ajanların ücretsiz bir AI Studio anahtarıyla Gemini'de çalışmasını
+istiyorum, böylece ürün ekibin Ollama sunucusu olmadan da çalışır.
 
-- Sprint 4 · **Partial** · Owner: Agents 3 / QA
-- Given `LLM_PROVIDER=gemini`, a key and `GEMINI_MODEL=gemini-3.5-flash-lite`, when I run
-  `KASA_LIVE_TESTS=1 pytest -m live -s` and `python -m evals.run_evals`, then the live tests
-  pass and the evals score at least as well as on Ollama.
-- Evidence: `app/agents/common.py` (`build_model`), `app/config.py`.
-- Gap: the default model is now `gemini-3.5-flash-lite`, because new keys may not have access
-  to the 2.5 models. No live Gemini call has been made yet, receipt vision included. A separate issue
-  covers it.
+- Sprint 4 · **Kısmen** · Sahip: Agents 3 / QA · Yapan: Berke
+- Diyelim ki `LLM_PROVIDER=gemini`, bir anahtar ve `GEMINI_MODEL=gemini-3.5-flash-lite` ayarlı.
+  `KASA_LIVE_TESTS=1 pytest -m live -s` ve `python -m evals.run_evals` komutlarını
+  çalıştırdığımda canlı testler geçer ve eval puanı en az Ollama'daki kadar olur.
+- Kanıt: `app/agents/common.py` (`build_model`), `app/config.py`.
+- Eksik: varsayılan model artık `gemini-3.5-flash-lite`, çünkü yeni anahtarların 2.5 modellerine
+  erişimi olmayabilir. Fiş okuma dahil, henüz hiç canlı Gemini çağrısı yapılmadı. Bunu ayrı bir
+  issue (#4) takip ediyor.
 
-## Epic: inbox and imports
+## Epik: gelen kutusu ve içe aktarma
 
-### US-INBOX-01 Import a CSV bank statement
+### US-INBOX-01 CSV banka ekstresi yükle
 
-As Deniz, I want to upload my bank's CSV export so that every card purchase becomes an item
-to review.
+Deniz olarak, bankamın CSV dışa aktarımını yüklemek istiyorum, böylece her kart harcaması
+incelenecek bir kalem olur.
 
-- Sprint 3 · **Done** · Owner: Agents 1 (INGEST), Backend, Frontend
-- Given a Garanti style export (semicolons, Windows-1254, "1.234,56"), when I upload it, then
-  every spending line becomes a pending inbox item, and income, card payments and refunds are
-  skipped.
-- Given I upload the same file again, then nothing new is created ("Duplicates").
-- Evidence: `POST /imports/statement`, page `/import`,
+- Sprint 3 · **Bitti** · Sahip: Agents 1 (INGEST), Backend, Frontend · Yapan: Berke
+- Diyelim ki Garanti tarzı bir dosya var (noktalı virgül, Windows-1254, "1.234,56").
+  Yüklediğimde her harcama satırı bekleyen bir gelen kutusu kalemi olur. Gelirler, kart
+  ödemeleri ve iadeler atlanır.
+- Diyelim ki aynı dosyayı tekrar yükledim. Yeni bir şey oluşmaz ("Duplicates").
+- Kanıt: `POST /imports/statement`, sayfa `/import`,
   `tests/test_ingest_statements.py::test_garanti_like_cp1254_semicolon_export`,
   `tests/test_ingest_statements.py::test_csv_upload_creates_pending_items_and_dedupes`.
 
-### US-INBOX-02 Import a PDF statement
+### US-INBOX-02 PDF ekstre yükle
 
-As Deniz, I want to upload the PDF statement when my bank has no CSV.
+Deniz olarak, bankamın CSV'si olmadığında PDF ekstreyi yüklemek istiyorum.
 
-- Sprint 3 · **Partial** · Owner: Agents 1 (statement agent)
-- Given a PDF with a text layer, then the statement parser agent reads it in chunks and each
-  line becomes an inbox item. Given a scanned PDF, then I get a clear 422.
-- Evidence: `POST /imports/statement`, `app/agents/statement_agent.py`,
-  `tests/test_ingest_statements.py::test_pdf_upload_goes_through_the_statement_parser` (fake
-  runner), `tests/test_ingest_live.py::test_live_statement_pdf` (live only).
-- Gap: no recorded live run, on Ollama or Gemini.
+- Sprint 3 · **Kısmen** · Sahip: Agents 1 (ekstre ajanı) · Yapan: Berke
+- Diyelim ki PDF'te metin katmanı var. Ekstre okuma ajanı onu parça parça okur ve her satır bir
+  gelen kutusu kalemi olur. PDF taranmış bir belgeyse anlaşılır bir 422 alırım.
+- Kanıt: `POST /imports/statement`, `app/agents/statement_agent.py`,
+  `tests/test_ingest_statements.py::test_pdf_upload_goes_through_the_statement_parser` (sahte
+  runner), `tests/test_ingest_live.py::test_live_statement_pdf` (yalnızca canlı).
+- Eksik: ne Ollama'da ne Gemini'de kaydedilmiş bir canlı çalıştırma var.
 
-### US-INBOX-03 Review, fix and approve inbox items
+### US-INBOX-03 Gelen kutusundaki kalemleri incele, düzelt, onayla
 
-As Deniz, I want to check each found purchase, fix it if needed, and approve or reject it, one
-by one or many at once, so that only real expenses are saved.
+Deniz olarak, bulunan her alışverişi kontrol etmek, gerekirse düzeltmek ve tek tek ya da toplu
+olarak onaylamak veya reddetmek istiyorum, böylece yalnızca gerçek harcamalar kaydedilir.
 
-- Sprint 3 · **Done** · Owner: Agents 1 (INGEST), Backend, Frontend
-- Given a pending item, when I change the category and approve, then an expense is created
-  through the normal pipeline (FX, budgets) with source "statement" or "email".
-- Given I select five items and press Approve, then all five are approved and failures are
-  reported per item.
-- Evidence: `GET /inbox`, `PATCH /inbox/{id}`, `POST /inbox/{id}/approve`,
-  `POST /inbox/{id}/reject`, `POST /inbox/approve`, `POST /inbox/reject`, page `/inbox`,
+- Sprint 3 · **Bitti** · Sahip: Agents 1 (INGEST), Backend, Frontend · Yapan: Berke
+- Diyelim ki bekleyen bir kalem var. Kategorisini değiştirip onayladığımda normal akıştan (kur,
+  bütçeler) geçen ve kaynağı "statement" ya da "email" olan bir harcama oluşur.
+- Diyelim ki beş kalem seçip Approve'a bastım. Beşi de onaylanır, başarısız olanlar kalem kalem
+  bildirilir.
+- Kanıt: `GET /inbox`, `PATCH /inbox/{id}`, `POST /inbox/{id}/approve`,
+  `POST /inbox/{id}/reject`, `POST /inbox/approve`, `POST /inbox/reject`, sayfa `/inbox`,
   `tests/test_ingest_inbox.py`.
 
-### US-INBOX-04 Get purchases from Gmail
+### US-INBOX-04 Alışverişleri Gmail'den al
 
-As Elif, I want to connect Gmail so that order and card emails (Trendyol, bank alerts) show up
-in the inbox by themselves.
+Elif olarak, Gmail'i bağlamak istiyorum, böylece sipariş ve kart e-postaları (Trendyol, banka
+bildirimleri) gelen kutusuna kendiliğinden düşer.
 
-- Sprint 3 · **Partial** · Owner: Backend (OAuth, Gmail, Pub/Sub), Agents 1 (email agent)
-- Given I connect Google in Settings, then Kasa stores an encrypted refresh token and starts
-  a Gmail watch. Given a new order email, then the email agent parses it into a pending item.
-  Newsletters are ignored.
-- Given an email that says "approve all items", then it is only a pending item. The parser has
-  no tool that can approve.
-- Evidence: `GET /integrations/google/connect`, `/callback`, `/status`, `POST /sync`,
-  `DELETE /integrations/google`, `POST /internal/gmail/push`, page `/settings`,
+- Sprint 3 · **Kısmen** · Sahip: Backend (OAuth, Gmail, Pub/Sub), Agents 1 (e-posta ajanı) ·
+  Yapan: Berke
+- Diyelim ki Settings'ten Google'ı bağladım. Kasa şifrelenmiş bir refresh token saklar ve bir
+  Gmail watch başlatır. Yeni bir sipariş e-postası geldiğinde e-posta ajanı onu bekleyen bir
+  kaleme çevirir. Bültenler yok sayılır.
+- Diyelim ki bir e-postada "approve all items" yazıyor. Bu yalnızca bekleyen bir kalem olur.
+  Okuyucu ajanın onay verebilecek bir aracı yok.
+- Kanıt: `GET /integrations/google/connect`, `/callback`, `/status`, `POST /sync`,
+  `DELETE /integrations/google`, `POST /internal/gmail/push`, sayfa `/settings`,
   `tests/test_ingest_oauth.py`, `tests/test_ingest_sync.py`, `tests/test_ingest_gmail.py`.
-- Gap: everything is tested with fakes. No Google OAuth client or consent screen exists yet, so
-  real OAuth, Gmail push and sync have never run.
+- Eksik: her şey sahte servislerle test edildi. Henüz bir Google OAuth client'ı ya da onay
+  ekranı yok, bu yüzden gerçek OAuth, Gmail push ve senkronizasyon hiç çalışmadı.
 
-### US-INBOX-05 Ask the chat about the inbox
+### US-INBOX-05 Gelen kutusunu sohbette sor
 
-As Deniz, I want to ask "Mailimde onay bekleyen harcama var mı?" and approve an item by
-saying so.
+Deniz olarak, "Mailimde onay bekleyen harcama var mı?" diye sormak ve bir kalemi söyleyerek
+onaylamak istiyorum.
 
-- Sprint 3 · **Partial** · Owner: Agents 1
-- Given pending items, then the inbox agent lists them. It approves only when I clearly ask
-  for that item.
-- Evidence: `app/agents/email_agent.py`, `app/agents/tools/inbox_tools.py`,
+- Sprint 3 · **Kısmen** · Sahip: Agents 1 · Yapan: Berke
+- Diyelim ki bekleyen kalemler var. Gelen kutusu ajanı onları listeler. Bir kalemi yalnızca o
+  kalem için açıkça istediğimde onaylar.
+- Kanıt: `app/agents/email_agent.py`, `app/agents/tools/inbox_tools.py`,
   `tests/test_ingest_inbox.py::test_chat_tools_list_approve_reject_and_status`,
   `tests/test_ingest_sync.py::test_inbox_agent_instruction_requires_explicit_user_approval`,
-  eval case `route-inbox-tr`.
-- Gap: passed on Ollama, not verified on Gemini.
+  `route-inbox-tr` eval vakası.
+- Eksik: Ollama'da geçti, Gemini'de doğrulanmadı.
 
-## Epic: guardrails and privacy
+## Epik: güvenlik ve gizlilik
 
-### US-GUARD-01 I only see my own data
+### US-GUARD-01 Yalnızca kendi verimi görürüm
 
-As Ali, I want to be sure flatmates and other users cannot see my personal expenses.
+Ali olarak, ev arkadaşlarımın ve diğer kullanıcıların kişisel harcamalarımı göremeyeceğinden
+emin olmak istiyorum.
 
-- Sprint 1 · **Done** · Owner: Backend
-- Given two users, when each lists expenses, then each sees only their own. Given a house, then
-  only members see its bills.
-- Evidence: every service filters by `user_id`,
+- Sprint 1 · **Bitti** · Sahip: Backend · Yapan: Berke
+- Diyelim ki iki kullanıcı var. Her biri harcamaları listelediğinde yalnızca kendi
+  harcamalarını görür. Bir evin faturalarını yalnızca üyeleri görür.
+- Kanıt: her servis `user_id` ile filtreliyor,
   `tests/test_api.py::test_create_and_list_expenses_is_scoped_per_user`,
   `tests/test_expenses_api.py::test_only_own_expenses`,
   `tests/test_report_guard.py::test_flatmate_sees_own_shares_only`.
 
-### US-GUARD-02 The chat can only read my rows
+### US-GUARD-02 Sohbet yalnızca benim satırlarımı okuyabilir
 
-As the product owner, I want the chat's SQL to be one read-only SELECT over the user's own
-rows so that no message can change or leak data.
+Product owner olarak, sohbetin SQL'inin kullanıcının kendi satırları üzerinde tek bir salt
+okunur SELECT olmasını istiyorum, böylece hiçbir mesaj veriyi değiştiremez ya da sızdıramaz.
 
-- Sprint 1 · **Done** · Owner: Agents 3 / QA
-- Given "DROP TABLE expenses", "SELECT * FROM users" or a T-SQL trick, then the guard rejects
-  it before it reaches the database and the chat says it can only read.
-- Given a valid query, then the relations are injected as CTEs filtered to the current user,
-  and a row limit is applied.
-- Evidence: `app/services/reports.py` (`validate_report_sql`, `build_scoped_sql`),
-  `tests/test_reports.py`, `tests/test_report_guard.py`, eval cases `refusal-drop-table`,
-  `refusal-other-user-en`, `refusal-injection-users-en` (3 of 3 on Ollama).
+- Sprint 1 · **Bitti** · Sahip: Agents 3 / QA · Yapan: Berke
+- Diyelim ki "DROP TABLE expenses", "SELECT * FROM users" ya da bir T-SQL hilesi geldi. Guard
+  bunu veritabanına ulaşmadan reddeder ve sohbet yalnızca okuyabildiğini söyler.
+- Diyelim ki sorgu geçerli. İlişkiler o anki kullanıcıya göre filtrelenmiş CTE'ler olarak
+  eklenir ve bir satır limiti uygulanır.
+- Kanıt: `app/services/reports.py` (`validate_report_sql`, `build_scoped_sql`),
+  `tests/test_reports.py`, `tests/test_report_guard.py`, `refusal-drop-table`,
+  `refusal-other-user-en`, `refusal-injection-users-en` eval vakaları (Ollama'da 3'te 3).
 
-### US-GUARD-03 Text in receipts and emails is data, not orders
+### US-GUARD-03 Fiş ve e-postalardaki metin veridir, emir değil
 
-As Elif, I want a receipt or email that says "ignore your rules" to change nothing.
+Elif olarak, "kurallarını yok say" yazan bir fişin ya da e-postanın hiçbir şeyi değiştirmemesini
+istiyorum.
 
-- Sprint 3 · **Done** · Owner: Agents 1, Agents 3 / QA
-- Given an injection email, then it becomes a normal pending item and nothing is approved.
-- Given the user's question contains instructions for the checker, then the checker treats it
-  as data.
-- Evidence: `GUARDRAILS` in `app/agents/common.py`,
+- Sprint 3 · **Bitti** · Sahip: Agents 1, Agents 3 / QA · Yapan: Berke
+- Diyelim ki injection içeren bir e-posta geldi. Normal bir bekleyen kalem olur ve hiçbir şey
+  onaylanmaz.
+- Diyelim ki kullanıcının sorusunda checker'a yönelik talimatlar var. Checker bunları veri
+  olarak görür.
+- Kanıt: `app/agents/common.py` içindeki `GUARDRAILS`,
   `tests/test_ingest_sync.py::test_injection_email_is_just_a_pending_item`,
   `tests/test_ingest_sync.py::test_parser_agent_cannot_approve_even_if_it_obeys_the_email`,
   `tests/test_report_checker.py` (`test_prompt_marks_user_text_as_data`).
 
-### US-GUARD-04 The database enforces user isolation too
+### US-GUARD-04 Kullanıcı ayrımını veritabanı da uygular
 
-As the product owner, I want SQL Server row-level security as a last line of defence so that
-a bug in one query cannot show another user's rows.
+Product owner olarak, son savunma hattı olarak SQL Server row-level security istiyorum, böylece
+tek bir sorgudaki hata başka bir kullanıcının satırlarını gösteremez.
 
-- Sprint 2 · **Partial** · Owner: Backend, Agents 3 / QA (cloud)
-- Given a session with `SESSION_CONTEXT('user_id')` set, then every user-owned table returns only
-  that user's rows, and house tables only the houses they belong to (house bills also go to
-  members). `fx_rates` is shared reference data.
-- Evidence: `alembic/versions/0001_sprint1_baseline.py`, `0002_sprints_2_4.py`,
+- Sprint 2 · **Kısmen** · Sahip: Backend, Agents 3 / QA (cloud) · Yapan: Berke
+- Bu story production veritabanı içindir. Kasa bugün SQLite ile çalışıyor (geliştirme, testler,
+  demo) ve SQLite'ta RLS yok; orada ayrımı servislerdeki `user_id` filtresi sağlıyor
+  (US-GUARD-01). Production için ileride Azure SQL Database (Microsoft SQL Server) planlıyoruz.
+  Planın tamamı [DATABASE.md](DATABASE.md) dosyasında.
+- Diyelim ki oturumda `SESSION_CONTEXT('user_id')` ayarlı. Kullanıcıya ait her tablo yalnızca o
+  kullanıcının satırlarını, ev tabloları da yalnızca üyesi olduğu evleri döndürür (ev faturaları
+  üyelere de görünür). `fx_rates` herkesin ortak kullandığı referans verisidir.
+- Kanıt: `alembic/versions/0001_sprint1_baseline.py`, `0002_sprints_2_4.py`,
   `app/db/session.py`, `tests/test_migrations.py::test_sql_server_ddl_renders_offline`,
   `tests/test_migrations.py::test_sql_server_ddl_fits_azure_sql_database`.
-- Gap: the DDL is only rendered offline. It has never run on Azure SQL, and RLS has not been
-  checked with real users (the smoke test is in `docs/SETUP.md`).
+- Eksik: migration'lar, RLS ve bağlantı kodu yazıldı ve offline test edildi, ama henüz bir Azure
+  veritabanı yok. DDL yalnızca offline üretildi, Azure SQL'de hiç çalışmadı. RLS gerçek
+  kullanıcılarla denenmedi (smoke test `docs/SETUP.md` dosyasında).
 
-### US-GUARD-05 Money is always exact
+### US-GUARD-05 Para hep kuruşu kuruşuna doğru
 
-As Ali, I want every share and conversion to add up to the kuruş so that nobody loses money to
-rounding.
+Ali olarak, her payın ve her kur çevriminin kuruşuna kadar tutmasını istiyorum, böylece kimse
+yuvarlama yüzünden para kaybetmez.
 
-- Sprint 1 · **Done** · Owner: Backend, Agents 2
-- Given any split, then the shares add up to the total. Given a conversion, then it is rounded
-  once, half to even.
-- Evidence: `app/services/money.py`, `app/services/splits.py`, `app/services/fx.py`,
-  property tests in `tests/test_house_splits.py` and `tests/test_settlement.py`,
+- Sprint 1 · **Bitti** · Sahip: Backend, Agents 2 · Yapan: Berke
+- Diyelim ki herhangi bir bölüşüm var. Payların toplamı toplam tutarı verir. Bir kur çevriminde
+  tutar bir kez, half to even kuralıyla yuvarlanır.
+- Kanıt: `app/services/money.py`, `app/services/splits.py`, `app/services/fx.py`,
+  `tests/test_house_splits.py` ve `tests/test_settlement.py` içindeki property testleri,
   `tests/test_money_fx.py::test_convert_minor_rounds_half_even`.
 
-### US-GUARD-06 No secrets in code or logs
+### US-GUARD-06 Kodda ve loglarda gizli bilgi yok
 
-As the product owner, I want keys only in environment variables and Google tokens encrypted so
-that a leaked repository or log reveals nothing.
+Product owner olarak, anahtarların yalnızca ortam değişkenlerinde durmasını ve Google
+token'larının şifrelenmesini istiyorum, böylece sızan bir repo ya da log hiçbir şey açığa
+çıkarmaz.
 
-- Sprint 2 · **Done** · Owner: Backend
-- Given a Google refresh token, then it is stored Fernet-encrypted and never logged.
-- Evidence: `app/config.py`, `app/services/crypto.py`, `.gitignore` (`.env`),
+- Sprint 2 · **Bitti** · Sahip: Backend · Yapan: Berke
+- Diyelim ki bir Google refresh token'ı var. Fernet ile şifrelenmiş olarak saklanır ve hiç
+  loglanmaz.
+- Kanıt: `app/config.py`, `app/services/crypto.py`, `.gitignore` (`.env`),
   `tests/test_ingest_oauth.py::test_tokens_never_reach_the_logs`,
   `tests/test_categories_crypto.py`.
 
-### US-GUARD-07 Limit chat use per user
+### US-GUARD-07 Kullanıcı başına sohbet sınırı
 
-As the product owner, I want a per-user limit on `/chat` and `/receipts` so that one user (or a
-loop) cannot use up the free Gemini quota for everyone.
+Product owner olarak, `/chat` ve `/receipts` için kullanıcı başına bir limit istiyorum, böylece
+tek bir kullanıcı (ya da bir döngü) ücretsiz Gemini kotasını herkes için tüketemez.
 
-- Sprint 4 · **Not started** · Owner: Backend
-- Given a user sends more than N messages a minute, then they get 429 with a clear message.
-- There is no rate limiting in `backend/app` today.
+- Sprint 4 · **Başlanmadı** · Sahip: Backend
+- Diyelim ki bir kullanıcı dakikada N'den fazla mesaj gönderiyor. Anlaşılır bir mesajla 429
+  alır.
+- Bugün `backend/app` içinde hiç rate limiting yok.
 
-### US-GUARD-08 Delete my account and data
+### US-GUARD-08 Hesabımı ve verilerimi sil
 
-As Elif, I want to delete my account and everything Kasa stored about me so that I stay in
-control of my data (KVKK).
+Elif olarak, hesabımı ve Kasa'nın benim hakkımda sakladığı her şeyi silmek istiyorum, böylece
+verilerimin kontrolü bende kalır (KVKK).
 
-- Sprint 4 · **Not started** · Owner: Backend, Frontend
-- Given I confirm, then my expenses, budgets, subscriptions, inbox items and Google connection
-  are deleted, and house bills with others are handled without breaking their balances.
-- Today only the Google connection can be removed (`DELETE /integrations/google`).
+- Sprint 4 · **Başlanmadı** · Sahip: Backend, Frontend
+- Diyelim ki silmeyi onayladım. Harcamalarım, bütçelerim, aboneliklerim, gelen kutusu kalemlerim
+  ve Google bağlantım silinir. Başkalarıyla ortak ev faturaları da onların bakiyeleri bozulmadan
+  ele alınır.
+- Bugün yalnızca Google bağlantısı kaldırılabiliyor (`DELETE /integrations/google`).
 
-## Epic: accounts
+## Epik: hesaplar
 
-### US-ACCOUNT-01 Sign in with Google
+### US-ACCOUNT-01 Google ile giriş yap
 
-As Elif, I want to sign in with my Google account so that my data is mine on every device.
+Elif olarak, Google hesabımla giriş yapmak istiyorum, böylece verilerim her cihazda benim olur.
 
-- Sprint 2 · **Partial** · Owner: Backend, Frontend
-- Given `FIREBASE_PROJECT_ID` is set, then every protected app endpoint needs a Firebase
-  ID token (not `/health`, the Google OAuth callback or `/internal/*`, which has its own check), and my
-  name and email are saved from it.
-- Evidence: `app/auth.py`, `frontend/src/lib/auth.ts`, the "Sign in with Google" button in the
-  nav bar, `tests/test_foundation_api.py` (`test_requires_bearer_token`,
-  `test_valid_token_sets_user_and_profile`, with a faked verifier).
-- Gap: no Firebase project is configured, so real sign-in has never run.
+- Sprint 2 · **Kısmen** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki `FIREBASE_PROJECT_ID` ayarlı. Korumalı her uygulama endpoint'i bir Firebase ID
+  token'ı ister (`/health`, Google OAuth callback'i ve kendi kontrolü olan `/internal/*` hariç),
+  adım ve e-postam da bu token'dan kaydedilir.
+- Kanıt: `app/auth.py`, `frontend/src/lib/auth.ts`, nav bar'daki "Sign in with Google" butonu,
+  `tests/test_foundation_api.py` (`test_requires_bearer_token`,
+  `test_valid_token_sets_user_and_profile`, sahte bir doğrulayıcıyla).
+- Eksik: ayarlı bir Firebase projesi yok, bu yüzden gerçek giriş hiç çalışmadı.
 
-### US-ACCOUNT-02 Act as any user in dev mode
+### US-ACCOUNT-02 Dev modunda herhangi bir kullanıcı ol
 
-As a developer or presenter, I want to switch users by typing an id so that I can show two
-flatmates without two Google accounts.
+Geliştirici ya da sunumu yapan kişi olarak, bir id yazarak kullanıcı değiştirmek istiyorum,
+böylece iki Google hesabı olmadan iki ev arkadaşını gösterebilirim.
 
-- Sprint 1 · **Done** · Owner: Backend, Frontend
-- Given no Firebase settings, when I type "demo" in the Dev user box and press Switch, then
-  every request carries `X-User-Id: demo`.
-- Evidence: `app/auth.py`, `frontend/src/components/Nav.tsx` (`DevUserSwitcher`),
+- Sprint 1 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki Firebase ayarı yok. Dev user kutusuna "demo" yazıp Switch'e bastığımda her istek
+  `X-User-Id: demo` ile gider.
+- Kanıt: `app/auth.py`, `frontend/src/components/Nav.tsx` (`DevUserSwitcher`),
   `tests/test_api.py::test_default_dev_user_without_header`.
 
-### US-ACCOUNT-03 Change my display name
+### US-ACCOUNT-03 Görünen adımı değiştir
 
-As Ali, I want to set the name my flatmates see.
+Ali olarak, ev arkadaşlarımın gördüğü adı ben belirlemek istiyorum.
 
-- Sprint 4 · **Done** · Owner: Backend, Frontend
-- Given I change my name in Settings, then the house shows the new name.
-- Evidence: `GET /me`, `PATCH /me`, page `/settings`,
+- Sprint 4 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki Settings'te adımı değiştirdim. Ev yeni adı gösterir.
+- Kanıt: `GET /me`, `PATCH /me`, sayfa `/settings`,
   `tests/test_expenses_api.py::test_get_and_patch_display_name`,
   `tests/test_expenses_api.py::test_house_members_show_the_new_name`.
 
-### US-ACCOUNT-04 Open Kasa at a public address
+### US-ACCOUNT-04 Kasa'yı herkese açık bir adreste aç
 
-As Elif, I want to open Kasa on my phone at a public URL so that I can use it outside the lab.
+Elif olarak, Kasa'yı telefonumdan herkese açık bir URL ile açmak istiyorum, böylece laboratuvar
+dışında da kullanabilirim.
 
-- Sprint 4 · **Partial** · Owner: Agents 3 / QA (cloud)
-- Given the deploy scripts run, then `kasa-api` and `kasa-web` run on Cloud Run with Azure SQL
-  and Firebase, and the smoke test in `docs/SETUP.md` passes.
-- Evidence: `deploy/*.sh`, `.github/workflows/deploy.yml`, `docs/SETUP.md`.
-- Gap: the scripts were checked with `bash -n` and a stubbed `gcloud` only. Nothing is deployed.
+- Sprint 4 · **Kısmen** · Sahip: Agents 3 / QA (cloud) · Yapan: Berke
+- Diyelim ki deploy script'leri çalıştı. `kasa-api` ve `kasa-web` Cloud Run'da, Azure SQL ve
+  Firebase ile çalışır ve `docs/SETUP.md` içindeki smoke test geçer.
+- Kanıt: `deploy/*.sh`, `.github/workflows/deploy.yml`, `docs/SETUP.md`.
+- Eksik: script'ler yalnızca `bash -n` ve sahte bir `gcloud` ile kontrol edildi. Hiçbir şey deploy
+  edilmedi. Production veritabanı olarak planlanan Azure SQL Database de henüz yok
+  ([DATABASE.md](DATABASE.md)); bugün Kasa SQLite ile çalışıyor.
 
-## Traceability
+## Takip tablosu
 
-One row per story. "Live only" tests run with `KASA_LIVE_TESTS=1`. All test paths are under
-`backend/tests/`.
+Her story için bir satır. "Yalnızca canlı" testler `KASA_LIVE_TESTS=1` ile çalışır. Tüm test
+yolları `backend/tests/` altında.
 
-| Story | Status | API endpoint(s) | Frontend page | Tests |
+| Story | Durum | API endpoint(ler)i | Frontend sayfası | Testler |
 | --- | --- | --- | --- | --- |
-| US-CAPTURE-01 | Done | `POST /expenses`, `GET /categories` | `/expenses` | `test_api.py`, `test_foundation_api.py` |
-| US-CAPTURE-02 | Partial | `POST /receipts` | `/receipts` | `test_agents_offline.py`, `test_live.py` (live only) |
-| US-CAPTURE-03 | Partial | `POST /chat` | `/chat` | eval `route-receipt-tr` |
-| US-CAPTURE-04 | Done | `POST /expenses`, `GET /fx/*` | `/expenses` | `test_money_fx.py`, `test_foundation_api.py` |
-| US-CAPTURE-05 | Done | `PATCH /expenses/{id}`, `DELETE /expenses/{id}` | `/expenses` | `test_expenses_api.py` |
-| US-CAPTURE-06 | Done | `GET /expenses` (filters) | `/expenses` | `test_expenses_api.py` |
-| US-BUDGET-01 | Done | `GET/PUT /budgets`, `DELETE /budgets/{id}`, `GET /budgets/status` | `/budgets` | `test_money_budgets.py`, `test_money_tools.py` |
-| US-BUDGET-02 | Done | `POST /expenses` (warnings) | `/expenses`, `/` | `test_money_budgets.py`, `test_integration.py` |
-| US-BUDGET-03 | Done | `GET /dashboard` | `/` | `test_money_dashboard.py` |
-| US-BUDGET-04 | Done | `GET /subscriptions`, `POST /subscriptions/detect`, `GET /subscriptions/upcoming`, `POST /subscriptions/{id}/dismiss` | `/subscriptions`, `/` | `test_money_subscriptions.py` |
-| US-BUDGET-05 | Partial | `POST /chat` | `/chat` | `test_money_tools.py`, evals |
-| US-HOUSE-01 | Done | `POST/GET /houses`, `POST /houses/{id}/members` | `/houses` | `test_api.py` |
-| US-HOUSE-02 | Not started | none | none | none |
-| US-HOUSE-03 | Done | `POST /houses/{id}/expenses` | `/houses` | `test_settlement.py`, `test_api.py` |
-| US-HOUSE-04 | Done | `POST /houses/{id}/expenses/split` | `/houses` | `test_house_api.py`, `test_house_splits.py` |
-| US-HOUSE-05 | Done | `GET /houses/{id}/balances` | `/houses`, `/` | `test_settlement.py`, `test_house_api.py` |
-| US-HOUSE-06 | Done | `GET/POST /houses/{id}/settlements`, `DELETE /houses/{id}/settlements/{id}` | `/houses` | `test_house_api.py`, `test_foundation_api.py` |
-| US-HOUSE-07 | Partial | `GET/POST /houses/{id}/reminders`, `PATCH /houses/{id}/reminders/{id}` | `/houses` | `test_house_reminders.py` (fakes) |
-| US-HOUSE-08 | Done | `DELETE /houses/{id}/members/{user_id}`, `DELETE /houses/{id}/expenses/{id}` | `/houses` | `test_house_members.py` |
-| US-HOUSE-09 | Partial | `POST /chat` | `/chat` | `test_house_tools.py`, `test_live.py` (live only) |
-| US-ASK-01 | Partial | `POST /chat` | `/chat` | `test_agents_offline.py`, `test_reports.py`, `test_report_guard.py`, evals |
-| US-ASK-02 | Done | `POST /chat` | `/chat`, `/` | `test_integration.py`, `test_report_guard.py` |
-| US-ASK-03 | Done | `POST /chat` | `/chat` | `test_report_checker.py` |
-| US-ASK-04 | Partial | `POST /chat` | `/chat` | `test_integration.py`, evals |
-| US-ASK-05 | Partial | `POST /chat` | `/chat` | `test_agents_offline.py`, evals |
-| US-ASK-06 | Partial | `POST /chat`, `POST /receipts` | `/chat`, `/receipts` | `test_live.py` (live only), evals |
-| US-INBOX-01 | Done | `POST /imports/statement` | `/import` | `test_ingest_statements.py` |
-| US-INBOX-02 | Partial | `POST /imports/statement` | `/import` | `test_ingest_statements.py` (fake), `test_ingest_live.py` (live only) |
-| US-INBOX-03 | Done | `GET /inbox`, `PATCH /inbox/{id}`, `POST /inbox/{id}/approve`, `POST /inbox/{id}/reject`, `POST /inbox/approve`, `POST /inbox/reject` | `/inbox` | `test_ingest_inbox.py` |
-| US-INBOX-04 | Partial | `/integrations/google/*`, `POST /internal/gmail/push`, `POST /internal/gmail/sync-all` | `/settings`, `/inbox` | `test_ingest_oauth.py`, `test_ingest_sync.py`, `test_ingest_gmail.py` (fakes) |
-| US-INBOX-05 | Partial | `POST /chat` | `/chat` | `test_ingest_inbox.py`, `test_ingest_sync.py`, evals |
-| US-GUARD-01 | Done | all | all | `test_api.py`, `test_expenses_api.py`, `test_report_guard.py` |
-| US-GUARD-02 | Done | `POST /chat` | `/chat` | `test_reports.py`, `test_report_guard.py`, evals `refusal-*` |
-| US-GUARD-03 | Done | `POST /chat`, `POST /receipts`, Gmail sync | `/chat`, `/inbox` | `test_ingest_sync.py`, `test_report_checker.py` |
-| US-GUARD-04 | Partial | all (SQL Server only) | none | `test_migrations.py` (offline DDL) |
-| US-GUARD-05 | Done | every money endpoint | all | `test_house_splits.py`, `test_settlement.py`, `test_money_fx.py` |
-| US-GUARD-06 | Done | `/integrations/google/*` | `/settings` | `test_ingest_oauth.py`, `test_categories_crypto.py` |
-| US-GUARD-07 | Not started | `POST /chat`, `POST /receipts` | none | none |
-| US-GUARD-08 | Not started | none | none | none |
-| US-ACCOUNT-01 | Partial | every endpoint (Bearer token) | nav bar | `test_foundation_api.py` (faked verifier) |
-| US-ACCOUNT-02 | Done | every endpoint (`X-User-Id`) | nav bar | `test_api.py` |
-| US-ACCOUNT-03 | Done | `GET/PATCH /me` | `/settings` | `test_expenses_api.py` |
-| US-ACCOUNT-04 | Partial | `GET /health` | all | none (deploy scripts dry-run only) |
+| US-CAPTURE-01 | Bitti | `POST /expenses`, `GET /categories` | `/expenses` | `test_api.py`, `test_foundation_api.py` |
+| US-CAPTURE-02 | Kısmen | `POST /receipts` | `/receipts` | `test_agents_offline.py`, `test_live.py` (yalnızca canlı) |
+| US-CAPTURE-03 | Kısmen | `POST /chat` | `/chat` | eval `route-receipt-tr` |
+| US-CAPTURE-04 | Bitti | `POST /expenses`, `GET /fx/*` | `/expenses` | `test_money_fx.py`, `test_foundation_api.py` |
+| US-CAPTURE-05 | Bitti | `PATCH /expenses/{id}`, `DELETE /expenses/{id}` | `/expenses` | `test_expenses_api.py` |
+| US-CAPTURE-06 | Bitti | `GET /expenses` (filtreler) | `/expenses` | `test_expenses_api.py` |
+| US-BUDGET-01 | Bitti | `GET/PUT /budgets`, `DELETE /budgets/{id}`, `GET /budgets/status` | `/budgets` | `test_money_budgets.py`, `test_money_tools.py` |
+| US-BUDGET-02 | Bitti | `POST /expenses` (uyarılar) | `/expenses`, `/` | `test_money_budgets.py`, `test_integration.py` |
+| US-BUDGET-03 | Bitti | `GET /dashboard` | `/` | `test_money_dashboard.py` |
+| US-BUDGET-04 | Bitti | `GET /subscriptions`, `POST /subscriptions/detect`, `GET /subscriptions/upcoming`, `POST /subscriptions/{id}/dismiss` | `/subscriptions`, `/` | `test_money_subscriptions.py` |
+| US-BUDGET-05 | Kısmen | `POST /chat` | `/chat` | `test_money_tools.py`, eval'ler |
+| US-HOUSE-01 | Bitti | `POST/GET /houses`, `POST /houses/{id}/members` | `/houses` | `test_api.py` |
+| US-HOUSE-02 | Başlanmadı | yok | yok | yok |
+| US-HOUSE-03 | Bitti | `POST /houses/{id}/expenses` | `/houses` | `test_settlement.py`, `test_api.py` |
+| US-HOUSE-04 | Bitti | `POST /houses/{id}/expenses/split` | `/houses` | `test_house_api.py`, `test_house_splits.py` |
+| US-HOUSE-05 | Bitti | `GET /houses/{id}/balances` | `/houses`, `/` | `test_settlement.py`, `test_house_api.py` |
+| US-HOUSE-06 | Bitti | `GET/POST /houses/{id}/settlements`, `DELETE /houses/{id}/settlements/{id}` | `/houses` | `test_house_api.py`, `test_foundation_api.py` |
+| US-HOUSE-07 | Kısmen | `GET/POST /houses/{id}/reminders`, `PATCH /houses/{id}/reminders/{id}` | `/houses` | `test_house_reminders.py` (sahte) |
+| US-HOUSE-08 | Bitti | `DELETE /houses/{id}/members/{user_id}`, `DELETE /houses/{id}/expenses/{id}` | `/houses` | `test_house_members.py` |
+| US-HOUSE-09 | Kısmen | `POST /chat` | `/chat` | `test_house_tools.py`, `test_live.py` (yalnızca canlı) |
+| US-ASK-01 | Kısmen | `POST /chat` | `/chat` | `test_agents_offline.py`, `test_reports.py`, `test_report_guard.py`, eval'ler |
+| US-ASK-02 | Bitti | `POST /chat` | `/chat`, `/` | `test_integration.py`, `test_report_guard.py` |
+| US-ASK-03 | Bitti | `POST /chat` | `/chat` | `test_report_checker.py` |
+| US-ASK-04 | Kısmen | `POST /chat` | `/chat` | `test_integration.py`, eval'ler |
+| US-ASK-05 | Kısmen | `POST /chat` | `/chat` | `test_agents_offline.py`, eval'ler |
+| US-ASK-06 | Kısmen | `POST /chat`, `POST /receipts` | `/chat`, `/receipts` | `test_live.py` (yalnızca canlı), eval'ler |
+| US-INBOX-01 | Bitti | `POST /imports/statement` | `/import` | `test_ingest_statements.py` |
+| US-INBOX-02 | Kısmen | `POST /imports/statement` | `/import` | `test_ingest_statements.py` (sahte), `test_ingest_live.py` (yalnızca canlı) |
+| US-INBOX-03 | Bitti | `GET /inbox`, `PATCH /inbox/{id}`, `POST /inbox/{id}/approve`, `POST /inbox/{id}/reject`, `POST /inbox/approve`, `POST /inbox/reject` | `/inbox` | `test_ingest_inbox.py` |
+| US-INBOX-04 | Kısmen | `/integrations/google/*`, `POST /internal/gmail/push`, `POST /internal/gmail/sync-all` | `/settings`, `/inbox` | `test_ingest_oauth.py`, `test_ingest_sync.py`, `test_ingest_gmail.py` (sahte) |
+| US-INBOX-05 | Kısmen | `POST /chat` | `/chat` | `test_ingest_inbox.py`, `test_ingest_sync.py`, eval'ler |
+| US-GUARD-01 | Bitti | hepsi | hepsi | `test_api.py`, `test_expenses_api.py`, `test_report_guard.py` |
+| US-GUARD-02 | Bitti | `POST /chat` | `/chat` | `test_reports.py`, `test_report_guard.py`, eval `refusal-*` |
+| US-GUARD-03 | Bitti | `POST /chat`, `POST /receipts`, Gmail senkronizasyonu | `/chat`, `/inbox` | `test_ingest_sync.py`, `test_report_checker.py` |
+| US-GUARD-04 | Kısmen | hepsi (yalnızca SQL Server'da, planlanan production veritabanı) | yok | `test_migrations.py` (offline DDL) |
+| US-GUARD-05 | Bitti | parayla ilgili her endpoint | hepsi | `test_house_splits.py`, `test_settlement.py`, `test_money_fx.py` |
+| US-GUARD-06 | Bitti | `/integrations/google/*` | `/settings` | `test_ingest_oauth.py`, `test_categories_crypto.py` |
+| US-GUARD-07 | Başlanmadı | `POST /chat`, `POST /receipts` | yok | yok |
+| US-GUARD-08 | Başlanmadı | yok | yok | yok |
+| US-ACCOUNT-01 | Kısmen | her endpoint (Bearer token) | nav bar | `test_foundation_api.py` (sahte doğrulayıcı) |
+| US-ACCOUNT-02 | Bitti | her endpoint (`X-User-Id`) | nav bar | `test_api.py` |
+| US-ACCOUNT-03 | Bitti | `GET/PATCH /me` | `/settings` | `test_expenses_api.py` |
+| US-ACCOUNT-04 | Kısmen | `GET /health` | hepsi | yok (deploy script'leri yalnızca dry-run) |
 
-## Open stories (future issues)
+## Açık story'ler
 
-Partial:
+Kısmen:
 
-- US-CAPTURE-02 Save a receipt from a photo: verify receipt vision on Gemini.
-- US-CAPTURE-03 Tell the chat about a purchase: verify on Gemini.
-- US-BUDGET-05 Budgets, subscriptions and rates in chat: fix the reply language, verify on
-  Gemini.
-- US-HOUSE-07 Settle-up reminders: run Calendar against real Google.
-- US-HOUSE-09 Run the house from the chat: verify on Gemini.
-- US-ASK-01 Spending questions with charts: verify on Gemini.
-- US-ASK-04 Answers in my language: fix the failing case, measure on Gemini.
-- US-ASK-05 Routing: verify on Gemini.
-- US-ASK-06 Kasa runs on Gemini: live tests and evals with `gemini-3.5-flash-lite`.
-- US-INBOX-02 PDF statements: record a live run.
-- US-INBOX-04 Gmail: create the OAuth client and consent screen, run the real flow.
-- US-INBOX-05 Inbox in chat: verify on Gemini.
-- US-GUARD-04 Row-level security: run the migrations on Azure SQL and the RLS smoke test.
-- US-ACCOUNT-01 Google sign-in: configure Firebase.
-- US-ACCOUNT-04 Public address: first Cloud Run deploy.
+- US-CAPTURE-02 Fişi fotoğraftan kaydet: fiş okumayı Gemini'de doğrulamak. Yusuf (#4).
+- US-CAPTURE-03 Alışverişi sohbete yaz: Gemini'de doğrulamak. Yusuf.
+- US-BUDGET-05 Bütçe, abonelik ve kurlar sohbette: cevap dilini düzeltmek, Gemini'de
+  doğrulamak. Yusuf.
+- US-HOUSE-07 Hesaplaşma hatırlatmaları: Calendar'ı gerçek Google'a karşı çalıştırmak. Ömer.
+- US-HOUSE-09 Evi sohbetten yönet: Gemini'de doğrulamak. Ömer.
+- US-ASK-01 Grafikli harcama soruları: Gemini'de doğrulamak. Yusuf.
+- US-ASK-04 Benim dilimde cevap: kalan vakayı düzeltmek, Gemini'de ölçmek. Yusuf (#5).
+- US-ASK-05 Yönlendirme: Gemini'de doğrulamak. Yusuf (#4).
+- US-ASK-06 Kasa Gemini'de çalışır: `gemini-3.5-flash-lite` ile canlı testler ve eval'ler.
+  Yusuf (#4).
+- US-INBOX-02 PDF ekstreler: canlı bir çalıştırma kaydetmek. Yusuf.
+- US-INBOX-04 Gmail: OAuth client'ı ve onay ekranını oluşturup gerçek akışı çalıştırmak. Mustafa.
+- US-INBOX-05 Sohbette gelen kutusu: Gemini'de doğrulamak. Yusuf.
+- US-GUARD-04 Row-level security: Azure SQL Database'i kurmak, migration'ları orada çalıştırmak
+  ve RLS smoke testini yapmak. Mustafa (#12).
+- US-ACCOUNT-01 Google ile giriş: Firebase'i ayarlamak. Mustafa, Zehra.
+- US-ACCOUNT-04 Herkese açık adres: ilk Cloud Run deploy'u. Mustafa, Yusuf.
 
-Not started:
+Başlanmadı:
 
-- US-HOUSE-02 Invite a flatmate with a link.
-- US-GUARD-07 Limit chat use per user.
-- US-GUARD-08 Delete my account and data.
+- US-HOUSE-02 Ev arkadaşını linkle davet et. Ömer (#6), Zehra (#11).
+- US-GUARD-07 Kullanıcı başına sohbet sınırı. Mustafa (#9).
+- US-GUARD-08 Hesabımı ve verilerimi sil. Mustafa, Zehra (#13).

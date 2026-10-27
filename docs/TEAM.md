@@ -1,96 +1,99 @@
-# Team and working agreement
+# Ekip ve çalışma anlaşması
 
-This file says who owns what, how we work on the repository, and how each person presents
-their part. The role split below is a **proposal**. Swap people between rows if that fits the
-team better, then update this file in a PR.
+Bu dosya kimin neyin sahibi olduğunu, repo üzerinde nasıl çalıştığımızı ve herkesin kendi
+kısmını nasıl sunduğunu anlatıyor. Aşağıdaki rol dağılımı bir **öneri**. Ekibe daha iyi
+uyacaksa satırlar arasında kişileri değiştirin, sonra bu dosyayı bir PR ile güncelleyin.
 
-## Roles and owners
+## Roller ve sahipler
 
-The five roles come from the project page. Agent developer #3 (QA and cloud) has no person
-yet, so Mustafa and Yusuf share it until someone else joins. Besides the product owner role,
-Berke co-owns everything outside the agents: backend, database, frontend and cloud.
+Beş rol proje sayfasından geliyor. Ajan geliştirici #3 (QA ve cloud) rolünde henüz kimse yok,
+o yüzden başka biri katılana kadar bu rolü Mustafa ve Yusuf paylaşıyor. Berke, product owner
+rolünün yanında ajanlar dışındaki her şeyin ortak sahibi: backend, veritabanı, frontend, cloud
+ve yönetim.
 
-| Person | GitHub | Role | Owns |
+| Kişi | GitHub | Rol | Sahip olduğu işler |
 | --- | --- | --- | --- |
-| Berke | @berkekcay | Product owner, architecture, backend, database, frontend | user stories, architecture, priorities, issue triage, demo kit, final review of docs; with Mustafa the data model, migrations and RLS, REST API and cloud; with Zehra the frontend |
-| Mustafa | @MustafaPar | Database and backend (with Berke) | data model, migrations and RLS, auth, REST API, Google OAuth and Gmail plumbing, statement CSV parsing |
-| Yusuf | @Yusufrmak497 | Agent developer #1 | coordinator, receipt agent, budget agent and the MONEY track, email and statement parser agents |
-| Ömer | @omertarikcandir | Agent developer #2 | house agent, splits, balances, settle-up, payments, Calendar reminders (HOUSE track) |
-| Zehra | @zehraoz36 | Frontend (with Berke) | every page and component in `frontend/` |
-| Mustafa and Yusuf | | Agent developer #3, QA and cloud (shared) | Yusuf: report agent, checker agent, evals. Mustafa and Berke: CI, Cloud Run deploy, Azure SQL |
+| Berke | @berkekcay | Product owner, mimari, backend, veritabanı, frontend | user story'ler, mimari, öncelikler, issue triage, demo kiti, dokümanların son incelemesi; Mustafa ile veri modeli, migration'lar ve RLS, REST API ve cloud; Zehra ile frontend |
+| Mustafa | @MustafaPar | Veritabanı ve backend (Berke ile) | veri modeli, migration'lar ve RLS, auth, REST API, Google OAuth ve Gmail altyapısı, ekstre CSV ayrıştırma |
+| Yusuf | @Yusufrmak497 | Ajan geliştirici #1 | koordinatör, fiş ajanı, bütçe ajanı ve MONEY track'i, e-posta ve ekstre ayrıştırıcı ajanlar |
+| Ömer | @omertarikcandir | Ajan geliştirici #2 | ev ajanı, bölüşümler, bakiyeler, hesaplaşma, ödemeler, Calendar hatırlatıcıları (HOUSE track'i) |
+| Zehra | @zehraoz36 | Frontend (Berke ile) | `frontend/` içindeki bütün sayfalar ve bileşenler |
+| Mustafa ve Yusuf | | Ajan geliştirici #3, QA ve cloud (ortak) | Yusuf: rapor ajanı, kontrol ajanı, eval'ler. Mustafa ve Berke: CI, Cloud Run deploy, Azure SQL |
 
-### Who owns which files
+### Hangi dosyalar kimde
 
-This is the track table from [ARCHITECTURE.md](ARCHITECTURE.md#tracks-and-owners) with a
-person on each row. Backend paths are under `backend/app/` and frontend paths under
-`frontend/src/`, unless they start with `backend/`, `frontend/`, `deploy/`, `docs/` or `.github/`.
+Bu tablo, [ARCHITECTURE.md](ARCHITECTURE.md#trackler-ve-sahipleri) içindeki track tablosunun her
+satırına bir kişi eklenmiş hali. Backend yolları `backend/app/`, frontend yolları
+`frontend/src/` altında. `backend/`, `frontend/`, `deploy/`, `docs/` ya da `.github/` ile
+başlayan yollar bunun dışında.
 
-| Area | Owner | Backend files | Frontend files |
+| Alan | Sahibi | Backend dosyaları | Frontend dosyaları |
 | --- | --- | --- | --- |
-| Shared core | Mustafa, Berke | `main.py`, `config.py`, `auth.py`, `db/*`, `backend/alembic/*`, `api/expenses.py`, `api/users.py`, `api/internal.py`, `services/expenses.py`, `services/users.py`, `services/categories.py`, `services/crypto.py`, `services/clock.py`, `schemas/common.py`, `schemas/expenses.py`, `schemas/users.py` | `lib/api/client.ts`, `lib/auth.ts` (with Zehra and Berke) |
-| Agent runtime | Yusuf | `agents/common.py`, `agents/runtime.py`, `agents/coordinator.py`, `agents/language.py`, `api/agents.py`, `schemas/agents.py`, `agents/receipt_agent.py`, `agents/tools/receipt_tools.py` | |
-| HOUSE | Ömer | `services/splits.py`, `services/settlement.py`, `services/houses.py`, `services/reminders.py`, `integrations/google_calendar.py`, `api/houses.py`, `schemas/houses.py`, `agents/house_agent.py`, `agents/tools/house_tools.py` | `features/houses` (with Zehra) |
-| MONEY | Yusuf | `services/fx.py`, `integrations/tcmb.py`, `services/budgets.py`, `services/subscriptions.py`, `services/dashboard.py`, `api/budgets.py`, `api/subscriptions.py`, `api/dashboard.py`, `api/fx.py`, `schemas/budgets.py`, `schemas/subscriptions.py`, `schemas/dashboard.py`, `schemas/fx.py`, `agents/budget_agent.py`, `agents/tools/budget_tools.py` | `features/dashboard`, `features/budgets`, `features/subscriptions` (with Zehra) |
-| INGEST plumbing | Mustafa, Berke | `integrations/google_oauth.py`, `integrations/gmail.py`, `services/gmail_sync.py`, `services/inbox.py`, `services/statements.py`, `api/integrations.py`, `api/inbox.py`, `api/imports.py`, `schemas/inbox.py`, `schemas/imports.py`, `schemas/integrations.py` | `features/inbox`, `features/imports`, `features/settings` (with Zehra) |
-| INGEST agents | Yusuf | `agents/email_agent.py`, `agents/statement_agent.py`, `agents/tools/inbox_tools.py` | |
-| REPORT | Yusuf (QA share) | `services/reports.py`, `agents/report_agent.py`, `agents/tools/report_tools.py`, `agents/checker_agent.py`, `backend/evals/` | `features/chat` (with Zehra) |
-| Cloud and CI | Mustafa (QA share), Berke | `backend/Dockerfile`, `deploy/*`, `.github/workflows/*`, `docs/SETUP.md` | `frontend/Dockerfile` |
+| Ortak çekirdek | Mustafa, Berke | `main.py`, `config.py`, `auth.py`, `db/*`, `backend/alembic/*`, `api/expenses.py`, `api/users.py`, `api/internal.py`, `services/expenses.py`, `services/users.py`, `services/categories.py`, `services/crypto.py`, `services/clock.py`, `schemas/common.py`, `schemas/expenses.py`, `schemas/users.py` | `lib/api/client.ts`, `lib/auth.ts` (Zehra ve Berke ile) |
+| Ajan runtime'ı | Yusuf | `agents/common.py`, `agents/runtime.py`, `agents/coordinator.py`, `agents/language.py`, `api/agents.py`, `schemas/agents.py`, `agents/receipt_agent.py`, `agents/tools/receipt_tools.py` | |
+| HOUSE | Ömer | `services/splits.py`, `services/settlement.py`, `services/houses.py`, `services/reminders.py`, `integrations/google_calendar.py`, `api/houses.py`, `schemas/houses.py`, `agents/house_agent.py`, `agents/tools/house_tools.py` | `features/houses` (Zehra ile) |
+| MONEY | Yusuf | `services/fx.py`, `integrations/tcmb.py`, `services/budgets.py`, `services/subscriptions.py`, `services/dashboard.py`, `api/budgets.py`, `api/subscriptions.py`, `api/dashboard.py`, `api/fx.py`, `schemas/budgets.py`, `schemas/subscriptions.py`, `schemas/dashboard.py`, `schemas/fx.py`, `agents/budget_agent.py`, `agents/tools/budget_tools.py` | `features/dashboard`, `features/budgets`, `features/subscriptions` (Zehra ile) |
+| INGEST altyapısı | Mustafa, Berke | `integrations/google_oauth.py`, `integrations/gmail.py`, `services/gmail_sync.py`, `services/inbox.py`, `services/statements.py`, `api/integrations.py`, `api/inbox.py`, `api/imports.py`, `schemas/inbox.py`, `schemas/imports.py`, `schemas/integrations.py` | `features/inbox`, `features/imports`, `features/settings` (Zehra ile) |
+| INGEST ajanları | Yusuf | `agents/email_agent.py`, `agents/statement_agent.py`, `agents/tools/inbox_tools.py` | |
+| REPORT | Yusuf (QA payı) | `services/reports.py`, `agents/report_agent.py`, `agents/tools/report_tools.py`, `agents/checker_agent.py`, `backend/evals/` | `features/chat` (Zehra ile) |
+| Cloud ve CI | Mustafa (QA payı), Berke | `backend/Dockerfile`, `deploy/*`, `.github/workflows/*`, `docs/SETUP.md` | `frontend/Dockerfile` |
 | Frontend | Zehra, Berke | | `frontend/src/**` |
-| Product docs and demo | Berke | `docs/USER_STORIES.md`, `docs/ARCHITECTURE.md`, `docs/TEAM.md`, `docs/DEMO.md`, `README.md`, `backend/scripts/seed_demo.py` | |
+| Ürün dokümanları ve demo | Berke | `docs/USER_STORIES.md`, `docs/ARCHITECTURE.md`, `docs/DATABASE.md`, `docs/TEAM.md`, `docs/DEMO.md`, `README.md`, `backend/scripts/seed_demo.py` | |
 
-"With Zehra" means the track owner decides what the page needs and Zehra or Berke builds or
-reviews it. Everyone writes tests for their own files.
+"Zehra ile" şu demek: sayfada ne olacağına track'in sahibi karar veriyor, sayfayı Zehra ya da
+Berke yapıyor veya review ediyor. Herkes kendi dosyalarının testlerini kendisi yazıyor.
 
-### First issues for each person
+### Herkesin ilk issue'ları
 
-Each Partial or Not started story in [USER_STORIES.md](USER_STORIES.md) becomes an issue.
-The open ones, with a ready prompt for a coding agent in each:
+[USER_STORIES.md](USER_STORIES.md) içinde yarım kalmış ya da hiç başlanmamış her story bir
+issue oluyor. Açık olanlar aşağıda, her birinde bir coding agent için hazır bir prompt var:
 
-- **Everyone:** [#3](https://github.com/berkekcay/Kasa-Expense-Agent/issues/3) set up,
-  rehearse and record the Friday demo.
-- **Mustafa:** [#7](https://github.com/berkekcay/Kasa-Expense-Agent/issues/7) finish the CSV
-  export PR, [#8](https://github.com/berkekcay/Kasa-Expense-Agent/issues/8) Next.js 16.4.3,
-  [#9](https://github.com/berkekcay/Kasa-Expense-Agent/issues/9) per-user chat limit
-  (US-GUARD-07). Later: Azure SQL and RLS smoke test (US-GUARD-04), first Cloud Run deploy
-  with Yusuf (US-ACCOUNT-04).
-- **Yusuf:** [#4](https://github.com/berkekcay/Kasa-Expense-Agent/issues/4) verify Gemini
-  with `gemini-3.5-flash-lite` (US-ASK-06, US-CAPTURE-02), then
-  [#5](https://github.com/berkekcay/Kasa-Expense-Agent/issues/5) reply language (US-ASK-04).
-- **Ömer:** [#6](https://github.com/berkekcay/Kasa-Expense-Agent/issues/6) house invite codes,
-  backend and house agent (US-HOUSE-02). Later: Calendar reminders against a real Google
-  account once the OAuth client exists (US-HOUSE-07).
-- **Zehra:** [#10](https://github.com/berkekcay/Kasa-Expense-Agent/issues/10) frontend tests in
-  CI, [#11](https://github.com/berkekcay/Kasa-Expense-Agent/issues/11) invite code pages
-  (US-HOUSE-02). Later: "delete my data" in Settings (US-GUARD-08).
-- **Berke:** keep USER_STORIES and the board current, review every PR for scope, review the
-  backend, database and frontend PRs with their owners, present the architecture in labs.
-  Later: the Azure SQL database with Mustafa (US-GUARD-04) and "delete my data" with Zehra
-  (US-GUARD-08).
+- **Herkes:** [#3](https://github.com/berkekcay/Kasa-Expense-Agent/issues/3) Cuma demosunu
+  kurmak, prova etmek ve kaydetmek.
+- **Mustafa:** [#7](https://github.com/berkekcay/Kasa-Expense-Agent/issues/7) CSV export PR'ını
+  bitirmek, [#8](https://github.com/berkekcay/Kasa-Expense-Agent/issues/8) Next.js 16.4.3,
+  [#9](https://github.com/berkekcay/Kasa-Expense-Agent/issues/9) kullanıcı başına sohbet
+  limiti (US-GUARD-07). Sonra: Azure SQL veritabanını kurmak ve RLS smoke testi (US-GUARD-04),
+  Yusuf ile ilk Cloud Run deploy'u (US-ACCOUNT-04), "verilerimi sil" özelliğinin backend
+  kısmı (US-GUARD-08).
+- **Yusuf:** [#4](https://github.com/berkekcay/Kasa-Expense-Agent/issues/4) Gemini'yi
+  `gemini-3.5-flash-lite` ile doğrulamak (US-ASK-06, US-CAPTURE-02), sonra
+  [#5](https://github.com/berkekcay/Kasa-Expense-Agent/issues/5) cevap dili (US-ASK-04).
+- **Ömer:** [#6](https://github.com/berkekcay/Kasa-Expense-Agent/issues/6) ev davet kodları,
+  backend ve ev ajanı (US-HOUSE-02). Sonra: OAuth client hazır olunca Calendar
+  hatırlatıcılarını gerçek bir Google hesabıyla denemek (US-HOUSE-07).
+- **Zehra:** [#10](https://github.com/berkekcay/Kasa-Expense-Agent/issues/10) frontend
+  testlerini CI'a eklemek, [#11](https://github.com/berkekcay/Kasa-Expense-Agent/issues/11)
+  davet kodu sayfaları (US-HOUSE-02). Sonra: Ayarlar sayfasında "verilerimi sil" (US-GUARD-08),
+  backend kısmı Mustafa'da.
 
-## Working agreement
+## Çalışma anlaşması
 
-- **No direct pushes to `main`.** `main` is protected. Every change goes through a pull
-  request with one approval and green CI.
-- **One issue per PR.** Create the issue first, then a branch named `feature/<short-name>`
-  (for example `feature/house-invites`). Use `fix/<short-name>` for bug fixes and
-  `docs/<short-name>` for documentation only.
-- **Use the PR template** (`.github/pull_request_template.md`): Problem, Approach, Testing,
-  Screenshots, Linked issue. Write `Closes #<issue>` so the issue closes on merge.
-- **One review.** Ask the owner of the files you touched. If you touched only your own files,
-  ask the person whose code calls yours. The author does not merge without the approval.
-- **CI must be green**: ruff, ruff format and pytest on Python 3.12 and 3.14, eslint and
-  `next build` for the frontend.
-- **Resolve every review thread**, including CodeRabbit's, before merging. If you disagree
-  with a comment, reply with the reason and resolve it; do not leave it open.
-- **Small PRs.** Under about 400 changed lines when possible. Split big features.
-- **No secrets.** Keys go in `backend/.env`, which is gitignored. Never paste a key into an
-  issue, a PR, a screenshot or a chat.
-- **Tests stay offline.** No test may call Gemini, Google or TCMB unless it is marked live.
+- **`main`'e doğrudan push yok.** `main` korumalı. Her değişiklik bir pull request üzerinden
+  geçiyor, bir onay ve yeşil CI gerekiyor. Berke repo admini olduğu için kendi doküman
+  değişikliklerini doğrudan merge ediyor, diğer herkesin değişikliği bir onayı ve yeşil CI'ı
+  olan bir PR istiyor.
+- **Her PR'da tek issue.** Önce issue'yu aç, sonra `feature/<short-name>` adında bir branch aç
+  (örneğin `feature/house-invites`). Bug fix'ler için `fix/<short-name>`, sadece doküman
+  değişikliği için `docs/<short-name>` kullan.
+- **PR template'ini kullan** (`.github/pull_request_template.md`): Problem, Approach,
+  Testing, Screenshots, Linked issue. Merge olunca issue kapansın diye `Closes #<issue>` yaz.
+- **Tek review.** Dokunduğun dosyaların sahibinden review iste. Sadece kendi dosyalarına
+  dokunduysan, senin kodunu çağıran kişiden iste. PR'ı açan kişi onay almadan merge etmiyor.
+- **CI yeşil olmalı**: ruff, ruff format, Python 3.12 ve 3.14 üzerinde pytest, frontend için
+  eslint ve `next build`.
+- **Merge etmeden önce her review thread'ini çöz**, CodeRabbit'inkiler de dahil. Bir yoruma
+  katılmıyorsan gerekçeni yazıp resolve et, açık bırakma.
+- **Küçük PR'lar.** Mümkünse 400 değişen satırın altında kalsın. Büyük özellikleri böl.
+- **Secret yok.** Key'ler gitignore'daki `backend/.env` dosyasına gidiyor. Bir key'i asla
+  issue'ya, PR'a, ekran görüntüsüne ya da sohbete yapıştırma.
+- **Testler offline kalıyor.** live olarak işaretlenmemiş hiçbir test Gemini'yi, Google'ı ya
+  da TCMB'yi çağıramaz.
 
-## Running the app and the tests
+## Uygulamayı ve testleri çalıştırmak
 
-The full steps for Windows and macOS are in [DEMO.md](DEMO.md#the-day-before-setup) and the
-README. In short:
+Windows ve macOS için adımların tamamı [DEMO.md](DEMO.md#bir-gün-önce-kurulum) dosyasında ve
+README'de. Kısaca:
 
 ```bash
 cd backend
@@ -107,33 +110,34 @@ npm install
 npm run dev                     # http://localhost:3000, type "demo" in the Dev user box
 ```
 
-Live tests against a model: `KASA_LIVE_TESTS=1 pytest -m live -s`. Evals:
-`python -m evals.run_evals` (see the docstring in `backend/evals/run_evals.py`).
+Bir modele karşı canlı testler: `KASA_LIVE_TESTS=1 pytest -m live -s`. Eval'ler:
+`python -m evals.run_evals` (bkz. `backend/evals/run_evals.py` içindeki docstring).
 
-## Using a coding agent on this repository
+## Bu repoda kodlama ajanı kullanmak
 
-Claude Code, Codex, Copilot and similar agents read [AGENTS.md](../AGENTS.md) at the
-repository root (`CLAUDE.md` imports it). It lists the layout, the commands and the rules
-that must never break: integer minor units, tools take the user from `tool_context`,
-untrusted text is data, no secrets. Some tips:
+Claude Code, Codex, Copilot ve benzeri ajanlar repo kökündeki [AGENTS.md](../AGENTS.md)
+dosyasını okuyor (`CLAUDE.md` onu import ediyor). Orada klasör yapısı, komutlar ve asla
+bozulmaması gereken kurallar var: tam sayı alt birimler, tool'lar kullanıcıyı `tool_context`'ten
+alır, güvenilmeyen metin veridir, secret yok. Birkaç ipucu:
 
-- Give the agent one issue at a time and the story id, and ask it to write the test first.
-- Ask it to run the CI commands before it says it is done.
-- Read every line of the diff before you push. You are the author, not the agent.
-- Never paste a real API key into an agent chat.
+- Ajana her seferinde tek bir issue ve story id'si ver, önce testi yazmasını iste.
+- "Bitti" demeden önce CI komutlarını çalıştırmasını iste.
+- Push etmeden önce diff'in her satırını oku. Yazar sensin, ajan değil.
+- Bir ajan sohbetine asla gerçek bir API key yapıştırma.
 
-## Lab presentations
+## Lab sunumları
 
-Everyone presents the part they own, so the instructor hears from all five of us. A short
-lab slot can look like this:
+Herkes sahibi olduğu kısmı sunuyor, böylece hoca beşimizi de dinlemiş oluyor. Kısa bir lab
+sunumu şöyle olabilir:
 
-| Part | Who | Time |
+| Bölüm | Kim | Süre |
 | --- | --- | --- |
-| Problem, users and architecture | Berke (or the next presenter if Berke is away) | 2 min |
-| Data model, API, security layers | Mustafa | 2 min |
-| Coordinator, receipts, budgets and money math | Yusuf | 2 min |
-| Houses, splits and settle-up | Ömer | 2 min |
-| The app itself, page by page | Zehra | 2 min |
+| Problem, kullanıcılar ve mimari | Berke (Berke yoksa Mustafa) | 2 dk |
+| Veri modeli, API, güvenlik katmanları | Mustafa | 2 dk |
+| Koordinatör, fişler, bütçeler ve para hesabı | Yusuf | 2 dk |
+| Evler, bölüşümler ve hesaplaşma | Ömer | 2 dk |
+| Uygulamanın kendisi, sayfa sayfa | Zehra | 2 dk |
 
-Each person shows one thing they built or fixed since the last lab, one test that proves it,
-and what they do next. For the demo on Friday 2026-10-30, follow [DEMO.md](DEMO.md).
+Herkes son labdan beri yaptığı ya da düzelttiği bir şeyi, bunu kanıtlayan bir testi ve sırada
+ne yapacağını gösteriyor. 30 Ekim 2026 Cuma günkü demo için [DEMO.md](DEMO.md) dosyasını takip
+edin.

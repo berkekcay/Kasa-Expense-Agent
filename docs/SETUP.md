@@ -1,43 +1,48 @@
-# Kasa setup guide
+# Kasa kurulum rehberi
 
-This guide takes the account owner from nothing to a working Kasa deployment. Follow the
-steps in order. Plan for one to two hours, most of it clicking through consoles.
+Bu rehber, ekipte bulut hesaplarını kuran kişi için yazıldı (bulut kurulumu Mustafa'da).
+Hiçbir şey yokken başlayıp çalışan bir Kasa deploy'una kadar gidiyor. Adımları sırayla izle.
+Bir iki saat ayır, çoğu console'larda tıklamakla geçiyor.
 
-At the end you have:
+**Bugünkü durum:** Kasa şu an SQLite ile çalışıyor (geliştirme, testler ve demo). Bu
+rehberdeki production kurulumu planlanan kurulum. Henüz ne Azure veritabanı ne de Cloud Run
+servisleri var. Veritabanı planının tamamı ve kimin ne yapacağı [docs/DATABASE.md](DATABASE.md)
+dosyasında.
 
-- `kasa-api` (FastAPI backend) and `kasa-web` (Next.js frontend) on Google Cloud Run in
-  `europe-west1`
-- an Azure SQL Database on the free offer, with the row-level security policy from the
-  Alembic migrations
-- Google sign-in through Firebase Auth, Gmail and Calendar access through Google OAuth,
-  and Gemini through an AI Studio key
-- Gmail push notifications through Pub/Sub, and three Cloud Scheduler jobs
+Rehberin sonunda elinde şunlar olacak:
 
-The scripts in `deploy/` do the Google Cloud command-line work. The rest happens in web
-consoles. Everything here has been checked offline only (script dry runs with a stubbed
-`gcloud`, the SQL Server DDL rendered without a server). The first real run is yours, so
-read the output of each script.
+- Google Cloud Run'da, `europe-west1` bölgesinde `kasa-api` (FastAPI backend) ve `kasa-web`
+  (Next.js frontend)
+- ücretsiz teklifte bir Azure SQL Database, Alembic migration'larından gelen row-level
+  security policy'siyle
+- Firebase Auth üzerinden Google ile giriş, Google OAuth üzerinden Gmail ve Calendar erişimi,
+  bir AI Studio anahtarıyla Gemini
+- Pub/Sub ile Gmail push bildirimleri ve üç Cloud Scheduler job'u
 
-## 1. Prerequisites
+Google Cloud'daki komut satırı işlerini `deploy/` içindeki script'ler yapıyor. Geri kalanı web
+console'larında. Buradaki her şey sadece offline kontrol edildi (sahte bir `gcloud` ile script
+dry run'ları, SQL Server DDL'inin sunucusuz üretilmesi). İlk gerçek çalıştırmayı sen
+yapacaksın, o yüzden her script'in çıktısını oku.
 
-- A Google account for the project owner.
-- Google Cloud Shell (https://shell.cloud.google.com). It already has `gcloud`, `git`,
-  `python3` and `docker`, so you install nothing. You can also use your own machine with the
-  gcloud CLI, but the scripts are written and described for Cloud Shell (bash).
-- An Azure account through Azure for Students (step 4). The Azure CLI (`az`) is optional;
-  this guide uses the Azure portal.
-- Read access to the GitHub repository.
+## 1. Gereksinimler
 
-## 2. Google Cloud project and billing
+- Projeyi kuran kişinin bir Google hesabı.
+- Google Cloud Shell (https://shell.cloud.google.com). İçinde `gcloud`, `git`, `python3` ve
+  `docker` hazır geliyor, bir şey kurman gerekmiyor. gcloud CLI ile kendi bilgisayarını da
+  kullanabilirsin ama script'ler Cloud Shell (bash) için yazıldı ve öyle anlatılıyor.
+- Azure for Students üzerinden bir Azure hesabı (adım 4). Azure CLI (`az`) şart değil, bu
+  rehber Azure portal'ını kullanıyor.
+- GitHub reposuna okuma erişimi.
 
-1. Open https://console.cloud.google.com, click the project picker, then **New project**.
-   Name it, for example, `kasa-berke`. Write down the **project ID** (it may differ from
-   the name).
-2. Link a billing account (**Billing** in the menu). Cloud Run asks for one even when you
-   stay inside the free tier. New billing accounts usually come with free trial credits.
-3. Set a budget alert so nothing surprises you: **Billing > Budgets & alerts > Create
-   budget**, for example 5 USD with alerts at 50, 90 and 100 percent.
-4. Open Cloud Shell and get the code:
+## 2. Google Cloud projesi ve faturalandırma
+
+1. https://console.cloud.google.com adresini aç, proje seçiciye tıkla, sonra **New project**.
+   Projeye örneğin `kasa-ekip` adını ver. **Project ID**'yi not al (addan farklı olabilir).
+2. Bir billing account bağla (menüde **Billing**). Free tier içinde kalsan bile Cloud Run
+   bunu istiyor. Yeni billing account'larla genelde ücretsiz deneme kredisi geliyor.
+3. Sürpriz fatura olmasın diye bir bütçe uyarısı kur: **Billing > Budgets & alerts > Create
+   budget**, örneğin 5 USD, uyarılar yüzde 50, 90 ve 100'de.
+4. Cloud Shell'i aç ve kodu çek:
 
    ```bash
    gcloud config set project <PROJECT_ID>
@@ -46,149 +51,153 @@ read the output of each script.
    source deploy/config.sh && echo "API: $API_URL" && echo "Web: $WEB_URL"
    ```
 
-   Cloud Run URLs follow the pattern `https://<service>-<project number>.<region>.run.app`,
-   so the two URLs are known before anything is deployed. You need them in steps 5 and 6.
-   All settings for the scripts are in `deploy/config.sh`.
+   Cloud Run URL'leri `https://<service>-<project number>.<region>.run.app` kalıbında, yani
+   iki URL de daha hiçbir şey deploy edilmeden belli. Bunlar 5. ve 6. adımlarda lazım olacak.
+   Script'lerin bütün ayarları `deploy/config.sh` içinde.
 
-## 3. Gemini API key
+## 3. Gemini API anahtarı
 
-1. Go to https://aistudio.google.com/apikey and sign in with the owner account.
-2. Click **Create API key** and choose the Kasa project (or another project, see below).
-3. Keep the key for step 7. Never put it in a file in the repository.
+1. https://aistudio.google.com/apikey adresine git ve projeyi kuran hesapla giriş yap.
+2. **Create API key**'e tıkla ve Kasa projesini seç (ya da başka bir proje, aşağıya bak).
+3. Anahtarı 7. adım için sakla. Repodaki hiçbir dosyaya koyma.
 
-A key in a project with billing turned on uses the paid tier. To stay on the free tier,
-create the key in a separate project without billing; AI Studio shows the tier next to each
-key. On the free tier Google may use prompts to improve its products, so use test receipts
-and test emails while you are on it.
+Billing'i açık bir projedeki anahtar ücretli tier'ı kullanır. Free tier'da kalmak için
+anahtarı billing'i olmayan ayrı bir projede oluştur; AI Studio her anahtarın yanında tier'ı
+gösteriyor. Free tier'da Google prompt'ları kendi ürünlerini geliştirmek için kullanabilir,
+o yüzden bu tier'dayken test fişleri ve test e-postaları kullan.
 
-## 4. Azure SQL Database (free offer)
+## 4. Azure SQL Database (ücretsiz teklif)
+
+Bu bölüm planlanan production veritabanını anlatıyor. Henüz kurulmadı, Kasa bugün SQLite ile
+çalışıyor. Migration'lar, row-level security ve bağlantı kodu hazır ve offline test edildi.
+Plan, sıralama ve görev dağılımı için [veritabanı planı](DATABASE.md) dosyasına bak.
 
 ### 4.1 Azure for Students
 
-Sign up at https://azure.microsoft.com/free/students with your school email. It gives a
-yearly credit and needs no credit card. The SQL Database free offer below does not use the
-credit as long as you keep the auto-pause setting from step 4.2.
+https://azure.microsoft.com/free/students adresinden okul e-postanla kaydol. Yıllık bir kredi
+veriyor ve kredi kartı istemiyor. Aşağıdaki SQL Database ücretsiz teklifi, 4.2'deki
+auto-pause ayarını değiştirmediğin sürece bu krediden harcamıyor.
 
-### 4.2 Server and database
+### 4.2 Sunucu ve veritabanı
 
-In https://portal.azure.com search for **SQL databases** and click **Create**.
+https://portal.azure.com içinde **SQL databases** ara ve **Create**'e tıkla.
 
 1. **Basics**
    - Resource group: **Create new**, `kasa-rg`.
    - Database name: `kasa`.
-   - Server: **Create new**. Server name: something unique such as `kasa-sql-berke`.
-     Location: a region near Belgium, for example **West Europe**. If the student
-     subscription refuses the region (a policy error), try another European region.
-     Authentication method: **Use SQL authentication**. Pick the server admin login (for
-     example `kasaadmin`) and a strong password (20 or more characters; use letters, digits
-     and `-_.!` only, which keeps the connection string simple). This admin login is only
-     for migrations.
-   - A banner offers the free offer ("Want to try Azure SQL Database for free?"). Click
-     **Apply offer**. The compute tier becomes General Purpose serverless.
-   - **Behavior when free limit reached**: choose **Auto-pause the database until next
-     month**. With this choice the database can never cost money; it stops for the rest of
-     the month instead.
+   - Server: **Create new**. Server name: benzersiz bir şey, örneğin `kasa-sql-ekip`.
+     Location: Belçika'ya yakın bir bölge, örneğin **West Europe**. Öğrenci aboneliği bölgeyi
+     reddederse (bir policy hatası) başka bir Avrupa bölgesi dene.
+     Authentication method: **Use SQL authentication**. Bir server admin login'i seç (örneğin
+     `kasaadmin`) ve uzun, rastgele bir parola belirle (en az 20 karakter; bağlantı
+     string'i basit kalsın diye sadece harf, rakam ve `-_.!` kullan). Bu admin login'i sadece
+     migration'lar için.
+   - Bir banner ücretsiz teklifi öneriyor ("Want to try Azure SQL Database for free?").
+     **Apply offer**'a tıkla. Compute tier General Purpose serverless oluyor.
+   - **Behavior when free limit reached**: **Auto-pause the database until next month**'u
+     seç. Böylece veritabanı hiçbir zaman para tutmaz, limit dolunca ayın geri kalanında
+     durur.
 2. **Networking**
    - Connectivity method: **Public endpoint**.
-   - Allow Azure services and resources to access this server: **No** (Cloud Run is not an
-     Azure service, and this switch would open the server to every Azure customer).
-   - Add current client IP address: **Yes**, so the portal query editor works.
+   - Allow Azure services and resources to access this server: **No** (Cloud Run bir Azure
+     servisi değil ve bu ayar sunucuyu bütün Azure müşterilerine açar).
+   - Add current client IP address: **Yes**, portal'daki query editor çalışsın diye.
    - Minimum TLS version: **1.2**.
-3. Leave the rest as it is and click **Review + create**, then **Create**.
+3. Gerisini olduğu gibi bırak, **Review + create**'e, sonra **Create**'e tıkla.
 
-### 4.3 Firewall for Cloud Run
+### 4.3 Cloud Run için firewall
 
-Cloud Run has no fixed outgoing IP address, so the server cannot allow "just Cloud Run".
-There are two options:
+Cloud Run'ın sabit bir çıkış IP adresi yok, bu yüzden sunucuda "sadece Cloud Run'a izin ver"
+diye bir kural yazılamıyor. İki seçenek var:
 
-- **Allow all addresses** (what this guide uses). Open the server (not the database), go to
-  **Security > Networking**, and under **Firewall rules** add a rule named
-  `AllowCloudRun` from `0.0.0.0` to `255.255.255.255`. Save. The server is then reachable
-  from the internet, protected by the SQL login, a strong password and TLS (the connection
-  string demands `Encrypt=yes` and a valid certificate).
-- **Static outgoing IP** (stricter, paid). Route the backend through a VPC with Cloud NAT
-  and a reserved static IP (Cloud Run Direct VPC egress with `--vpc-egress=all-traffic`),
-  then allow only that IP. The NAT gateway and the IP cost a few dollars a month, which is
-  why it is not the default here.
+- **Bütün adreslere izin vermek** (bu rehberin kullandığı yol). Veritabanını değil sunucuyu
+  aç, **Security > Networking**'e git ve **Firewall rules** altında `0.0.0.0` ile
+  `255.255.255.255` arası için `AllowCloudRun` adında bir kural ekle. Kaydet. Sunucu artık
+  internetten erişilebilir; onu SQL login'i, uzun parola ve TLS koruyor (bağlantı string'i
+  `Encrypt=yes` ve geçerli bir sertifika istiyor).
+- **Sabit çıkış IP'si** (daha sıkı, ücretli). Backend'i Cloud NAT ve ayrılmış sabit bir IP ile
+  bir VPC üzerinden geçir (`--vpc-egress=all-traffic` ile Cloud Run Direct VPC egress), sonra
+  sadece o IP'ye izin ver. NAT gateway ve IP ayda birkaç dolar tutuyor, bu yüzden burada
+  varsayılan değil.
 
-### 4.4 Database user for the app
+### 4.4 Uygulamanın veritabanı kullanıcısı
 
-The app connects as a contained database user with data access only. It cannot change the
-schema or the security policy, so row-level security always applies to it. The admin login
-from step 4.2 is used only by the migration job.
+Uygulama, sadece veri erişimi olan bir contained database user ile bağlanır. Bu kullanıcı
+şemayı ya da security policy'yi değiştiremez, yani row-level security ona her zaman uygulanır.
+4.2'deki admin login'ini sadece migration job kullanır.
 
-Open the `kasa` database, click **Query editor (preview)**, sign in with the admin login, and
-run this (choose a different strong password):
+`kasa` veritabanını aç, **Query editor (preview)**'a tıkla, admin login'iyle giriş yap ve
+şunu çalıştır (farklı, uzun bir parola seç):
 
 ```sql
 CREATE USER kasa_app WITH PASSWORD = '<app password>';
 GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo TO kasa_app;
 ```
 
-The grant covers tables the migrations create later. After the first deploy (step 8) you can
-also stop the app user from touching the migration bookkeeping:
+Bu yetki, migration'ların sonradan oluşturacağı tabloları da kapsıyor. İlk deploy'dan sonra
+(adım 8) uygulama kullanıcısının migration kayıt tablosuna dokunmasını da engelleyebilirsin:
 
 ```sql
 DENY INSERT, UPDATE, DELETE ON dbo.alembic_version TO kasa_app;
 ```
 
-The predicate functions live in the `security` schema, which `kasa_app` has no rights on.
-Because the policy is schema-bound, users do not need any permission on those functions.
+Predicate fonksiyonları `security` şemasında duruyor ve `kasa_app`'in orada hiçbir yetkisi
+yok. Policy schema-bound olduğu için kullanıcıların bu fonksiyonlarda yetkiye ihtiyacı yok.
 
-### 4.5 Connection URLs
+### 4.5 Bağlantı URL'leri
 
-The backend needs two SQLAlchemy URLs. `gcp_bootstrap.sh` (step 7) asks for the parts and
-builds both for you, so this is for reference:
+Backend'in iki SQLAlchemy URL'ine ihtiyacı var. `gcp_bootstrap.sh` (adım 7) parçaları sorup
+ikisini de senin için oluşturuyor, bu kısım sadece bilgi için:
 
 ```
 mssql+pyodbc://<user>:<password, URL-encoded>@<server>.database.windows.net:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no
 ```
 
-| Secret Manager name | Env var | User | Read by |
+| Secret Manager adı | Env değişkeni | Kullanıcı | Kim okuyor |
 | --- | --- | --- | --- |
-| `database-url` | `DATABASE_URL` | `kasa_app` | backend service |
-| `migration-database-url` | `MIGRATION_DATABASE_URL` | admin login | migration job only |
+| `database-url` | `DATABASE_URL` | `kasa_app` | backend servisi |
+| `migration-database-url` | `MIGRATION_DATABASE_URL` | admin login | sadece migration job |
 
-Characters such as `@`, `:`, `/` and `%` in a password break the URL unless they are
-percent-encoded. To encode one by hand:
+Parolada `@`, `:`, `/` ve `%` gibi karakterler percent-encode edilmezse URL'i bozar. Elle
+encode etmek için:
 
 ```bash
 python3 -c 'import getpass, urllib.parse; print(urllib.parse.quote(getpass.getpass(), safe=""))'
 ```
 
-The backend image already contains Microsoft ODBC Driver 18.
+Backend image'ında Microsoft ODBC Driver 18 zaten var.
 
-### 4.6 Auto-pause and the first request
+### 4.6 Auto-pause ve ilk istek
 
-The free database pauses after a period without connections (the auto-pause delay on the
-database's **Compute + storage** page; set it to the lowest value offered). While it is
-paused, the first login fails with error 40613 and the database takes about a minute to
-resume.
+Ücretsiz veritabanı bir süre bağlantı gelmezse duraklıyor (bu süre veritabanının
+**Compute + storage** sayfasındaki auto-pause delay; sunulan en düşük değere ayarla).
+Duraklamışken ilk login 40613 hatasıyla düşüyor ve veritabanının uyanması yaklaşık bir dakika
+sürüyor.
 
-The backend handles this: `app/db/session.py` retries a login that fails with 40613 (and
-Azure's other transient login errors) for about 75 seconds, so the first request after a
-pause is slow but succeeds. The migration job uses the same retry. `pool_pre_ping` replaces
-pooled connections that died while an instance sat idle. Pooled connections also keep the
-database awake until the Cloud Run instance shuts down, which happens some minutes after the
-last request.
+Backend bunu hallediyor: `app/db/session.py`, 40613 (ve Azure'un diğer geçici login
+hataları) ile düşen bir login'i yaklaşık 75 saniye boyunca yeniden deniyor. Yani duraklamadan
+sonraki ilk istek yavaş ama başarılı oluyor. Migration job da aynı yeniden denemeyi
+kullanıyor. `pool_pre_ping`, instance boşta beklerken ölen pool bağlantılarını yeniliyor.
+Pool'daki bağlantılar da Cloud Run instance'ı kapanana kadar veritabanını uyanık tutuyor, bu
+da son istekten birkaç dakika sonra oluyor.
 
-Read "Free limits and costs" at the end before you pick the Gmail sync schedule.
+Gmail sync zamanlamasını seçmeden önce sondaki "Ücretsiz limitler ve maliyetler" bölümünü oku.
 
-## 5. Google OAuth for Gmail and Calendar
+## 5. Gmail ve Calendar için Google OAuth
 
-Kasa reads receipts from Gmail and adds settle-up reminders to Google Calendar through a
-standard OAuth web flow on the backend.
+Kasa, backend'deki standart bir OAuth web akışıyla Gmail'den fişleri okuyor ve Google
+Calendar'a hesaplaşma hatırlatmaları ekliyor.
 
-### 5.1 Consent screen
+### 5.1 Onay ekranı
 
-1. Open https://console.cloud.google.com/auth/overview (Google Auth Platform) in the Kasa
-   project and click **Get started**.
-2. App name `Kasa`, your email as support email, audience **External**, your email as
-   contact. Accept the policy and create.
-3. **Audience**: leave the publishing status on **Testing**. Under **Test users** add the
-   Google account of everyone who will use Kasa (up to 100).
-4. **Data access > Add or remove scopes**: add these four (paste them under "Manually add
-   scopes" if they are not in the list) and save:
+1. Kasa projesinde https://console.cloud.google.com/auth/overview (Google Auth Platform)
+   adresini aç ve **Get started**'a tıkla.
+2. App name `Kasa`, support email olarak kendi e-postan, audience **External**, contact
+   olarak yine kendi e-postan. Policy'yi kabul et ve oluştur.
+3. **Audience**: publishing status'u **Testing**'de bırak. **Test users** altına Kasa'yı
+   kullanacak herkesin Google hesabını ekle (en fazla 100).
+4. **Data access > Add or remove scopes**: şu dört scope'u ekle (listede yoksa "Manually add
+   scopes" altına yapıştır) ve kaydet:
 
    ```
    openid
@@ -197,46 +206,50 @@ standard OAuth web flow on the backend.
    https://www.googleapis.com/auth/calendar.events
    ```
 
-What Testing mode means for Kasa:
+Testing modunun Kasa için anlamı:
 
-- `gmail.readonly` is a restricted scope. Publishing the app for everyone would need Google's
-  verification plus a yearly third-party security assessment, so the app stays in Testing.
-- Only test users can sign in. This also covers Firebase's Google sign-in, which uses the
-  same project.
-- Google refresh tokens for apps in Testing expire after 7 days. Kasa notices the dead token,
-  shows Google as disconnected, and the user connects again in **Settings**.
-- During consent Google shows an "unverified app" warning. Click **Advanced** and continue.
+- `gmail.readonly` kısıtlı bir scope. Uygulamayı herkese açmak için Google'ın doğrulaması ve
+  her yıl üçüncü taraf bir güvenlik değerlendirmesi gerekiyor, bu yüzden uygulama Testing'de
+  kalıyor.
+- Sadece test kullanıcıları giriş yapabiliyor. Bu, aynı projeyi kullanan Firebase'in Google
+  ile girişi için de geçerli.
+- Testing'deki uygulamaların Google refresh token'ları 7 gün sonra geçersiz oluyor. Kasa
+  ölmüş token'ı fark ediyor, Google'ı bağlantısı kopmuş olarak gösteriyor ve kullanıcı
+  **Settings**'ten tekrar bağlanıyor.
+- Onay sırasında Google bir "unverified app" uyarısı gösteriyor. **Advanced**'e tıklayıp
+  devam et.
 
 ### 5.2 OAuth client
 
-1. **Clients > Create client**, type **Web application**, name `kasa-api`.
-2. Under **Authorized redirect URIs** add both:
+1. **Clients > Create client**, tür **Web application**, ad `kasa-api`.
+2. **Authorized redirect URIs** altına ikisini de ekle:
 
    ```
    http://localhost:8000/integrations/google/callback
    <API_URL>/integrations/google/callback
    ```
 
-   `<API_URL>` is the backend URL printed in step 2, for example
+   `<API_URL>`, 2. adımda yazdırılan backend URL'i, örneğin
    `https://kasa-api-123456789012.europe-west1.run.app`.
-3. Click **Create** and copy the client ID and client secret right away (download the JSON
-   too; the console may not show the secret again). You enter both in step 7.
+3. **Create**'e tıkla ve client ID ile client secret'ı hemen kopyala (JSON'u da indir; console
+   secret'ı bir daha göstermeyebilir). İkisini 7. adımda gireceksin.
 
-The Gmail and Calendar APIs are enabled by `gcp_bootstrap.sh`.
+Gmail ve Calendar API'lerini `gcp_bootstrap.sh` açıyor.
 
 ## 6. Firebase Auth
 
-1. Open https://console.firebase.google.com, click **Create a project** (or **Add
-   project**) and choose the existing Google Cloud project from step 2, so both share one
-   project. Google Analytics is not needed.
-2. **Build > Authentication > Get started > Sign-in method**: enable **Google**, pick the
-   support email, save.
-3. **Authentication > Settings > Authorized domains**: add the frontend host, which is
-   `<WEB_URL>` without `https://`, for example `kasa-web-123456789012.europe-west1.run.app`.
-   `localhost` is already there.
-4. **Project settings > General > Your apps**: add a **Web** app (`</>`), nickname
-   `kasa-web`, no Hosting. Copy `apiKey`, `authDomain`, `projectId` and `appId`.
-5. Save them in Cloud Shell. This file is gitignored and Cloud Shell keeps your home folder:
+1. https://console.firebase.google.com adresini aç, **Create a project**'e (ya da **Add
+   project**'e) tıkla ve 2. adımdaki mevcut Google Cloud projesini seç, böylece ikisi aynı
+   projeyi paylaşır. Google Analytics gerekmiyor.
+2. **Build > Authentication > Get started > Sign-in method**: **Google**'ı aç, support
+   email'i seç, kaydet.
+3. **Authentication > Settings > Authorized domains**: frontend host'unu ekle. Bu,
+   `https://` olmadan `<WEB_URL>`, örneğin `kasa-web-123456789012.europe-west1.run.app`.
+   `localhost` zaten listede.
+4. **Project settings > General > Your apps**: bir **Web** uygulaması ekle (`</>`), nickname
+   `kasa-web`, Hosting yok. `apiKey`, `authDomain`, `projectId` ve `appId` değerlerini kopyala.
+5. Bunları Cloud Shell'de kaydet. Bu dosya gitignore'da ve Cloud Shell home klasörünü
+   saklıyor:
 
    ```bash
    cat > deploy/config.local.sh <<'EOF'
@@ -244,54 +257,55 @@ The Gmail and Calendar APIs are enabled by `gcp_bootstrap.sh`.
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="<authDomain>"
    NEXT_PUBLIC_FIREBASE_PROJECT_ID="<projectId>"
    NEXT_PUBLIC_FIREBASE_APP_ID="<appId>"
-   # Optional overrides of deploy/config.sh, for example:
-   # SYNC_SCHEDULE="0 * * * *"     # hourly instead of every 6 hours
-   # ENABLE_GMAIL_PUSH=true        # new mail within seconds (uses more free database time)
+   # deploy/config.sh ayarlarını ezmek için, örneğin:
+   # SYNC_SCHEDULE="0 * * * *"     # 6 saatte bir yerine saatte bir
+   # ENABLE_GMAIL_PUSH=true        # yeni mail saniyeler içinde (daha çok ücretsiz veritabanı süresi harcar)
    EOF
    ```
 
-These four values are public web config (they end up in the browser bundle), not secrets.
-The backend checks Firebase ID tokens against `FIREBASE_PROJECT_ID`, which the deploy script
-sets to the project ID. Both sides must name the same project.
+Bu dört değer public web config (tarayıcıya giden bundle'ın içine giriyor), secret değil.
+Backend, Firebase ID token'larını `FIREBASE_PROJECT_ID`'ye göre kontrol ediyor ve deploy
+script'i bunu proje ID'sine ayarlıyor. İki taraf da aynı projeyi göstermeli.
 
 ## 7. Google Cloud bootstrap
 
-Run this once in Cloud Shell from the repository folder. It is safe to run again; it skips
-what exists and only asks for secrets that are still empty.
+Bunu Cloud Shell'de repo klasöründen bir kez çalıştır. Tekrar çalıştırmak sorun değil: var
+olanı atlıyor ve sadece hâlâ boş olan secret'ları soruyor.
 
 ```bash
 bash deploy/gcp_bootstrap.sh
 ```
 
-It asks for the Azure SQL server name, the admin login and password, the `kasa_app`
-password, the Gemini key and the OAuth client ID and secret. Leave an answer empty to skip
-it and run the script again later. It creates:
+Azure SQL sunucu adını, admin login'ini ve parolasını, `kasa_app` parolasını, Gemini
+anahtarını ve OAuth client ID ile secret'ını soruyor. Bir soruyu atlamak için boş bırak, script'i
+sonra tekrar çalıştırırsın. Oluşturdukları:
 
-- **APIs**: Cloud Run, Cloud Build, Artifact Registry, Secret Manager, Pub/Sub, Cloud
-  Scheduler, Gmail, Calendar, IAM, Identity Toolkit (Firebase Auth) and a few helpers.
-- **Artifact Registry** repository `kasa`, with a cleanup policy that keeps the 5 newest
-  images.
-- **Bucket** `<project>-kasa-build` for Cloud Build uploads (files deleted after 7 days).
-- **Service accounts**, each with only what it needs:
+- **API'ler**: Cloud Run, Cloud Build, Artifact Registry, Secret Manager, Pub/Sub, Cloud
+  Scheduler, Gmail, Calendar, IAM, Identity Toolkit (Firebase Auth) ve birkaç yardımcı API.
+- `kasa` adında bir **Artifact Registry** reposu; en yeni 5 image'ı tutan bir cleanup
+  policy'siyle.
+- Cloud Build yüklemeleri için `<project>-kasa-build` **bucket**'ı (dosyalar 7 gün sonra
+  siliniyor).
+- Her biri sadece ihtiyacı olan yetkiye sahip **service account**'lar:
 
-  | Account | Used by | Permissions |
+  | Hesap | Kullanan | Yetkiler |
   | --- | --- | --- |
-  | `kasa-api` | backend service | read its six secrets |
-  | `kasa-migrate` | migration job | read `migration-database-url` |
-  | `kasa-web` | frontend service | none |
-  | `kasa-build` | Cloud Build | push to the `kasa` repo, read the build bucket, write logs |
-  | `kasa-pubsub-push` | Pub/Sub push token | none (only its identity is used) |
+  | `kasa-api` | backend servisi | kendi altı secret'ını okumak |
+  | `kasa-migrate` | migration job | `migration-database-url`'i okumak |
+  | `kasa-web` | frontend servisi | yok |
+  | `kasa-build` | Cloud Build | `kasa` reposuna push, build bucket'ını okumak, log yazmak |
+  | `kasa-pubsub-push` | Pub/Sub push token'ı | yok (sadece kimliği kullanılıyor) |
 
-- **Secrets** in Secret Manager: `database-url`, `migration-database-url`,
-  `gemini-api-key`, `google-oauth-client-id`, `google-oauth-client-secret`, and two it
-  generates itself: `token-encryption-key` (`TOKEN_ENCRYPTION_KEY`, the Fernet key for
-  stored Google refresh tokens) and `internal-task-token` (`INTERNAL_TASK_TOKEN`). Do not
-  change the encryption key later: tokens encrypted with the old key cannot be read and
-  every user would have to reconnect Google.
-- **Pub/Sub** for Gmail push (skipped with `ENABLE_GMAIL_PUSH=false`): topic `kasa-gmail`,
-  publish rights on it for Gmail's own account, and a push subscription that sends each
-  message to the backend with a Google-signed OIDC token. The backend checks that token's
-  audience and service account. The core commands are:
+- Secret Manager'da **secret'lar**: `database-url`, `migration-database-url`,
+  `gemini-api-key`, `google-oauth-client-id`, `google-oauth-client-secret` ve kendi ürettiği
+  iki tane: `token-encryption-key` (`TOKEN_ENCRYPTION_KEY`, saklanan Google refresh
+  token'ları için Fernet anahtarı) ve `internal-task-token` (`INTERNAL_TASK_TOKEN`).
+  Şifreleme anahtarını sonradan değiştirme: eski anahtarla şifrelenmiş token'lar okunamaz ve
+  her kullanıcının Google'ı yeniden bağlaması gerekir.
+- Gmail push için **Pub/Sub** (`ENABLE_GMAIL_PUSH=false` ile atlanır): `kasa-gmail` topic'i,
+  Gmail'in kendi hesabına bu topic'te publish yetkisi ve her mesajı Google imzalı bir OIDC
+  token'ıyla backend'e gönderen bir push subscription. Backend bu token'ın audience'ını ve
+  service account'unu kontrol ediyor. Temel komutlar:
 
   ```bash
   gcloud pubsub topics create kasa-gmail
@@ -303,186 +317,192 @@ it and run the script again later. It creates:
     --push-auth-token-audience "$API_URL/internal/gmail/push" --ack-deadline 30
   ```
 
-- **Cloud Scheduler** jobs, time zone Europe/Istanbul, each a `POST` with the header
-  `X-Kasa-Task-Token: <internal-task-token>`:
+- **Cloud Scheduler** job'ları, saat dilimi Europe/Istanbul; her biri
+  `X-Kasa-Task-Token: <internal-task-token>` header'ıyla bir `POST`:
 
-  | Job | Default schedule | Endpoint | Deadline |
+  | Job | Varsayılan zamanlama | Endpoint | Süre sınırı |
   | --- | --- | --- | --- |
-  | `kasa-gmail-sync-all` | every 6 hours (`SYNC_SCHEDULE`) | `/internal/gmail/sync-all` | 900 s |
-  | `kasa-gmail-renew-watches` | daily 08:10 | `/internal/gmail/renew-watches` | 180 s |
-  | `kasa-fx-refresh` | daily 16:00 | `/internal/fx/refresh` | 180 s |
+  | `kasa-gmail-sync-all` | 6 saatte bir (`SYNC_SCHEDULE`) | `/internal/gmail/sync-all` | 900 s |
+  | `kasa-gmail-renew-watches` | her gün 08:10 | `/internal/gmail/renew-watches` | 180 s |
+  | `kasa-fx-refresh` | her gün 16:00 | `/internal/fx/refresh` | 180 s |
 
-  The sync job gets a long deadline because it parses every new email with Gemini. Gmail
-  watches expire after 7 days, so the daily renewal keeps push alive. TCMB publishes the
-  day's exchange rates around 15:30. The token is stored in the job settings, where project
-  viewers can see it; anyone else gets 401 from `/internal/*`.
+  Sync job'unun süre sınırı uzun, çünkü her yeni e-postayı Gemini ile parse ediyor. Gmail
+  watch'ları 7 gün sonra bitiyor, günlük yenileme push'u ayakta tutuyor. TCMB günün döviz
+  kurlarını 15:30 civarı yayımlıyor. Token job ayarlarında saklanıyor ve proje viewer'ları
+  onu görebiliyor; başka herkes `/internal/*`'dan 401 alıyor.
 
-When it finishes it prints the URLs and lists any secret that is still empty.
+Bitince URL'leri yazdırıyor ve hâlâ boş olan secret'ları listeliyor.
 
-## 8. Deploy the backend
+## 8. Backend deploy
 
 ```bash
 bash deploy/deploy_backend.sh
 ```
 
-The first run takes about ten minutes. The script:
+İlk çalıştırma yaklaşık on dakika sürüyor. Script şunları yapıyor:
 
-1. Stops if `database-url` or `migration-database-url` is empty.
-2. Builds `backend/Dockerfile` with Cloud Build as `kasa-build` and pushes
-   `europe-west1-docker.pkg.dev/<project>/kasa/api:<git commit>`.
-3. Deploys the Cloud Run job `kasa-migrate` from the same image with the command
-   `alembic upgrade head` and only `MIGRATION_DATABASE_URL` mounted, then runs it and waits.
-   A failed migration stops the script before any new code serves traffic.
-4. Deploys the service `kasa-api` with `AUTO_MIGRATE=false`, `LLM_PROVIDER=gemini`,
-   `FIREBASE_PROJECT_ID`, `CORS_ORIGINS` and `FRONTEND_URL` set to the frontend URL,
-   `GOOGLE_OAUTH_REDIRECT_URI`, the three `PUBSUB_*` settings, and the six secrets mounted as
-   env vars (`DATABASE_URL`, `GOOGLE_API_KEY`, `TOKEN_ENCRYPTION_KEY`,
-   `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `INTERNAL_TASK_TOKEN`). A secret
-   that is still empty is left out, and the feature behind it reports itself as not
-   configured.
-5. Calls `/health`.
+1. `database-url` ya da `migration-database-url` boşsa duruyor.
+2. `backend/Dockerfile`'ı `kasa-build` olarak Cloud Build ile build ediyor ve
+   `europe-west1-docker.pkg.dev/<project>/kasa/api:<git commit>` olarak push ediyor.
+3. Aynı image'dan `kasa-migrate` Cloud Run job'unu `alembic upgrade head` komutuyla ve
+   sadece `MIGRATION_DATABASE_URL` bağlı olarak deploy ediyor, sonra çalıştırıp bekliyor.
+   Migration başarısız olursa script, yeni kod trafik almaya başlamadan duruyor.
+4. `kasa-api` servisini deploy ediyor: `AUTO_MIGRATE=false`, `LLM_PROVIDER=gemini`,
+   `FIREBASE_PROJECT_ID`, frontend URL'ine ayarlanmış `CORS_ORIGINS` ve `FRONTEND_URL`,
+   `GOOGLE_OAUTH_REDIRECT_URI`, üç `PUBSUB_*` ayarı ve env değişkeni olarak bağlanan altı
+   secret (`DATABASE_URL`, `GOOGLE_API_KEY`, `TOKEN_ENCRYPTION_KEY`,
+   `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `INTERNAL_TASK_TOKEN`). Hâlâ boş
+   olan bir secret atlanıyor ve ona bağlı özellik kendini yapılandırılmamış olarak
+   gösteriyor.
+5. `/health`'i çağırıyor.
 
-Service settings and why:
+Servis ayarları ve nedenleri:
 
-| Setting | Value | Reason |
+| Ayar | Değer | Neden |
 | --- | --- | --- |
-| CPU, memory | 1 vCPU, 1 GiB | ADK, the Google clients and pyodbc do not fit well in 512 MiB |
-| Concurrency | 20 | requests mostly wait on Gemini and the database |
-| Timeout | 900 s | `sync-all` makes one Gemini call per new email |
-| Max instances | 1 | chat sessions live in instance memory, and it caps the cost |
-| `--no-cpu-throttling` | on | see below |
-| `--allow-unauthenticated` | on | the app checks Firebase tokens, the push token and the task token itself |
+| CPU, bellek | 1 vCPU, 1 GiB | ADK, Google client'ları ve pyodbc 512 MiB'a pek sığmıyor |
+| Concurrency | 20 | istekler çoğunlukla Gemini'yi ve veritabanını bekliyor |
+| Timeout | 900 s | `sync-all` her yeni e-posta için bir Gemini çağrısı yapıyor |
+| Max instances | 1 | sohbet session'ları instance belleğinde duruyor, maliyet de sınırlı kalıyor |
+| `--no-cpu-throttling` | açık | aşağıya bak |
+| `--allow-unauthenticated` | açık | Firebase token'larını, push token'ını ve task token'ını uygulama kendisi kontrol ediyor |
 
-`--no-cpu-throttling` is needed because two endpoints keep working after they answer:
-`POST /internal/gmail/push` replies 204 at once and parses the email in a background task,
-and the OAuth callback starts the first Gmail sync the same way. With the default
-request-based billing Cloud Run throttles the CPU as soon as the response is sent, and that
-work would stall. Instance-based billing keeps the CPU on while the instance lives. Instances
-still scale to zero when there is no traffic.
+`--no-cpu-throttling` gerekiyor, çünkü iki endpoint cevap verdikten sonra da çalışmaya devam
+ediyor: `POST /internal/gmail/push` hemen 204 dönüyor ve e-postayı bir background task'te
+parse ediyor, OAuth callback de ilk Gmail sync'ini aynı şekilde başlatıyor. Varsayılan
+request-based billing'de Cloud Run, cevap gönderilir gönderilmez CPU'yu kısıyor ve bu iş
+yarıda kalıyor. Instance-based billing, instance yaşadığı sürece CPU'yu açık tutuyor.
+Trafik yokken instance'lar yine sıfıra iniyor.
 
-## 9. Deploy the frontend
+## 9. Frontend deploy
 
 ```bash
 bash deploy/deploy_frontend.sh
 ```
 
-`NEXT_PUBLIC_*` values are baked into the bundle at build time, so the script passes
-`NEXT_PUBLIC_API_URL` (the backend URL) and the four Firebase values as Docker build args,
-then deploys `kasa-web` (512 MiB, scales to zero). It stops if the Firebase values are
-missing, since the production API rejects the dev user box.
+`NEXT_PUBLIC_*` değerleri build sırasında bundle'a gömülüyor. Bu yüzden script
+`NEXT_PUBLIC_API_URL`'i (backend URL'i) ve dört Firebase değerini Docker build argümanı olarak
+veriyor, sonra `kasa-web`'i deploy ediyor (512 MiB, sıfıra iniyor). Firebase değerleri eksikse
+duruyor, çünkü production API dev user kutusunu reddediyor.
 
-To redeploy after a code change, `git pull` in Cloud Shell and run the script for the part
-that changed. Run the backend first when both changed.
+Kod değiştikten sonra yeniden deploy etmek için Cloud Shell'de `git pull` yap ve değişen
+kısmın script'ini çalıştır. İkisi de değiştiyse önce backend'i çalıştır.
 
-## 10. GitHub Actions deploy (optional)
+## 10. GitHub Actions ile deploy (isteğe bağlı)
 
-`.github/workflows/deploy.yml` deploys from GitHub with a manual button and no JSON keys.
-GitHub hands the job a short-lived OIDC token, Google's Workload Identity Federation trades
-it for credentials of the `kasa-deployer` service account, and only workflows from `main` of
-your repository are accepted.
+`.github/workflows/deploy.yml`, GitHub'dan elle basılan bir butonla ve JSON anahtarı olmadan
+deploy ediyor. GitHub job'a kısa ömürlü bir OIDC token veriyor, Google'ın Workload Identity
+Federation'ı bunu `kasa-deployer` service account'unun kimlik bilgileriyle değiştiriyor ve
+sadece senin reponun `main` branch'indeki workflow'lar kabul ediliyor.
 
-One-time setup:
+Bir kerelik kurulum:
 
-1. In Cloud Shell:
+1. Cloud Shell'de:
 
    ```bash
    GITHUB_REPO=berkekcay/Kasa-Expense-Agent bash deploy/gcp_bootstrap.sh
    ```
 
-   Besides the usual work this creates the identity pool `github`, the provider `kasa-repo`
-   (condition: this repository and `refs/heads/main`), and `kasa-deployer` with:
-   Cloud Run Admin, Secret Manager Viewer (lists secret versions, cannot read values),
-   Artifact Registry Writer on the `kasa` repo, and Service Account User on `kasa-api`,
-   `kasa-migrate` and `kasa-web` only. The workflow builds images with Docker on the runner,
-   so the deployer needs no Cloud Build or Storage roles.
-2. In GitHub, **Settings > Secrets and variables > Actions > Variables**, add the variables
-   the script printed (`GCP_PROJECT_ID`, `GCP_PROJECT_NUMBER`, `GCP_REGION`,
-   `GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SA`) and the four `NEXT_PUBLIC_FIREBASE_*` values. With
-   the GitHub CLI: `gh variable set GCP_PROJECT_ID --body <value>` and so on.
-3. Run it from **Actions > Deploy > Run workflow** on `main`, choosing backend, frontend or
-   both.
+   Bu, normal işlerine ek olarak `github` identity pool'unu, `kasa-repo` provider'ını
+   (koşul: bu repo ve `refs/heads/main`) ve şu rollere sahip `kasa-deployer`'ı oluşturuyor:
+   Cloud Run Admin, Secret Manager Viewer (secret versiyonlarını listeler, değerleri
+   okuyamaz), `kasa` reposunda Artifact Registry Writer ve sadece `kasa-api`, `kasa-migrate`
+   ve `kasa-web` üzerinde Service Account User. Workflow image'ları runner'da Docker ile build
+   ediyor, bu yüzden deployer'ın Cloud Build ya da Storage rolüne ihtiyacı yok.
+2. GitHub'da **Settings > Secrets and variables > Actions > Variables** altına script'in
+   yazdırdığı değişkenleri (`GCP_PROJECT_ID`, `GCP_PROJECT_NUMBER`, `GCP_REGION`,
+   `GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SA`) ve dört `NEXT_PUBLIC_FIREBASE_*` değerini ekle.
+   GitHub CLI ile: `gh variable set GCP_PROJECT_ID --body <value>` ve diğerleri için de aynı
+   şekilde.
+3. **Actions > Deploy > Run workflow** ile `main` üzerinde çalıştır; backend, frontend ya da
+   ikisini birden seç.
 
 ## 11. Smoke test
 
-Run these in Cloud Shell after `source deploy/config.sh`:
+Bunları Cloud Shell'de `source deploy/config.sh`'tan sonra çalıştır:
 
-- [ ] `curl -s "$API_URL/health"` shows `"status":"ok"`, `"agents_enabled":true` and
-  `"auth":"firebase"`.
-- [ ] `curl -s -o /dev/null -w '%{http_code}\n' "$API_URL/expenses"` prints `401`.
+- [ ] `curl -s "$API_URL/health"` çıktısında `"status":"ok"`, `"agents_enabled":true` ve
+  `"auth":"firebase"` var.
+- [ ] `curl -s -o /dev/null -w '%{http_code}\n' "$API_URL/expenses"` `401` yazdırıyor.
 - [ ] `curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API_URL/internal/fx/refresh"`
-  prints `401` (no task token).
-- [ ] `gcloud run jobs executions list --job kasa-migrate --region "$REGION"` shows a
-  successful run.
-- [ ] `gcloud scheduler jobs run kasa-fx-refresh --location "$REGION"`, then the job shows
-  a successful last run in **Cloud Scheduler** and a 200 in the `kasa-api` logs.
+  `401` yazdırıyor (task token yok).
+- [ ] `gcloud run jobs executions list --job kasa-migrate --region "$REGION"` başarılı bir
+  çalıştırma gösteriyor.
+- [ ] `gcloud scheduler jobs run kasa-fx-refresh --location "$REGION"` çalıştır; job
+  **Cloud Scheduler**'da başarılı bir son çalıştırma, `kasa-api` log'larında da 200 gösteriyor.
 
-Then in the browser, at `$WEB_URL`, signed in as a test user:
+Sonra tarayıcıda, `$WEB_URL` adresinde bir test kullanıcısıyla giriş yapmışken:
 
-- [ ] Google sign-in works and the nav bar shows your name, not the dev user box.
-- [ ] Add an expense by hand; it appears in the list.
-- [ ] Upload a receipt photo; the receipt agent saves it (first live Gemini call).
-- [ ] Ask the chat "bu ay kategoriye göre ne kadar harcadım?"; a chart comes back.
-- [ ] Create a house, add a second test user, add a shared expense. The second user signs in
-  and sees the same balances, and a third account does not see the house.
-- [ ] **Settings > Connect Google**, accept the scopes, and land back on Settings with
-  Google connected and a Gmail watch expiry date.
-- [ ] Send yourself an email with "Sipariş" or "Order" in the subject. An inbox item appears
-  within a minute (push) or after you press the Gmail sync button in Settings.
-- [ ] Row-level security, in the Azure query editor as the admin:
+- [ ] Google ile giriş çalışıyor ve nav bar'da dev user kutusu değil senin adın görünüyor.
+- [ ] Elle bir harcama ekle; listede görünüyor.
+- [ ] Bir fiş fotoğrafı yükle; receipt agent kaydediyor (ilk canlı Gemini çağrısı).
+- [ ] Sohbete "bu ay kategoriye göre ne kadar harcadım?" diye sor; bir grafik geliyor.
+- [ ] Bir ev oluştur, ikinci bir test kullanıcısı ekle, ortak bir harcama gir. İkinci
+  kullanıcı giriş yapınca aynı bakiyeleri görüyor, üçüncü bir hesap ise evi görmüyor.
+- [ ] **Settings > Connect Google**, scope'ları kabul et; Google bağlı ve bir Gmail watch
+  bitiş tarihiyle Settings'e geri dönüyorsun.
+- [ ] Kendine konusunda "Sipariş" ya da "Order" geçen bir e-posta gönder. Bir dakika içinde
+  (push) ya da Settings'teki Gmail sync butonuna bastıktan sonra bir inbox kaydı çıkıyor.
+- [ ] Row-level security, Azure query editor'da admin olarak:
 
   ```sql
   SELECT name, is_enabled FROM sys.security_policies;   -- kasa_policy, 1
-  SELECT COUNT(*) FROM dbo.expenses;                    -- 0: no user in SESSION_CONTEXT
+  SELECT COUNT(*) FROM dbo.expenses;                    -- 0: SESSION_CONTEXT'te kullanıcı yok
   EXEC sp_set_session_context @key = N'user_id', @value = N'<your Firebase UID>';
-  SELECT COUNT(*) FROM dbo.expenses;                    -- your expenses only
+  SELECT COUNT(*) FROM dbo.expenses;                    -- sadece senin harcamaların
   ```
 
-  The UID is in **Firebase console > Authentication > Users**.
-- [ ] Leave the app alone until the portal shows the database as **Paused**, then reload
-  Kasa. The first page takes up to a minute and then works.
+  UID, **Firebase console > Authentication > Users** içinde.
+- [ ] Portal veritabanını **Paused** olarak gösterene kadar uygulamaya dokunma, sonra Kasa'yı
+  yenile. İlk sayfa bir dakikaya kadar sürüyor, sonra çalışıyor.
 
-## Free limits and costs
+## Ücretsiz limitler ve maliyetler
 
-Prices and limits change; check the pages of each service.
+Fiyatlar ve limitler değişiyor, her servisin kendi sayfasına bak.
 
-- **Azure SQL free offer**: 100,000 vCore seconds of compute and 32 GB of storage per
-  database per month. While the database is awake it is billed at least its minimum vCores
-  (see **Compute + storage**). At 0.5 vCores that is about 55 hours awake per month, under
-  two hours a day. An hourly `sync-all` job, or Gmail push for active mailboxes, keeps the
-  database from pausing, and the free amount runs out within days; the database then stays
-  paused until the next month. That is why the defaults are a sync every 6 hours and push
-  off. To turn push on for a demo, set in `deploy/config.local.sh`:
+- **Azure SQL ücretsiz teklif**: veritabanı başına ayda 100.000 vCore saniye compute ve
+  32 GB depolama. Veritabanı uyanıkken en az minimum vCore'u kadar faturalanıyor (bkz.
+  **Compute + storage**). 0,5 vCore'da bu ayda yaklaşık 55 saat uyanıklık demek, günde iki
+  saatten az. Saatlik bir `sync-all` job'u ya da aktif posta kutuları için Gmail push,
+  veritabanının duraklamasını engelliyor ve ücretsiz miktar birkaç günde bitiyor; sonra
+  veritabanı gelecek aya kadar duraklamış kalıyor. Varsayılanların 6 saatte bir sync ve
+  kapalı push olmasının nedeni bu. Bir demo için push'u açmak istersen
+  `deploy/config.local.sh` içine şunu yaz:
 
   ```bash
-  ENABLE_GMAIL_PUSH=true        # new mail within seconds
+  ENABLE_GMAIL_PUSH=true        # yeni mail saniyeler içinde
   ```
 
-  then run `bash deploy/gcp_bootstrap.sh` and `bash deploy/deploy_backend.sh` again. The
-  database **Overview** page shows how much of the free amount is left.
-- **Cloud Run**: a monthly free allowance of vCPU and memory seconds. Instance-based billing
-  (`--no-cpu-throttling`) counts the whole time an instance is up, which is still small for a
-  handful of users because instances scale to zero.
-- **Artifact Registry**: 0.5 GB free; the cleanup policy keeps it near that.
-- **Cloud Scheduler**: 3 free jobs per billing account, which is exactly what Kasa uses.
-- **Secret Manager**: a few active secret versions are free; Kasa's seven cost cents.
-- **Cloud Build, Pub/Sub, Firebase Auth**: Kasa's use fits the free tiers.
-- **Gemini**: free tier with rate limits, or paid per token (step 3).
+  sonra `bash deploy/gcp_bootstrap.sh` ve `bash deploy/deploy_backend.sh` komutlarını tekrar
+  çalıştır. Ücretsiz miktardan ne kadar kaldığını veritabanının **Overview** sayfası
+  gösteriyor.
+- **Cloud Run**: aylık ücretsiz bir vCPU ve bellek saniyesi kotası var. Instance-based billing
+  (`--no-cpu-throttling`) bir instance'ın açık kaldığı bütün süreyi sayıyor; instance'lar
+  sıfıra indiği için birkaç kullanıcıda bu yine az.
+- **Artifact Registry**: 0,5 GB ücretsiz; cleanup policy kullanımı bunun civarında tutuyor.
+- **Cloud Scheduler**: billing account başına 3 ücretsiz job, Kasa da tam olarak bu kadar
+  kullanıyor.
+- **Secret Manager**: birkaç aktif secret versiyonu ücretsiz; Kasa'nın yedi tanesi birkaç
+  cent tutuyor.
+- **Cloud Build, Pub/Sub, Firebase Auth**: Kasa'nın kullanımı free tier'lara sığıyor.
+- **Gemini**: rate limit'li free tier ya da token başına ücretli (adım 3).
 
-## Troubleshooting
+## Sorun giderme
 
-| Symptom | Cause and fix |
+| Belirti | Neden ve çözüm |
 | --- | --- |
-| Every API call is 401 after sign-in | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` and the backend's `FIREBASE_PROJECT_ID` name different projects |
-| `auth/unauthorized-domain` on sign-in | add the frontend host to Firebase authorized domains (step 6) |
-| CORS error in the browser console | `CORS_ORIGINS` must equal the frontend URL exactly, without a trailing slash |
-| `redirect_uri_mismatch` from Google | the OAuth client needs `<API_URL>/integrations/google/callback` (step 5.2) |
-| `Login failed for user 'kasa_app'` | the user was created in `master` instead of `kasa`, or the password differs from the secret |
-| Error 40613 for more than two minutes | the free amount is used up and the database is paused until next month |
-| Migration job failed | open the execution in **Cloud Run > Jobs > kasa-migrate** and read the logs |
-| Push logs "unexpected service account" | the subscription's push account differs from `PUBSUB_PUSH_SERVICE_ACCOUNT`; rerun both scripts |
-| Scheduler jobs get 401 | the task token changed; rerun `gcp_bootstrap.sh` and `deploy_backend.sh` |
+| Girişten sonra her API çağrısı 401 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` ile backend'deki `FIREBASE_PROJECT_ID` farklı projeleri gösteriyor |
+| Girişte `auth/unauthorized-domain` | frontend host'unu Firebase authorized domains'e ekle (adım 6) |
+| Tarayıcı console'unda CORS hatası | `CORS_ORIGINS` frontend URL'iyle birebir aynı olmalı, sonda eğik çizgi olmadan |
+| Google'dan `redirect_uri_mismatch` | OAuth client'ta `<API_URL>/integrations/google/callback` olmalı (adım 5.2) |
+| `Login failed for user 'kasa_app'` | kullanıcı `kasa` yerine `master`'da oluşturulmuş ya da parola secret'takinden farklı |
+| İki dakikadan uzun süren 40613 hatası | ücretsiz miktar bitmiş, veritabanı gelecek aya kadar duraklatıldı |
+| Migration job başarısız | **Cloud Run > Jobs > kasa-migrate** içinde çalıştırmayı aç ve log'ları oku |
+| Push log'larında "unexpected service account" | subscription'ın push hesabı `PUBSUB_PUSH_SERVICE_ACCOUNT`'tan farklı; iki script'i de tekrar çalıştır |
+| Scheduler job'ları 401 alıyor | task token değişmiş; `gcp_bootstrap.sh` ve `deploy_backend.sh`'ı tekrar çalıştır |
 
-To replace a secret, add a version and redeploy so new instances read it:
+Bir secret'ı değiştirmek için yeni bir versiyon ekle ve yeni instance'lar okusun diye
+yeniden deploy et:
 
 ```bash
 printf '%s' '<new value>' | gcloud secrets versions add gemini-api-key --data-file=-

@@ -1,71 +1,80 @@
 # Kasa
 
-Kasa is an AI agent (Google ADK + Gemini) that looks after a student's personal spending and
-shared-flat expenses. It reads receipts, saves expenses, splits bills, settles debts and answers
-money questions with charts.
+Kasa, bir öğrencinin kişisel harcamalarını ve ev arkadaşlarıyla ortak giderlerini takip eden
+bir AI agent (Google ADK + Gemini). Fişleri okuyor, harcamaları kaydediyor, faturaları
+bölüşüyor, borçları kapatıyor ve parayla ilgili soruları grafiklerle cevaplıyor.
 
-**Start here:** [user stories](docs/USER_STORIES.md) (what Kasa does and how far each part
-is), [architecture](docs/ARCHITECTURE.md) (a five minute overview with diagrams, then the
-module map), [team](docs/TEAM.md) (who owns what and how we work) and the
-[demo runbook](docs/DEMO.md) (setup, demo data and the script for Friday 2026-10-30).
-Coding agents read [AGENTS.md](AGENTS.md).
+**Buradan başla:** [kullanıcı hikayeleri](docs/USER_STORIES.md) (Kasa ne yapıyor, her parça
+ne durumda), [mimari](docs/ARCHITECTURE.md) (diyagramlarla beş dakikalık bir özet, ardından
+modül haritası), [ekip](docs/TEAM.md) (kim neyden sorumlu, nasıl çalışıyoruz),
+[demo rehberi](docs/DEMO.md) (kurulum, demo verisi ve 30 Ekim 2026 Cuma demosunun akışı) ve
+[veritabanı planı](docs/DATABASE.md) (bugün SQLite, production için Azure SQL).
+Coding agent'lar [AGENTS.md](AGENTS.md) dosyasını okur.
 
-The module map, the data model, who owns which files and how a request flows through the
-system are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Modül haritası, veri modeli, hangi dosyanın kime ait olduğu ve bir isteğin sistemde nasıl
+ilerlediği [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) içinde.
 
-The one rule: the LLM decides *what* to do, and plain Python does all the money math.
-Amounts are stored as integer minor units (kuruş/cents), never floats.
+Tek kural: LLM *ne* yapılacağına karar verir, para hesabının tamamını düz Python yapar.
+Tutarlar float olarak değil, tam sayı alt birim (kuruş/cent) olarak saklanır.
 
-## Architecture
+**Veritabanı:** Kasa bugün SQLite ile çalışıyor (geliştirme, testler ve demo). Production
+için Azure SQL Database (Microsoft SQL Server) planlıyoruz. Alembic migration'ları,
+row-level security ve bağlantı kodu (auto-pause için yeniden deneme, `SESSION_CONTEXT`)
+yazıldı ve offline test edildi, ama henüz bir Azure veritabanı yok. Planın tamamı ve işi kimin
+yapacağı [veritabanı planı](docs/DATABASE.md) dosyasında.
+
+## Mimari
 
 ```
- Browser
+ Tarayıcı
    |
    v
- Next.js web UI (frontend/)        chat, receipt upload, expenses, house, charts
-   |  HTTPS + Firebase ID token (or X-User-Id in dev mode)
+ Next.js web arayüzü (frontend/)   sohbet, fiş yükleme, harcamalar, ev, grafikler
+   |  HTTPS + Firebase ID token (dev modunda X-User-Id)
    v
  FastAPI backend (backend/app)
-   |-- api/        REST routers
-   |-- agents/     Google ADK agents
+   |-- api/        REST router'ları
+   |-- agents/     Google ADK agent'ları
    |     coordinator --> receipt_agent   (save_expense, list_recent_expenses)
-   |                 --> house_agent     (splits, balances, settle-up, paybacks)
-   |                 --> report_agent    (guarded read-only SQL -> chart spec)
-   |                 --> budget_agent    (budgets, subscriptions, exchange rates)
-   |                 --> inbox_agent     (expenses found in Gmail and bank statements)
-   |-- services/   plain-Python data layer + money math (unit tested)
-   |-- db/         SQLAlchemy models + sessions (sets SESSION_CONTEXT on MSSQL)
-   |-- alembic/    migrations, including row-level security on SQL Server
+   |                 --> house_agent     (bölüşüm, bakiyeler, hesaplaşma, geri ödemeler)
+   |                 --> report_agent    (korumalı, salt okunur SQL -> grafik tanımı)
+   |                 --> budget_agent    (bütçeler, abonelikler, döviz kurları)
+   |                 --> inbox_agent     (Gmail'de ve banka ekstrelerinde bulunan harcamalar)
+   |-- services/   düz Python veri katmanı + para hesapları (unit test'li)
+   |-- db/         SQLAlchemy modelleri + session'lar (MSSQL'de SESSION_CONTEXT ayarlar)
+   |-- alembic/    migration'lar, SQL Server için row-level security dahil
    |        |                                  |
    v        v                                  v
- Gemini API (Ollama     SQLite (local dev)  /  SQL Server with row-level security (prod)
- in dev and tests)      Gmail, Calendar and TCMB exchange rates via app/integrations/
+ Gemini API (dev ve     SQLite (bugün)  /  Azure SQL, row-level security ile (planlı)
+ testlerde Ollama)      Gmail, Calendar ve TCMB döviz kurları: app/integrations/
 ```
 
-Guardrails:
-- Report SQL is parsed with sqlglot. Only one plain `SELECT` is allowed, and only over
-  `my_spending`, `my_expenses`, `my_expense_items`, `my_house_shares`, `my_budgets` and
-  `my_subscriptions`.
-  Those names are injected as CTEs filtered to the current user, and a row limit is applied.
-  A second agent, the checker, reads each query next to the user's question and can send it
-  back for a fix before it runs.
-- Emails and bank statements only ever create inbox items. Nothing becomes an expense until
-  the user approves it, and text inside an email cannot approve anything.
-- Users only see their own data, enforced three times: service queries, scoped report CTEs
-  and SQL Server RLS (created by the Alembic migrations in `backend/alembic/versions/`).
-- Receipt and email content is treated as data, never as instructions. This is written into
-  every agent prompt, and the acting user always comes from the request, never from the model.
-- No keys in code. Settings come from env vars, which are backed by Secret Manager on Cloud Run.
+Güvenlik önlemleri:
+- Rapor SQL'i sqlglot ile parse edilir. Yalnızca tek bir düz `SELECT` kabul edilir, o da
+  sadece `my_spending`, `my_expenses`, `my_expense_items`, `my_house_shares`, `my_budgets` ve
+  `my_subscriptions` üzerinde.
+  Bu isimler, o anki kullanıcıya göre filtrelenmiş CTE'ler olarak eklenir ve bir satır limiti
+  uygulanır. İkinci bir agent (checker) her sorguyu kullanıcının sorusuyla birlikte okur ve
+  sorgu çalışmadan önce düzeltilmesi için geri gönderebilir.
+- E-postalar ve banka ekstreleri sadece inbox kaydı oluşturur. Kullanıcı onaylamadan hiçbir
+  şey harcamaya dönüşmez ve bir e-postanın içindeki metin hiçbir şeyi onaylayamaz.
+- Kullanıcılar yalnızca kendi verilerini görür. Bu üç yerde uygulanıyor: service sorguları,
+  kullanıcıya göre filtrelenmiş rapor CTE'leri ve SQL Server RLS (`backend/alembic/versions/`
+  içindeki Alembic migration'ları oluşturuyor; bugünkü SQLite kurulumunda ilk ikisi geçerli).
+- Fiş ve e-posta içeriği talimat olarak değil, veri olarak ele alınır. Bu her agent
+  prompt'unda yazıyor ve işlemi yapan kullanıcı her zaman istekten gelir, modelden asla.
+- Kodda anahtar yok. Ayarlar env değişkenlerinden gelir; Cloud Run'da bunların arkasında
+  Secret Manager olacak.
 
-## Who owns what
+## Kim neyden sorumlu
 
-Sprint 2 to 4 work is split into four tracks (HOUSE, MONEY, INGEST, REPORT), each with its
-own files. The table is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tracks-and-owners).
+Sprint 2-4 işleri dört track'e bölündü (HOUSE, MONEY, INGEST, REPORT) ve her track'in kendi
+dosyaları var. Tablo [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#trackler-ve-sahipleri) içinde.
 
-## Run locally
+## Yerelde çalıştırma
 
-You need Python 3.12+ and Node 20+ (tested with Python 3.14 and Node 24). Start the backend
-on :8000 and the frontend on :3000.
+Python 3.12+ ve Node 20+ gerekiyor (Python 3.14 ve Node 24 ile test ettik). Backend'i :8000,
+frontend'i :3000 portunda başlat.
 
 ### Backend: Windows (PowerShell)
 
@@ -74,7 +83,7 @@ cd backend
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
-Copy-Item .env.example .env        # then paste your GOOGLE_API_KEY into .env
+Copy-Item .env.example .env        # sonra GOOGLE_API_KEY'ini .env içine yapıştır
 pytest
 uvicorn app.main:app --reload --port 8000
 ```
@@ -85,38 +94,39 @@ uvicorn app.main:app --reload --port 8000
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env               # then paste your GOOGLE_API_KEY into .env
+cp .env.example .env               # sonra GOOGLE_API_KEY'ini .env içine yapıştır
 pytest
 uvicorn app.main:app --reload --port 8000
 ```
 
-The database schema is created and upgraded by Alembic when the app starts (`AUTO_MIGRATE=true`).
-To run it by hand: `alembic upgrade head`.
+Uygulama açılırken veritabanı şemasını Alembic oluşturur ve günceller (`AUTO_MIGRATE=true`).
+Elle çalıştırmak için: `alembic upgrade head`.
 
-Demo data for one dev user (three months of expenses, a shared house, budgets, subscriptions
-and inbox items; no network or LLM needed): `python -m scripts.seed_demo --user demo`, then
-type `demo` in the "Dev user" box. Add `--reset` to start over. Details are in
-[docs/DEMO.md](docs/DEMO.md).
+Tek bir dev kullanıcısı için demo verisi (üç aylık harcama, ortak bir ev, bütçeler,
+abonelikler ve inbox kayıtları; ağ ya da LLM gerekmez): `python -m scripts.seed_demo --user demo`,
+sonra "Dev user" kutusuna `demo` yaz. Baştan başlamak için `--reset` ekle. Ayrıntılar
+[docs/DEMO.md](docs/DEMO.md) içinde.
 
-API docs are at http://localhost:8000/docs. Without an LLM provider, everything works except
-`POST /receipts` and `POST /chat`, which return 503. Endpoints of features that are not built
-yet return 501.
+API dokümanı http://localhost:8000/docs adresinde. LLM sağlayıcısı yoksa `POST /receipts` ve
+`POST /chat` dışında her şey çalışır, bu ikisi 503 döner. Henüz yazılmamış özelliklerin
+endpoint'leri 501 döner.
 
-### Running the agents on Ollama instead of Gemini
+### Agent'ları Gemini yerine Ollama ile çalıştırma
 
-For development without a Gemini key, point the agents at an Ollama server in `backend/.env`:
+Gemini anahtarı olmadan geliştirme yapmak için `backend/.env` içinde agent'ları bir Ollama
+sunucusuna yönlendir:
 
 ```bash
 LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434     # or the team server
-OLLAMA_MODEL=gpt-oss:20b                    # chat and tool calling
-OLLAMA_VISION_MODEL=qwen3-vl:8b             # receipt photos
+OLLAMA_BASE_URL=http://localhost:11434     # ya da ekibin Ollama sunucusu
+OLLAMA_MODEL=gpt-oss:20b                    # sohbet ve tool calling
+OLLAMA_VISION_MODEL=qwen3-vl:8b             # fiş fotoğrafları
 ```
 
-This needs `requirements-dev.txt` (it adds litellm). Live end-to-end tests:
+Bunun için `requirements-dev.txt` gerekiyor (litellm'i o ekliyor). Canlı uçtan uca testler:
 `KASA_LIVE_TESTS=1 pytest -m live -s`.
 
-### Frontend (any OS)
+### Frontend (her işletim sistemi)
 
 ```bash
 cd frontend
@@ -125,107 +135,109 @@ cp .env.example .env.local         # PowerShell: Copy-Item .env.example .env.loc
 npm run dev                        # http://localhost:3000
 ```
 
-Use the "Dev user" box in the nav bar to act as different users. For example, create a house
-as `ali`, add `ayse`, then switch to `ayse`.
+Farklı kullanıcılar gibi davranmak için nav bar'daki "Dev user" kutusunu kullan. Örneğin
+`ali` olarak bir ev oluştur, `ayse`'yi ekle, sonra `ayse`'ye geç.
 
-## Environment variables
+## Ortam değişkenleri
 
-Every backend setting is listed with a comment in `backend/.env.example`; the frontend ones are
-in `frontend/.env.example`. The ones you need most:
+Backend ayarlarının hepsi açıklamalarıyla birlikte `backend/.env.example` içinde, frontend
+ayarları `frontend/.env.example` içinde. En çok lazım olanlar:
 
-| Variable | Where | Default | Notes |
+| Değişken | Nerede | Varsayılan | Not |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | backend | `sqlite:///./kasa.db` | Prod: `mssql+pyodbc://user:pass@host:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server` |
-| `AUTO_MIGRATE` | backend | `true` | Prod: `false`, and migrate as a deploy step |
-| `LLM_PROVIDER` | backend | `gemini` | `ollama` for dev and tests |
-| `GOOGLE_API_KEY` | backend | empty | Gemini key. Empty disables the agent endpoints (503). |
-| `GEMINI_MODEL` | backend | `gemini-3.5-flash-lite` | Any Gemini model id your key can use. New keys cannot use the 2.5 models. |
-| `FIREBASE_PROJECT_ID` | backend | empty | Set in prod. Empty means dev mode (X-User-Id) |
-| `TOKEN_ENCRYPTION_KEY` | backend | empty | Fernet key for Google refresh tokens: `python -m app.services.crypto` |
-| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | backend | empty | Gmail and Calendar connection |
-| `INTERNAL_TASK_TOKEN` | backend | empty | Cloud Scheduler secret for `/internal/*` |
-| `CORS_ORIGINS` | backend | `http://localhost:3000` | Comma-separated list |
-| `NEXT_PUBLIC_API_URL` | frontend | `http://localhost:8000` | Baked in at build time |
-| `NEXT_PUBLIC_FIREBASE_*` | frontend | empty | Google sign-in; empty shows the dev user box |
+| `DATABASE_URL` | backend | `sqlite:///./kasa.db` | Production (planlı): `mssql+pyodbc://user:pass@host:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server` |
+| `AUTO_MIGRATE` | backend | `true` | Production'da `false`, migration ayrı bir deploy adımı |
+| `LLM_PROVIDER` | backend | `gemini` | Dev ve testler için `ollama` |
+| `GOOGLE_API_KEY` | backend | boş | Gemini anahtarı. Boşsa agent endpoint'leri kapalı (503). |
+| `GEMINI_MODEL` | backend | `gemini-3.5-flash-lite` | Anahtarının erişebildiği herhangi bir Gemini model id'si. Yeni anahtarlar 2.5 modellerini kullanamıyor. |
+| `FIREBASE_PROJECT_ID` | backend | boş | Production'da dolu. Boşsa dev modu (X-User-Id) |
+| `TOKEN_ENCRYPTION_KEY` | backend | boş | Google refresh token'ları için Fernet anahtarı: `python -m app.services.crypto` |
+| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | backend | boş | Gmail ve Calendar bağlantısı |
+| `INTERNAL_TASK_TOKEN` | backend | boş | `/internal/*` için Cloud Scheduler secret'ı |
+| `CORS_ORIGINS` | backend | `http://localhost:3000` | Virgülle ayrılmış liste |
+| `NEXT_PUBLIC_API_URL` | frontend | `http://localhost:8000` | Build sırasında koda gömülür |
+| `NEXT_PUBLIC_FIREBASE_*` | frontend | boş | Google ile giriş; boşsa dev user kutusu görünür |
 
-### Getting a Gemini API key
+### Gemini API anahtarı alma
 
-1. Go to https://aistudio.google.com/apikey and sign in with a Google account.
-2. Click **Create API key** and pick or create a Google Cloud project.
-3. Put the key in `backend/.env` as `GOOGLE_API_KEY=...`. Never commit it. `.env` is gitignored.
+1. https://aistudio.google.com/apikey adresine git ve bir Google hesabıyla giriş yap.
+2. **Create API key**'e tıkla, bir Google Cloud projesi seç ya da yeni bir tane oluştur.
+3. Anahtarı `backend/.env` içine `GOOGLE_API_KEY=...` olarak yaz. Asla commit etme. `.env`
+   gitignore'da.
 
-## Deploying
+## Deploy
 
-Production runs on Google Cloud Run (`kasa-api` and `kasa-web` in `europe-west1`) with an
-Azure SQL Database on the free offer. [docs/SETUP.md](docs/SETUP.md) is the full guide, from
-an empty account to a smoke-tested deployment: Gemini key, Azure SQL server, database and
-low-privilege app user, Google OAuth consent screen and client, Firebase Auth, secrets,
-Pub/Sub, Cloud Scheduler and the GitHub deploy workflow.
+Production için plan şu: Google Cloud Run (`europe-west1` bölgesinde `kasa-api` ve
+`kasa-web`) ve ücretsiz teklifteki bir Azure SQL Database. Bunların hiçbiri henüz kurulmadı,
+Kasa bugün SQLite ile çalışıyor. [docs/SETUP.md](docs/SETUP.md) boş bir hesaptan smoke test
+edilmiş bir deploy'a kadar bütün adımları anlatıyor: Gemini anahtarı, Azure SQL sunucusu,
+veritabanı ve düşük yetkili uygulama kullanıcısı, Google OAuth onay ekranı ve client,
+Firebase Auth, secret'lar, Pub/Sub, Cloud Scheduler ve GitHub deploy workflow'u.
 
-The short version, in Cloud Shell after the console steps in the guide:
+Kısa hali, rehberdeki console adımlarından sonra Cloud Shell'de:
 
 ```bash
-bash deploy/gcp_bootstrap.sh     # APIs, service accounts, secrets, Pub/Sub, Scheduler (re-runnable)
-bash deploy/deploy_backend.sh    # Cloud Build, `alembic upgrade head` as a Cloud Run job, deploy
-bash deploy/deploy_frontend.sh   # Cloud Build with the NEXT_PUBLIC_* build args, deploy
+bash deploy/gcp_bootstrap.sh     # API'ler, service account'lar, secret'lar, Pub/Sub, Scheduler (tekrar çalıştırılabilir)
+bash deploy/deploy_backend.sh    # Cloud Build, Cloud Run job olarak `alembic upgrade head`, deploy
+bash deploy/deploy_frontend.sh   # NEXT_PUBLIC_* build argümanlarıyla Cloud Build, deploy
 ```
 
-The schema and the row-level security policy come only from the Alembic migrations. They run
-as a Cloud Run job with an admin login (`MIGRATION_DATABASE_URL`), while the service runs with
-`AUTO_MIGRATE=false` as a contained database user that can read and write data but not change
-the schema. Each transaction sets `SESSION_CONTEXT('user_id')`, and the RLS policy filters on
-it. To review the SQL Server DDL without a server:
+Şema ve row-level security policy'si yalnızca Alembic migration'larından gelir. Migration'lar
+admin login'iyle (`MIGRATION_DATABASE_URL`) bir Cloud Run job olarak çalışır. Servis ise
+`AUTO_MIGRATE=false` ile, veriyi okuyup yazabilen ama şemayı değiştiremeyen bir contained
+database user olarak çalışır. Her transaction `SESSION_CONTEXT('user_id')` ayarlar ve RLS
+policy'si buna göre filtreler. SQL Server DDL'ini sunucu olmadan incelemek için:
 
 ```bash
 cd backend
 alembic -x url="mssql+pyodbc://u:p@host/kasa?driver=ODBC+Driver+18+for+SQL+Server" upgrade head --sql
 ```
 
-`.github/workflows/deploy.yml` runs the same deploy scripts from GitHub (manual trigger, `main`
-only) with Workload Identity Federation instead of a key file.
+`.github/workflows/deploy.yml` aynı deploy script'lerini GitHub'dan çalıştırır (elle
+tetiklenir, sadece `main`). Anahtar dosyası yerine Workload Identity Federation kullanır.
 
-## Sprint 1 checklist
+## Sprint 1 kontrol listesi
 
-- [x] A receipt photo goes to the receipt agent as an inline image, and its `save_expense` tool saves the expense
-- [x] Expense list plus a manual add form
-- [x] One house with members, equal split (the remainder is spread so shares always sum to the total)
-- [x] House balances and greedy settle-up transfers
-- [x] A question goes to the report agent, which runs guarded SQL and returns a chart spec that recharts draws
-- [x] Dockerfiles for Cloud Run (backend and frontend)
-- [x] pytest: money math, SQL guard, API happy paths, and ADK wiring with a scripted fake LLM
-- [ ] Try live Gemini calls with a real key (receipt accuracy, routing quality)
-- [ ] Provision SQL Server, run the migrations and test RLS end to end (Azure SQL steps are in docs/SETUP.md)
-- [ ] First Cloud Run deploy (the scripts in `deploy/` are ready but have not run against a real project)
+- [x] Fiş fotoğrafı receipt agent'a inline görsel olarak gidiyor ve `save_expense` tool'u harcamayı kaydediyor
+- [x] Harcama listesi ve elle ekleme formu
+- [x] Üyeleriyle bir ev, eşit bölüşüm (kalan kuruşlar dağıtılıyor, paylar her zaman toplama eşit)
+- [x] Ev bakiyeleri ve greedy hesaplaşma transferleri
+- [x] Soru report agent'a gidiyor, agent korumalı SQL çalıştırıp recharts'ın çizdiği bir grafik tanımı döndürüyor
+- [x] Cloud Run için Dockerfile'lar (backend ve frontend)
+- [x] pytest: para hesapları, SQL koruması, API'nin normal akışları ve script'li sahte bir LLM ile ADK bağlantıları
+- [ ] Gerçek bir anahtarla canlı Gemini çağrılarını denemek (fiş doğruluğu, yönlendirme kalitesi)
+- [ ] SQL Server kurmak, migration'ları çalıştırmak ve RLS'i uçtan uca test etmek (Azure SQL adımları docs/SETUP.md içinde)
+- [ ] İlk Cloud Run deploy'u (`deploy/` içindeki script'ler hazır ama gerçek bir projede çalışmadı)
 
-## Sprint 2 foundation
+## Sprint 2 altyapısı
 
-- [x] Alembic migrations for SQLite and SQL Server (RLS included); a test checks they match the models
-- [x] Data model for sprints 2 to 4 (splits, settlements, budgets, FX, inbox, Google, subscriptions, reminders)
-- [x] Recorded payments between flatmates reduce balances
-- [x] Fixed category list with Turkish synonyms
-- [x] Firebase Auth (optional) with the dev header as fallback
-- [x] Ollama provider for dev; the three Sprint 1 flows pass live on the team server
-- [x] Skeleton modules, routes and pages for the HOUSE, MONEY, INGEST and REPORT tracks
-- [x] CI: ruff, pytest, eslint and next build on every push
+- [x] SQLite ve SQL Server için Alembic migration'ları (RLS dahil); modellerle uyumlu olduklarını bir test kontrol ediyor
+- [x] Sprint 2-4 için veri modeli (bölüşümler, hesaplaşmalar, bütçeler, döviz, inbox, Google, abonelikler, hatırlatmalar)
+- [x] Ev arkadaşları arasında kaydedilen ödemeler bakiyeleri düşürüyor
+- [x] Türkçe eş anlamlılarıyla sabit kategori listesi
+- [x] Firebase Auth (isteğe bağlı), yedek olarak dev header'ı
+- [x] Dev için Ollama sağlayıcısı; Sprint 1'in üç akışı ekibin Ollama sunucusunda canlı olarak geçiyor
+- [x] HOUSE, MONEY, INGEST ve REPORT track'leri için iskelet modüller, route'lar ve sayfalar
+- [x] CI: her push'ta ruff, pytest, eslint ve next build
 
-## Sprints 2 to 4 tracks
+## Sprint 2-4 track'leri
 
-All four tracks have landed and the backend has no stubs left. Tested offline with fakes for
-Google and the LLM; the REPORT evals also ran live on Ollama (`backend/evals/latest.md`).
+Dört track'in hepsi tamamlandı, backend'de stub kalmadı. Google ve LLM için sahtelerle offline
+test edildi; REPORT eval'leri Ollama üzerinde canlı da çalıştı (`backend/evals/latest.md`).
 
-- [x] HOUSE: equal, percent, exact and per-item splits, recorded payments, settle-up reminders (Google Calendar)
-- [x] MONEY: TCMB exchange rates, budgets with alerts, subscription detection, dashboard
-- [x] INGEST: Google OAuth connection, Gmail sync and push handler, CSV and PDF statement import, inbox approval
-- [x] REPORT: user-scoped relations, checker agent that reviews each query, eval runner
-- [ ] Real Google OAuth consent, Gmail push and Calendar events against Google
-- [ ] The same flows on Gemini instead of Ollama
+- [x] HOUSE: eşit, yüzdeli, tutara göre ve kalem bazlı bölüşüm, kaydedilen ödemeler, hesaplaşma hatırlatmaları (Google Calendar)
+- [x] MONEY: TCMB döviz kurları, uyarılı bütçeler, abonelik tespiti, dashboard
+- [x] INGEST: Google OAuth bağlantısı, Gmail senkronizasyonu ve push handler'ı, CSV ve PDF ekstre içe aktarma, inbox onayı
+- [x] REPORT: kullanıcıya göre filtrelenmiş tablolar, her sorguyu inceleyen checker agent, eval runner
+- [ ] Gerçek Google'a karşı OAuth onayı, Gmail push ve Calendar etkinlikleri
+- [ ] Aynı akışlar Ollama yerine Gemini ile
 
-## Deployment kit
+## Deploy kiti
 
-- [x] Setup guide from an empty account to a smoke test: [docs/SETUP.md](docs/SETUP.md)
-- [x] `deploy/` scripts for Cloud Shell: bootstrap, backend (migration job, then service), frontend; checked with `bash -n` and dry runs against a stubbed `gcloud`
-- [x] Manual GitHub Actions deploy with Workload Identity Federation (`.github/workflows/deploy.yml`)
-- [x] Backend waits for a paused Azure SQL serverless database to resume (connect retry, unit tested)
-- [x] SQL Server DDL reviewed for Azure SQL Database; a test keeps out `USE`, cross-database names and server-level statements
-- [ ] Run the scripts against a real Google Cloud project and Azure SQL database
-- [ ] RLS checked on Azure SQL with real users (smoke test in docs/SETUP.md)
+- [x] Boş bir hesaptan smoke test'e kadar kurulum rehberi: [docs/SETUP.md](docs/SETUP.md)
+- [x] Cloud Shell için `deploy/` script'leri: bootstrap, backend (önce migration job, sonra servis), frontend; `bash -n` ve sahte bir `gcloud` ile dry run'larla kontrol edildi
+- [x] Workload Identity Federation ile elle tetiklenen GitHub Actions deploy'u (`.github/workflows/deploy.yml`)
+- [x] Backend, duraklatılmış bir Azure SQL serverless veritabanının uyanmasını bekliyor (bağlantıda yeniden deneme, unit test'li)
+- [x] SQL Server DDL'i Azure SQL Database için gözden geçirildi; `USE`, veritabanları arası isimler ve sunucu seviyesindeki komutları bir test engelliyor
+- [ ] Script'leri gerçek bir Google Cloud projesi ve Azure SQL veritabanına karşı çalıştırmak
+- [ ] Azure SQL'de gerçek kullanıcılarla RLS'i kontrol etmek (smoke test docs/SETUP.md içinde)

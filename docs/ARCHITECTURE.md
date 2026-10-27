@@ -1,78 +1,79 @@
-# Kasa architecture
+# Kasa mimarisi
 
-Kasa is a FastAPI backend with Google ADK agents and a Next.js frontend. The LLM decides
-what to do; plain Python does every money calculation. Amounts are stored as integer minor
-units (kuruş), never floats.
+Kasa, Google ADK ajanları olan bir FastAPI backend ile bir Next.js frontend'den oluşuyor. Ne
+yapılacağına LLM karar veriyor, para hesaplarının hepsini düz Python yapıyor. Tutarlar float
+olarak değil, tam sayı alt birim (kuruş) olarak saklanıyor.
 
-The first part of this document is an overview the product owner (or anyone on the team) can
-present in five minutes. The second part, from [Modules](#modules) on, is the detailed map
-for the four feature tracks (HOUSE, MONEY, INGEST, REPORT).
+Bu belgenin ilk kısmı, product owner'ın (ya da ekipten herhangi birinin) beş dakikada
+anlatabileceği bir genel bakış. [Modüller](#modüller) bölümünden başlayan ikinci kısım ise
+dört özellik track'i (HOUSE, MONEY, INGEST, REPORT) için ayrıntılı harita.
 
-## Overview in five minutes
+## Beş dakikada genel bakış
 
-### What to say, minute by minute
+### Dakika dakika ne anlatılır
 
-1. **The problem (30 s).** Students lose track of small purchases, and in a shared flat
-   nobody knows who owes whom. Spreadsheets get abandoned.
-2. **What Kasa does (60 s).** You add a purchase by photo, by chat, by hand, or from a bank
-   statement or Gmail. Kasa splits house bills, tells everyone who pays whom, watches
-   budgets and subscriptions, and answers questions with charts, in Turkish or English.
-3. **The system (90 s).** Walk through the system diagram below: browser, Next.js, FastAPI,
-   the coordinator and its specialists, services, database, outside services.
-4. **One request end to end (90 s).** Walk through one of the two sequence diagrams.
-5. **Why it is safe (60 s).** The decisions and the security model below: the LLM never
-   does money math, the chat can only read your rows, emails never become expenses without
-   your approval.
+1. **Problem (30 sn).** Öğrenciler küçük harcamaların takibini kaybediyor. Ortak evde de kimin
+   kime borçlu olduğunu kimse bilmiyor. Excel tabloları bir süre sonra bırakılıyor.
+2. **Kasa ne yapıyor (60 sn).** Harcamayı fotoğrafla, sohbetle, elle ya da banka ekstresinden
+   veya Gmail'den ekliyorsun. Kasa ev faturalarını bölüyor, kimin kime ödeyeceğini söylüyor,
+   bütçeleri ve abonelikleri takip ediyor, soruları Türkçe ya da İngilizce olarak grafikle
+   cevaplıyor.
+3. **Sistem (90 sn).** Aşağıdaki sistem diyagramını sırayla anlat: tarayıcı, Next.js, FastAPI,
+   koordinatör ve uzman ajanlar, service katmanı, veritabanı, dış servisler.
+4. **Uçtan uca bir istek (90 sn).** İki sequence diyagramından birini adım adım anlat.
+5. **Neden güvenli (60 sn).** Aşağıdaki kararlar ve güvenlik modeli: LLM hiçbir zaman para
+   hesabı yapmıyor, sohbet sadece senin satırlarını okuyabiliyor, e-postalar senin onayın
+   olmadan harcamaya dönüşmüyor.
 
-### System diagram
+### Sistem diyagramı
 
 ```mermaid
 flowchart TB
-    user["Student, in a browser or on a phone"]
+    user["Öğrenci, tarayıcıdan ya da telefondan"]
 
     subgraph web["frontend: Next.js"]
-        pages["Pages: dashboard, expenses, receipt, import, inbox, house, budgets, subscriptions, chat, settings"]
+        pages["Sayfalar: dashboard, harcamalar, fiş, içe aktarma, gelen kutusu, ev, bütçeler, abonelikler, sohbet, ayarlar"]
     end
 
     subgraph api["backend: FastAPI"]
-        rest["REST routers (app/api)"]
-        subgraph agents["Google ADK agents (app/agents)"]
-            coord["Coordinator"]
-            receipt["Receipt agent"]
-            house["House agent"]
-            report["Report agent"]
-            budget["Budget agent"]
-            inbox["Inbox agent"]
-            checker["Checker agent"]
-            parsers["Email and statement parsers"]
+        rest["REST router'ları (app/api)"]
+        subgraph agents["Google ADK ajanları (app/agents)"]
+            coord["Koordinatör"]
+            receipt["Fiş ajanı"]
+            house["Ev ajanı"]
+            report["Rapor ajanı"]
+            budget["Bütçe ajanı"]
+            inbox["Gelen kutusu ajanı"]
+            checker["Kontrol ajanı"]
+            parsers["E-posta ve ekstre ayrıştırıcıları"]
         end
-        tools["Tools (app/agents/tools)"]
-        services["Services (app/services): money math, splits, FX, budgets, guarded SQL"]
-        dblayer["Models, sessions, Alembic migrations"]
+        tools["Tool'lar (app/agents/tools)"]
+        services["Service'ler (app/services): para hesabı, bölüşüm, döviz, bütçe, korumalı SQL"]
+        dblayer["Modeller, session'lar, Alembic migration'ları"]
     end
 
-    subgraph storage["Database"]
-        sqlite[("SQLite, local dev")]
-        mssql[("Azure SQL with row-level security, prod")]
+    subgraph storage["Veritabanı"]
+        sqlite[("SQLite, şu an (geliştirme, test, demo)")]
+        mssql[("Azure SQL, planlanan (row-level security ile)")]
     end
 
-    subgraph outside["Outside services"]
-        gemini["Gemini API, or Ollama in dev"]
-        gmail["Gmail and Google Calendar"]
-        tcmb["TCMB exchange rates"]
+    subgraph outside["Dış servisler"]
+        gemini["Gemini API, geliştirmede Ollama"]
+        gmail["Gmail ve Google Calendar"]
+        tcmb["TCMB döviz kurları"]
         firebase["Firebase Auth"]
     end
 
     user --> pages
-    pages -->|"JSON over HTTPS, Firebase token or X-User-Id"| rest
+    pages -->|"HTTPS üzerinden JSON, Firebase token ya da X-User-Id"| rest
     rest -->|"POST /chat"| coord
     rest -->|"POST /receipts"| receipt
-    rest -->|"everything else"| services
+    rest -->|"geri kalan her şey"| services
     coord --> receipt & house & report & budget & inbox
-    report -->|"run_report asks"| checker
+    report -->|"run_report sorar"| checker
     receipt & house & report & budget & inbox & parsers --> tools
     tools --> services
-    services -->|"Gmail sync, PDF import"| parsers
+    services -->|"Gmail senkronu, PDF içe aktarma"| parsers
     services --> dblayer
     dblayer --> sqlite
     dblayer --> mssql
@@ -80,141 +81,159 @@ flowchart TB
     services -.-> gmail
     services -.-> tcmb
     pages -.-> firebase
-    rest -.->|"verify token"| firebase
+    rest -.->|"token doğrulama"| firebase
 ```
 
-One sentence version: a Next.js app calls a FastAPI backend, where a coordinator agent hands
-each chat message to one of five specialist agents, whose tools call plain Python services
-that do all the money math and talk to the database and to Google and TCMB.
+Tek cümleyle: Next.js uygulaması bir FastAPI backend'i çağırıyor, orada koordinatör ajan her
+sohbet mesajını beş uzman ajandan birine veriyor, bu ajanların tool'ları da para hesabının
+hepsini yapan ve veritabanı, Google ve TCMB ile konuşan düz Python service'lerini çağırıyor.
 
-### Receipt photo to saved expense
+### Fiş fotoğrafından kaydedilen harcamaya
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor U as User
-    participant W as Receipt page (Next.js)
+    actor U as Kullanıcı
+    participant W as Fiş sayfası (Next.js)
     participant A as POST /receipts (FastAPI)
-    participant R as Receipt agent (ADK runner)
-    participant G as Gemini vision model
+    participant R as Fiş ajanı (ADK runner)
+    participant G as Gemini görsel modeli
     participant T as save_expense tool
     participant S as Expense service
-    participant D as Database
-    U->>W: Choose a photo, press Read and save
-    W->>A: Image, with a Firebase token or X-User-Id
-    A->>A: Check the image type and size, find the user
-    A->>R: run_agent receipt, text part plus image part
-    R->>G: Instructions with guardrails, plus the image
-    G-->>R: Call save_expense with merchant, date, total, lines
-    R->>T: save_expense, user id taken from tool_context
+    participant D as Veritabanı
+    U->>W: Fotoğraf seçer, Read and save düğmesine basar
+    W->>A: Görsel, Firebase token ya da X-User-Id ile
+    A->>A: Görselin türünü ve boyutunu kontrol eder, kullanıcıyı bulur
+    A->>R: run_agent receipt, metin parçası ve görsel parçası
+    R->>G: Guardrail'li talimatlar ve görsel
+    G-->>R: save_expense çağrısı (satıcı, tarih, toplam, satırlar)
+    R->>T: save_expense, user id tool_context'ten alınır
     T->>S: add_expense
-    S->>S: build_expense turns amounts into integer kurus and picks a category
-    S->>D: finalize_expense reads the TCMB rate if needed, and the budgets
-    S->>D: Insert the expense and its lines, commit
-    S-->>T: Saved expense and warnings (FX note, budget alert)
-    T-->>R: status saved, expense id, warnings
-    R->>G: Tool result
-    G-->>R: Short answer for the user
-    A-->>W: 201 with the expense, the warnings and the agent message
-    W-->>U: Saved, with the lines and any warnings
+    S->>S: build_expense tutarları tam sayı kuruşa çevirir ve kategori seçer
+    S->>D: finalize_expense gerekirse TCMB kurunu okur, bütçeleri de okur
+    S->>D: Harcamayı ve satırlarını ekler, commit
+    S-->>T: Kaydedilen harcama ve uyarılar (döviz notu, bütçe uyarısı)
+    T-->>R: status saved, expense id, uyarılar
+    R->>G: Tool sonucu
+    G-->>R: Kullanıcı için kısa cevap
+    A-->>W: 201, harcama, uyarılar ve ajanın mesajı
+    W-->>U: Kaydedildi, satırlar ve varsa uyarılar
 ```
 
-The model only reads the photo and fills in the tool's arguments. Validation, conversion,
-budget checks and saving are plain Python. The acting user never comes from the model.
+Model sadece fotoğrafı okuyor ve tool'un argümanlarını dolduruyor. Doğrulama, kur çevirme,
+bütçe kontrolü ve kaydetme düz Python'da. İşlemi yapan kullanıcı hiçbir zaman modelden
+gelmiyor.
 
-### Chat question to guarded SQL to chart
+### Sohbet sorusundan korumalı SQL'e ve grafiğe
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor U as User
-    participant W as Chat page (Next.js)
+    actor U as Kullanıcı
+    participant W as Sohbet sayfası (Next.js)
     participant A as POST /chat (FastAPI)
-    participant C as Coordinator
-    participant RA as Report agent
+    participant C as Koordinatör
+    participant RA as Rapor ajanı
     participant RT as run_report tool
-    participant GD as Static SQL guard
-    participant CK as Checker agent
-    participant D as Database
-    U->>W: Bu ay kategoriye gore ne kadar harcadim? Grafik ciz
-    W->>A: Message and chat session id
-    A->>C: run_agent chat for this user
+    participant GD as Statik SQL koruması
+    participant CK as Kontrol ajanı
+    participant D as Veritabanı
+    U->>W: Bu ay kategoriye göre ne kadar harcadım? Grafik çiz
+    W->>A: Mesaj ve sohbet session id
+    A->>C: Bu kullanıcı için run_agent chat
     C->>RA: transfer_to_agent report_agent
-    RA->>RT: One SELECT over my_spending, chart type bar
-    RT->>GD: Parse with sqlglot
-    GD-->>RT: One plain SELECT, allowed relations only, row limit applied
-    RT->>CK: The SQL next to the question
-    alt the checker finds a mistake
-        CK-->>RT: revise, with the reason
-        RT-->>RA: status revise and the reason
-        RA->>RT: Fixed SQL, checked again (at most 2 revisions)
-    else the SQL matches the question
+    RA->>RT: my_spending üzerinde tek SELECT, grafik türü bar
+    RT->>GD: sqlglot ile ayrıştırır
+    GD-->>RT: Tek düz SELECT, sadece izinli sanal tablolar, satır limiti eklenmiş
+    RT->>CK: SQL ve yanında soru
+    alt kontrol ajanı bir hata bulursa
+        CK-->>RT: revise, gerekçesiyle
+        RT-->>RA: status revise ve gerekçe
+        RA->>RT: Düzeltilmiş SQL, yeniden kontrol (en fazla 2 düzeltme)
+    else SQL soruyla uyuşuyorsa
         CK-->>RT: approve
     end
-    RT->>D: Relations injected as CTEs bound to the current user id
-    D-->>RT: Rows in kurus (RLS filters again on SQL Server)
-    RT-->>RA: Rows in TL plus a chart spec
-    RA-->>A: One to three sentences quoting the tool's numbers
-    A-->>W: Text, chart spec, name of the agent that answered
-    W-->>U: The answer and a bar chart (recharts)
+    RT->>D: Sanal tablolar o anki user id'ye bağlı CTE olarak eklenir
+    D-->>RT: Kuruş cinsinden satırlar (Azure SQL'e geçince RLS bir kez daha süzecek)
+    RT-->>RA: TL cinsinden satırlar ve grafik tanımı
+    RA-->>A: Tool'un sayılarını aktaran bir ile üç cümle
+    A-->>W: Metin, grafik tanımı, cevap veren ajanın adı
+    W-->>U: Cevap ve bir bar grafik (recharts)
 ```
 
-### Key decisions
+### Temel kararlar
 
-Short records of the choices that shape the system. Each says what we decided, why, and what
-it costs.
+Sistemi şekillendiren seçimlerin kısa kayıtları. Her biri neye karar verdiğimizi, nedenini ve
+bedelini yazıyor.
 
-- **ADR-1 One coordinator and specialist agents.** One agent with every tool picked the
-  wrong tool and had long, mixed instructions. The coordinator only routes; each specialist
-  (receipt, house, report, budget, inbox) has a short prompt and a few tools, and each track
-  owns one agent. Cost: one extra model call per message, and routing can be wrong (5 of 6
-  routing evals passed on Ollama).
-- **ADR-2 Tools do all money math, in integer minor units.** Models make arithmetic and
-  rounding mistakes, and floats cannot hold 0.10 exactly. Amounts are integers in kuruş
-  (BIGINT). Splits use the largest remainder method, so shares always add up to the total,
-  and conversions round once, half to even (`services/money.py`, `splits.py`, `fx.py`). The
-  prompts forbid the model from computing amounts. Cost: every new money feature needs a tool.
-- **ADR-3 The chat gets read-only, user-scoped SQL and a checker agent.** Free text
-  questions need flexible queries, but a model must never write or see other users' rows.
-  sqlglot allows one plain SELECT over six virtual relations (`my_spending`, `my_expenses`,
-  `my_expense_items`, `my_house_shares`, `my_budgets`, `my_subscriptions`). They are injected
-  as CTEs filtered by the bound user id, with a row limit. A second agent compares the SQL
-  with the question and can send it back. Cost: extra latency, and the checker fails open to
-  the static guard when it times out.
-- **ADR-4 Emails and statements only create inbox items.** Email text is untrusted and
-  parsing can be wrong. Parsers can only submit candidates; a person approves each one, and
-  nothing in an email can approve. Cost: one more step for the user.
-- **ADR-5 Alembic migrations and row-level security.** The schema has to work on SQLite for
-  development and on SQL Server in production. Alembic is the only source of the schema, a
-  test keeps models and migrations in sync, and the migrations create an RLS policy that
-  filters on `SESSION_CONTEXT('user_id')`, which every session sets. The app runs as a user
-  that cannot change the schema. Cost: RLS only exists on SQL Server, and it has not run on
-  Azure yet.
-- **ADR-6 Gemini in the product, Ollama for development.** Gemini is fast and has a free
-  tier. The team's Ollama server lets us develop and run evals without a key or quota.
-  `LLM_PROVIDER` switches both through ADK (`Gemini` or `LiteLlm`). The default model is
-  `gemini-3.5-flash-lite`, because new keys cannot use the 2.5 models and flash-lite has the
-  most generous free tier. Cost: the live flows were verified on Ollama only, so far.
+- **ADR-1 Bir koordinatör ve uzman ajanlar.** Bütün tool'ları olan tek bir ajan yanlış tool
+  seçiyordu, talimatları da uzun ve karışıktı. Koordinatör sadece yönlendiriyor. Her uzmanın
+  (fiş, ev, rapor, bütçe, gelen kutusu) kısa bir prompt'u ve birkaç tool'u var. Her track bir
+  ajanın sahibi. Bedeli: her mesajda fazladan bir model çağrısı yapılıyor ve yönlendirme yanlış
+  olabiliyor (Ollama'da 6 yönlendirme eval'inden 5'i geçti).
+- **ADR-2 Para hesabını tool'lar yapıyor, tam sayı alt birimle.** Modeller aritmetikte ve
+  yuvarlamada hata yapıyor, float da 0.10'u tam tutamıyor. Tutarlar kuruş cinsinden tam sayı
+  (BIGINT). Bölüşümde en büyük kalan yöntemini kullanıyoruz, bu yüzden paylar her zaman toplamı
+  veriyor. Kur çevirmede tek bir yuvarlama var ve yarımlar çift sayıya yuvarlanıyor, yani half
+  to even (`services/money.py`, `splits.py`, `fx.py`). Prompt'lar modelin tutar hesaplamasını
+  yasaklıyor. Bedeli: her yeni para özelliği bir tool gerektiriyor.
+- **ADR-3 Sohbet salt okunur, kullanıcıya özel SQL ve bir kontrol ajanı kullanıyor.** Serbest
+  metinli sorular esnek sorgu istiyor, ama model hiçbir zaman yazma yapmamalı ya da başka
+  kullanıcıların satırlarını görmemeli. sqlglot, altı sanal tablo (relation) üzerinde tek bir
+  düz SELECT'e izin veriyor (`my_spending`, `my_expenses`, `my_expense_items`,
+  `my_house_shares`, `my_budgets`, `my_subscriptions`). Bunlar bağlı user id'ye göre süzülen
+  CTE'ler olarak sorguya ekleniyor ve bir satır limiti var. İkinci bir ajan SQL'i soruyla
+  karşılaştırıyor ve geri gönderebiliyor. Bedeli: ek gecikme. Kontrol ajanı zaman aşımına
+  uğrarsa sorgu sadece statik korumayla çalışıyor (fail open).
+- **ADR-4 E-postalar ve ekstreler sadece gelen kutusu kaydı oluşturuyor.** E-posta metni
+  güvenilmez, ayrıştırma da yanlış olabilir. Ayrıştırıcılar sadece aday gönderebiliyor. Her
+  adayı bir insan onaylıyor, e-postadaki hiçbir şey onay veremiyor. Bedeli: kullanıcı için bir
+  adım fazla.
+- **ADR-5 Alembic migration'ları ve row-level security.** Şema şu an geliştirme, test ve demo
+  için SQLite'ta çalışıyor. İleride production'ı Azure SQL'e (SQL Server) taşıyacağız, şemanın
+  orada da çalışması gerekiyor. Şemanın tek kaynağı Alembic, modellerle migration'ların uyumunu
+  bir test kontrol ediyor. Migration'lar SQL Server için, her session'ın ayarladığı
+  `SESSION_CONTEXT('user_id')` değerine göre süzen bir RLS policy'si oluşturuyor. Orada
+  uygulama, şemayı değiştiremeyen bir kullanıcıyla bağlanacak. Bedeli: RLS sadece SQL
+  Server'da var ve henüz bir Azure SQL veritabanı olmadığı için gerçek bir sunucuda hiç
+  çalışmadı (bkz. [Veritabanı: şimdi SQLite, sonra Azure SQL](#veritabanı-şimdi-sqlite-sonra-azure-sql)).
+- **ADR-6 Üründe Gemini, geliştirmede Ollama.** Gemini hızlı ve ücretsiz bir kotası var. Ekibin
+  Ollama sunucusu sayesinde key ya da kota olmadan geliştirme yapıp eval çalıştırabiliyoruz.
+  `LLM_PROVIDER` ikisi arasında ADK üzerinden geçiş yapıyor (`Gemini` ya da `LiteLlm`).
+  Varsayılan model `gemini-3.5-flash-lite`, çünkü yeni key'ler 2.5 modellerini kullanamıyor ve
+  en cömert ücretsiz kota flash-lite'ta. Bedeli: canlı akışlar şimdilik sadece Ollama'da
+  doğrulandı.
 
-### Security model
+### Güvenlik modeli
 
-| Layer | What protects it | Where |
+| Katman | Onu ne koruyor | Nerede |
 | --- | --- | --- |
-| Who is calling | Firebase ID token in production. In dev mode the `X-User-Id` header, which must never be used in production. | `app/auth.py` |
-| What they can reach | Every service takes `user_id` and filters by it. Houses answer 404 to non-members, so ids cannot be probed. | `app/services/*` |
-| What the database returns | Row-level security on SQL Server, keyed on `SESSION_CONTEXT('user_id')`. The app login cannot run DDL. | `alembic/versions/`, `app/db/session.py` |
-| What the agents can do | Tools read the user from `tool_context`, never from the model. Receipt, email and tool text is data. The model never computes money. | `app/agents/common.py`, `app/agents/tools/` |
-| What the chat can query | One SELECT over six user-scoped relations, row limit, no system objects, then the checker. | `app/services/reports.py`, `app/agents/checker_agent.py` |
-| What imports can change | Only inbox items. A person approves each expense. | `app/services/inbox.py`, `app/agents/tools/inbox_tools.py` |
-| Secrets | Environment variables only (Secret Manager on Cloud Run). `.env` is gitignored. Google refresh tokens are Fernet-encrypted and never logged. | `app/config.py`, `app/services/crypto.py` |
-| Background endpoints | `/internal/*` needs `X-Kasa-Task-Token`. The Gmail push needs a Pub/Sub OIDC token. | `app/api/internal.py` |
-| Uploads | Image types only for receipts, CSV or PDF for statements, 10 MB limit. | `app/api/agents.py`, `app/api/imports.py` |
+| Kim çağırıyor | Production'da Firebase ID token. Dev modunda `X-User-Id` header'ı, bu production'da asla kullanılmamalı. | `app/auth.py` |
+| Neye erişebiliyor | Her service `user_id` alıyor ve ona göre süzüyor. Evler üye olmayanlara 404 dönüyor, böylece id'ler yoklanamıyor. | `app/services/*` |
+| Veritabanı ne döndürüyor | Şu an SQLite'ta service katmanındaki `user_id` süzmesi. Azure SQL'e geçince buna ek olarak `SESSION_CONTEXT('user_id')` anahtarlı row-level security gelecek, uygulamanın login'i de DDL çalıştıramayacak. Migration'lar ve kod hazır. | `alembic/versions/`, `app/db/session.py` |
+| Ajanlar ne yapabiliyor | Tool'lar kullanıcıyı modelden değil, `tool_context`'ten okuyor. Fiş, e-posta ve tool metni veridir. Model hiçbir zaman para hesaplamıyor. | `app/agents/common.py`, `app/agents/tools/` |
+| Sohbet neyi sorgulayabiliyor | Kullanıcıya özel altı sanal tablo üzerinde tek SELECT, satır limiti, sistem nesnesi yok, sonra kontrol ajanı. | `app/services/reports.py`, `app/agents/checker_agent.py` |
+| İçe aktarma neyi değiştirebiliyor | Sadece gelen kutusu kayıtlarını. Her harcamayı bir insan onaylıyor. | `app/services/inbox.py`, `app/agents/tools/inbox_tools.py` |
+| Gizli bilgiler | Sadece ortam değişkenleri (Cloud Run'da Secret Manager). `.env` gitignore'da. Google refresh token'ları Fernet ile şifreleniyor ve hiç loglanmıyor. | `app/config.py`, `app/services/crypto.py` |
+| Arka plan endpoint'leri | `/internal/*` için `X-Kasa-Task-Token` gerekiyor. Gmail push'u bir Pub/Sub OIDC token'ı istiyor. | `app/api/internal.py` |
+| Yüklemeler | Fiş için sadece görsel türleri, ekstre için CSV ya da PDF, 10 MB sınır. | `app/api/agents.py`, `app/api/imports.py` |
 
-Known gaps (see [USER_STORIES.md](USER_STORIES.md)): no per-user rate limit on `/chat` and
-`/receipts`; any house member can add any user id (no invite link yet); RLS has never run on
-Azure SQL; Firebase is not configured; chat sessions live in the memory of one instance.
+Bilinen eksikler (bkz. [USER_STORIES.md](USER_STORIES.md)): `/chat` ve `/receipts` için
+kullanıcı başına istek sınırı yok. Evin herhangi bir üyesi herhangi bir user id'yi ekleyebiliyor
+(henüz davet linki yok). Azure SQL veritabanı henüz kurulmadı, RLS gerçek bir sunucuda hiç
+çalışmadı. Firebase yapılandırılmadı. Sohbet session'ları tek bir instance'ın belleğinde duruyor.
 
-## Modules
+## Veritabanı: şimdi SQLite, sonra Azure SQL
+
+Kasa bugün SQLite üzerinde çalışıyor. Geliştirme, testler ve demo hep SQLite kullanıyor.
+Production için planımız, ileride Azure SQL Database'e (Microsoft SQL Server) geçmek. Bunun
+kodu hazır: Alembic migration'ları, row-level security policy'si ve `session_for(user_id)`
+içinde `SESSION_CONTEXT` ayarlayan bağlantı kodu yazıldı ve sunucu olmadan test edildi. Henüz
+bir Azure veritabanı yok, yani canlıda çalışan bir production ortamı da yok. Veritabanının
+kurulması ve RLS smoke testi US-GUARD-04 kapsamında yapılacak. Planın tamamı
+[DATABASE.md](DATABASE.md) dosyasında.
+
+## Modüller
 
 ```
 backend/
@@ -247,82 +266,85 @@ frontend/src/
   lib/auth.ts, lib/user.ts  Firebase sign-in or the dev user box
 ```
 
-## Tracks and owners
+## Track'ler ve sahipleri
 
-| Track | Backend files | Frontend files |
+| Track | Backend dosyaları | Frontend dosyaları |
 | --- | --- | --- |
-| Shared (done) | `main.py`, `config.py`, `auth.py`, `db/*`, `alembic/*`, `agents/common.py`, `agents/runtime.py`, `agents/coordinator.py`, `api/internal.py`, `api/expenses.py`, `api/users.py`, `api/agents.py`, `services/expenses.py`, `services/users.py`, `services/categories.py`, `services/crypto.py`, `services/clock.py`, `schemas/__init__.py`, `schemas/common.py`, `schemas/expenses.py`, `schemas/users.py`, `schemas/agents.py` | `lib/api/client.ts`, `lib/api/index.ts`, `lib/api/expenses.ts`, `lib/api/me.ts`, `lib/auth.ts`, `lib/hooks.ts`, `components/Nav.tsx`, `features/expenses` |
+| Ortak (bitti) | `main.py`, `config.py`, `auth.py`, `db/*`, `alembic/*`, `agents/common.py`, `agents/runtime.py`, `agents/coordinator.py`, `api/internal.py`, `api/expenses.py`, `api/users.py`, `api/agents.py`, `services/expenses.py`, `services/users.py`, `services/categories.py`, `services/crypto.py`, `services/clock.py`, `schemas/__init__.py`, `schemas/common.py`, `schemas/expenses.py`, `schemas/users.py`, `schemas/agents.py` | `lib/api/client.ts`, `lib/api/index.ts`, `lib/api/expenses.ts`, `lib/api/me.ts`, `lib/auth.ts`, `lib/hooks.ts`, `components/Nav.tsx`, `features/expenses` |
 | HOUSE | `services/splits.py`, `services/houses.py`, `services/reminders.py`, `integrations/google_calendar.py`, `api/houses.py`, `schemas/houses.py`, `agents/house_agent.py`, `agents/tools/house_tools.py` | `features/houses`, `lib/api/houses.ts` |
 | MONEY | `services/fx.py`, `integrations/tcmb.py`, `services/budgets.py`, `services/subscriptions.py`, `services/dashboard.py`, `api/budgets.py`, `api/subscriptions.py`, `api/dashboard.py`, `api/fx.py`, `schemas/budgets.py`, `schemas/subscriptions.py`, `schemas/dashboard.py`, `schemas/fx.py`, `agents/budget_agent.py`, `agents/tools/budget_tools.py` | `features/dashboard`, `features/budgets`, `features/subscriptions`, `lib/api/{budgets,subscriptions,dashboard,fx}.ts` |
 | INGEST | `integrations/google_oauth.py`, `integrations/gmail.py`, `services/inbox.py`, `services/gmail_sync.py`, `services/statements.py`, `api/integrations.py`, `api/inbox.py`, `api/imports.py`, `schemas/inbox.py`, `schemas/imports.py`, `schemas/integrations.py`, `agents/email_agent.py`, `agents/statement_agent.py`, `agents/tools/inbox_tools.py` | `features/inbox`, `features/imports`, `features/settings`, `lib/api/{inbox,imports,integrations}.ts` |
 | REPORT | `services/reports.py`, `agents/report_agent.py`, `agents/tools/report_tools.py`, `agents/checker_agent.py`, `evals/` | `features/chat` |
 
-Stubs raise `NotImplementedError`. The API turns that into HTTP 501, and agent tools return
-`{"status": "unavailable"}` so the chat stays polite. A track is done when its stubs are gone
-and its tests pass. The receipt agent and its tools are finished Sprint 1 code that every
-track may call but nobody needs to change.
+Stub'lar `NotImplementedError` fırlatıyor. API bunu HTTP 501'e çeviriyor, ajan tool'ları da
+`{"status": "unavailable"}` dönüyor, böylece sohbet kibar kalıyor. Bir track'in stub'ları
+kalmadığında ve testleri geçtiğinde o track bitmiş sayılıyor. Fiş ajanı ve tool'ları Sprint
+1'de bitmiş kod. Her track onları çağırabilir, ama kimsenin değiştirmesi gerekmiyor.
 
-Rules every track keeps:
+Her track'in uyduğu kurallar:
 
-- Never trust a user id from the model. Tools read `tool_context.user_id`; services take
-  `user_id` and filter by it.
-- Money math is integer minor units in plain Python (`services/money.py`). No floats except
-  for drawing charts.
-- Services raise `DomainError` subclasses (`NotFound`, `Forbidden`, `Conflict`,
-  `InvalidInput`, `NotConfigured`, `UpstreamError`); the API maps them to status codes.
-- Email, receipt and statement text is data, never instructions (see `GUARDRAILS`).
+- Modelden gelen bir user id'ye asla güvenme. Tool'lar `tool_context.user_id` okuyor,
+  service'ler `user_id` alıp ona göre süzüyor.
+- Para hesabı düz Python'da, tam sayı alt birimle yapılıyor (`services/money.py`). Grafik
+  çizmek dışında float yok.
+- Service'ler `DomainError` alt sınıfları fırlatıyor (`NotFound`, `Forbidden`, `Conflict`,
+  `InvalidInput`, `NotConfigured`, `UpstreamError`). API bunları status kodlarına eşliyor.
+- E-posta, fiş ve ekstre metni veridir, asla talimat değildir (bkz. `GUARDRAILS`).
 
-## Data model
+## Veri modeli
 
-All money columns are BIGINT minor units. User ids are strings (Firebase uids). Text is
-`Unicode` so SQL Server stores NVARCHAR.
+Bütün para kolonları BIGINT alt birim. User id'ler string (Firebase uid). Metin kolonları
+`Unicode`, böylece SQL Server'a geçtiğimizde NVARCHAR olarak saklanacak.
 
-| Table | What it holds |
+| Tablo | Ne tutuyor |
 | --- | --- |
-| `users` | id, display_name, email (filled from the Firebase token) |
-| `houses`, `house_members` | a shared flat and who lives there |
-| `expenses` | one purchase. `owner_id` paid it. `house_id` set means shared. `currency`/`total_minor` are always in the base currency (TRY, or the house currency); a converted purchase keeps `original_currency`, `original_total_minor`, `fx_rate` (TRY per 1 unit) and `fx_date`. `source` is manual, receipt, statement or email. `split_type` is equal, percent, exact or items (null for personal). `external_ref` is unique per owner and source, for import dedupe. `subscription_id` links a detected subscription. `category` is always one of the 12 in `services/categories.py`. |
-| `expense_items` | receipt lines |
-| `expense_item_assignees` | who shares a line, for per-item splits |
-| `expense_shares` | what each member owes for a house expense; sums to the total |
-| `settlements` | a recorded payment between flatmates; balances include it |
-| `budgets` | monthly limit per category, or overall when category is null; one per user and category |
-| `fx_rates` | TCMB rate per day and currency (shared reference data) |
-| `inbox_items` | an expense candidate from Gmail or a statement, waiting for approve/reject; `parsed_json` is `services.inbox.ParsedExpense` |
-| `google_accounts` | the user's Google connection; refresh token Fernet-encrypted |
-| `subscriptions` | recurring charges found in expenses |
-| `reminders` | settle-up reminders, optionally a Google Calendar event. `cancel_reason` is `user` (cancelled by its creator) or `outdated` (the balances changed and creating reminders again replaced it) |
+| `users` | id, display_name, email (Firebase token'ından dolduruluyor) |
+| `houses`, `house_members` | ortak bir ev ve orada kimlerin yaşadığı |
+| `expenses` | tek bir harcama. `owner_id` ödeyen kişi. `house_id` doluysa harcama ortak. `currency`/`total_minor` her zaman ana para biriminde (TRY ya da evin para birimi). Çevrilmiş bir harcama `original_currency`, `original_total_minor`, `fx_rate` (1 birim başına TRY) ve `fx_date` alanlarını da tutuyor. `source` manual, receipt, statement ya da email. `split_type` equal, percent, exact ya da items (kişisel harcamada null). `external_ref` sahip ve kaynak başına benzersiz, içe aktarmada tekrarı önlemek için. `subscription_id` tespit edilen bir aboneliğe bağlıyor. `category` her zaman `services/categories.py` içindeki 12 kategoriden biri. |
+| `expense_items` | fiş satırları |
+| `expense_item_assignees` | satır bazlı bölüşümde bir satırı kimlerin paylaştığı |
+| `expense_shares` | ev harcamasında her üyenin borcu; toplamı harcama tutarına eşit |
+| `settlements` | ev arkadaşları arasında kaydedilmiş bir ödeme; bakiyeler bunu da hesaba katıyor |
+| `budgets` | kategori başına aylık limit, kategori null ise genel limit; kullanıcı ve kategori başına bir tane |
+| `fx_rates` | gün ve para birimi başına TCMB kuru (ortak referans verisi) |
+| `inbox_items` | Gmail'den ya da ekstreden gelen, onay veya ret bekleyen harcama adayı; `parsed_json` bir `services.inbox.ParsedExpense` |
+| `google_accounts` | kullanıcının Google bağlantısı; refresh token Fernet ile şifreli |
+| `subscriptions` | harcamalarda bulunan tekrarlayan ödemeler |
+| `reminders` | hesaplaşma hatırlatıcıları, istenirse bir Google Calendar etkinliğiyle. `cancel_reason` ya `user` (oluşturan kişi iptal etti) ya da `outdated` (bakiyeler değişti ve hatırlatıcıları yeniden oluşturmak bunun yerini aldı) |
 
-Row-level security on SQL Server (created by the migrations): expenses are visible to the
-payer and house members; items, shares and item assignees follow their expense; houses,
-members, settlements and reminders are visible to house members; budgets, subscriptions and
-inbox items only to their owner; `google_accounts` to its owner or a background job session
-(`session_for(None, system=True)`). `users` and `fx_rates` have no policy.
+SQL Server'daki row-level security (migration'lar oluşturuyor, Azure SQL'e geçince devreye
+girecek): harcamaları ödeyen kişi ve ev üyeleri görüyor. Satırlar, paylar ve satır atamaları
+bağlı oldukları harcamayı izliyor. Evler, üyeler, settlement'lar ve hatırlatıcılar ev
+üyelerine görünüyor. Bütçeler, abonelikler ve gelen kutusu kayıtları sadece sahibine,
+`google_accounts` ise sahibine ya da bir arka plan işinin session'ına
+(`session_for(None, system=True)`) görünüyor. `users` ve `fx_rates` için policy yok.
 
-### Changing the schema
+### Şemayı değiştirmek
 
-1. Edit `app/db/models.py`.
+1. `app/db/models.py` dosyasını düzenle.
 2. `cd backend && alembic revision --autogenerate --rev-id 0004_short_name -m "what changed"`
-3. Read the generated file. If the new table is user-owned, add its RLS predicate on SQL
-   Server (drop and recreate `security.kasa_policy`, as `0002_sprints_2_4.py` does).
-4. `pytest tests/test_migrations.py` checks that migrations and models match.
+3. Oluşan dosyayı oku. Yeni tablo bir kullanıcıya aitse SQL Server için RLS predicate'ini ekle
+   (`0002_sprints_2_4.py` dosyasındaki gibi `security.kasa_policy`'yi silip yeniden oluştur).
+4. `pytest tests/test_migrations.py` migration'ların ve modellerin uyumlu olduğunu kontrol
+   ediyor.
 
-Revisions so far: `0001_sprint1_baseline` (Sprint 1 tables + RLS), `0002_sprints_2_4`
-(everything above) and `0003_reminder_cancel_reason` (one nullable column; the RLS policy
-is unchanged). Print the SQL Server DDL without a server:
+Şimdiye kadarki revizyonlar: `0001_sprint1_baseline` (Sprint 1 tabloları + RLS),
+`0002_sprints_2_4` (yukarıdaki her şey) ve `0003_reminder_cancel_reason` (nullable tek bir
+kolon, RLS policy'si değişmedi). SQL Server DDL'ini sunucu olmadan yazdırmak için:
 
 ```bash
 alembic -x url="mssql+pyodbc://u:p@host/kasa?driver=ODBC+Driver+18+for+SQL+Server" upgrade head --sql
 ```
 
-## Request flow
+## Bir isteğin akışı
 
-**REST call.** `auth.authenticate` verifies the Firebase token (or reads X-User-Id in dev).
-`get_db` opens `session_for(user_id)`, which on SQL Server sets `SESSION_CONTEXT('user_id')`
-for RLS, and creates the user row on first sight. The router calls a service; a
-`DomainError` becomes a JSON error with the right status.
+**REST çağrısı.** `auth.authenticate` Firebase token'ını doğruluyor (dev modunda X-User-Id'yi
+okuyor). `get_db`, `session_for(user_id)` açıyor. Bu fonksiyon SQL Server'a bağlıyken RLS
+için `SESSION_CONTEXT('user_id')` ayarlıyor ve kullanıcıyı ilk gördüğünde user satırını
+oluşturuyor. Router bir service çağırıyor. Bir `DomainError` doğru status koduyla JSON hatasına
+dönüşüyor.
 
-**Creating an expense (every path).**
+**Harcama oluşturma (her yolda aynı).**
 
 ```
 expense = build_expense(user_id, data, source=..., external_ref=...)   # validate, minor units, category
@@ -331,62 +353,66 @@ db.add(expense); db.commit()
 ```
 
 `add_expense(db, user_id, data, source=..., external_ref=...) -> SavedExpense(expense, warnings)`
-does this for personal expenses and raises `Conflict` for a duplicate import. House expenses
-call `finalize_expense(..., check_budgets=False)` so only FX runs, split the converted total
-into shares, and then call `budgets.warnings_for_new_expense`, so the payer's budget alert
-counts their own share and not the whole bill.
+kişisel harcamalar için bunu yapıyor ve tekrarlanan bir içe aktarmada `Conflict` fırlatıyor.
+Ev harcamaları `finalize_expense(..., check_budgets=False)` çağırıyor, böylece sadece döviz
+adımı çalışıyor. Sonra çevrilmiş toplamı paylara bölüp `budgets.warnings_for_new_expense`
+çağırıyorlar. Bu sayede ödeyen kişinin bütçe uyarısı faturanın tamamını değil, kendi payını
+sayıyor.
 
-**Editing and deleting.** `PATCH /expenses/{id}` changes merchant, category, date or note of
-your own expense; amounts never change (delete and add again). `DELETE /expenses/{id}` is for
-personal expenses; a house expense answers 409 and is deleted with
-`DELETE /houses/{id}/expenses/{expense_id}` by the member who paid it, so balances stay
-right. `GET /expenses` takes `month`, `category`, `source`, `scope`, `limit` and `offset` and
-puts the match count in `X-Total-Count` (exposed through CORS). A member leaves, or the
-house creator removes someone, with `DELETE /houses/{id}/members/{user_id}`, only at a zero
-balance; past shares stay. Creating reminders again cancels scheduled ones that no longer
-match a suggested transfer (`cancel_reason` "outdated").
+**Düzenleme ve silme.** `PATCH /expenses/{id}` kendi harcamanın satıcısını, kategorisini,
+tarihini ya da notunu değiştiriyor. Tutarlar hiç değişmiyor (silip yeniden ekle).
+`DELETE /expenses/{id}` kişisel harcamalar için. Ev harcaması 409 dönüyor. Onu ödeyen üye
+`DELETE /houses/{id}/expenses/{expense_id}` ile siliyor, böylece bakiyeler doğru kalıyor.
+`GET /expenses`; `month`, `category`, `source`, `scope`, `limit` ve `offset` alıyor ve eşleşen
+kayıt sayısını `X-Total-Count` header'ına koyuyor (CORS üzerinden erişilebilir). Bir üye evden
+kendisi ayrılabiliyor ya da evi kuran kişi birini çıkarabiliyor:
+`DELETE /houses/{id}/members/{user_id}`, sadece bakiye sıfırken. Geçmiş paylar duruyor.
+Hatırlatıcıları yeniden oluşturmak, artık önerilen bir transfere uymayan planlı hatırlatıcıları
+iptal ediyor (`cancel_reason` "outdated").
 
-**Report questions.** The report agent writes one SELECT over the user-scoped relations and
-calls `run_report(sql, question, ...)`. The tool runs the static guard first (sqlglot: one
-SELECT, allowed relations only, no system objects, LIMIT clamped), then the checker agent,
-which compares the SQL with the question and calls `submit_verdict(approve|revise, ...)`.
-On `revise` the reason goes back to the report agent, at most twice per turn. If the checker
-model fails or times out, the query runs on the static guard alone and the result says so.
-"How much did I spend" with no other qualifier means personal expenses plus the user's house
-shares (UNION ALL), the same definition the dashboard and budgets use. Personal only or house
-only when the user says so. `chart_type` "table" returns the rows as a table spec
-(`columns` and `data`).
+**Rapor soruları.** Rapor ajanı kullanıcıya özel sanal tablolar üzerinde tek bir SELECT yazıyor
+ve `run_report(sql, question, ...)` çağırıyor. Tool önce statik korumayı çalıştırıyor (sqlglot:
+tek SELECT, sadece izinli tablolar, sistem nesnesi yok, LIMIT sınırlanıyor), sonra kontrol
+ajanını. Kontrol ajanı SQL'i soruyla karşılaştırıp `submit_verdict(approve|revise, ...)`
+çağırıyor. `revise` gelirse gerekçe rapor ajanına geri gidiyor, bir turda en fazla iki kez.
+Kontrol modeli hata verirse ya da zaman aşımına uğrarsa sorgu sadece statik korumayla çalışıyor
+ve sonuç bunu belirtiyor. Başka bir niteleme olmadan sorulan "ne kadar harcadım", kişisel
+harcamalar artı kullanıcının ev payları demek (UNION ALL). Dashboard ve bütçeler de aynı tanımı
+kullanıyor. Kullanıcı açıkça isterse sadece kişisel ya da sadece ev harcamalarına bakılıyor.
+`chart_type` "table" satırları bir tablo tanımı olarak döndürüyor (`columns` ve `data`).
 
-**Chat.** `POST /chat` calls `runtime.run_agent("chat", user_id, parts, session_id)`. The
-coordinator calls `transfer_to_agent` (receipt, house, report, budget or inbox agent). The
-specialist calls tools; tools open `tool_db(tool_context)` and call services. The response
-carries the text, an optional chart spec from `run_report`, and the name of the agent that
-answered.
+**Sohbet.** `POST /chat`, `runtime.run_agent("chat", user_id, parts, session_id)` çağırıyor.
+Koordinatör `transfer_to_agent` çağırıyor (fiş, ev, rapor, bütçe ya da gelen kutusu ajanı).
+Uzman ajan tool'ları çağırıyor. Tool'lar `tool_db(tool_context)` açıp service'leri çağırıyor.
+Cevapta metin, `run_report`'tan gelen isteğe bağlı bir grafik tanımı ve cevap veren ajanın adı
+oluyor.
 
-**Receipt.** `POST /receipts` sends the image to the "receipt" runner (vision model), whose
-`save_expense` tool goes through `add_expense`.
+**Fiş.** `POST /receipts` görseli "receipt" runner'ına (görsel model) gönderiyor. Onun
+`save_expense` tool'u `add_expense` üzerinden geçiyor.
 
-**Gmail (INGEST).** Google pushes to Pub/Sub, Pub/Sub pushes to `POST /internal/gmail/push`
-(OIDC token checked). `gmail_sync.handle_push` finds the account in a system session, then
-works as that user: new messages go through the "email-parse" runner
-(`submit_parsed_expense` or `mark_not_expense`) and become inbox items. Approving an item
-calls `add_expense` with `source="email"` and the Gmail message id as `external_ref`.
-Cloud Scheduler calls `/internal/gmail/sync-all` (hourly), `/internal/gmail/renew-watches`
-and `/internal/fx/refresh` (daily) with the `X-Kasa-Task-Token` header.
+**Gmail (INGEST).** Google, Pub/Sub'a push ediyor. Pub/Sub de `POST /internal/gmail/push`
+adresine push ediyor (OIDC token kontrol ediliyor). `gmail_sync.handle_push` hesabı bir sistem
+session'ında buluyor, sonra o kullanıcı olarak çalışıyor: yeni mesajlar "email-parse"
+runner'ından geçiyor (`submit_parsed_expense` ya da `mark_not_expense`) ve gelen kutusu kaydı
+oluyor. Bir kaydı onaylamak, `add_expense`'i `source="email"` ile ve `external_ref` olarak
+Gmail mesaj id'siyle çağırıyor. Cloud Scheduler `/internal/gmail/sync-all` (saatlik),
+`/internal/gmail/renew-watches` ve `/internal/fx/refresh` (günlük) endpoint'lerini
+`X-Kasa-Task-Token` header'ıyla çağırıyor.
 
-**Statements (INGEST).** `POST /imports/statement`: CSV is parsed in Python, PDF text goes to
-the "statement-parse" runner. Each line becomes an inbox item keyed by `statements.line_ref`.
+**Ekstreler (INGEST).** `POST /imports/statement`: CSV Python'da ayrıştırılıyor, PDF metni
+"statement-parse" runner'ına gidiyor. Her satır, `statements.line_ref` anahtarıyla bir gelen
+kutusu kaydı oluyor.
 
-## LLM providers
+## LLM sağlayıcıları
 
-| | Gemini (product default) | Ollama (dev and tests) |
+| | Gemini (ürün varsayılanı) | Ollama (geliştirme ve testler) |
 | --- | --- | --- |
-| Settings | `LLM_PROVIDER=gemini`, `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_VISION_MODEL` | `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL` |
-| How | `google.adk.models.Gemini` | `google.adk.models.lite_llm.LiteLlm(model="ollama_chat/<name>")` |
-| Install | `requirements.txt` | `requirements-dev.txt` (adds litellm) |
+| Ayarlar | `LLM_PROVIDER=gemini`, `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_VISION_MODEL` | `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL` |
+| Nasıl | `google.adk.models.Gemini` | `google.adk.models.lite_llm.LiteLlm(model="ollama_chat/<name>")` |
+| Kurulum | `requirements.txt` | `requirements-dev.txt` (litellm ekliyor) |
 
-Agent endpoints answer 503 until the chosen provider is configured. Tests never call a real
-model unless `KASA_LIVE_TESTS=1`:
+Seçilen sağlayıcı yapılandırılana kadar ajan endpoint'leri 503 dönüyor. Testler
+`KASA_LIVE_TESTS=1` olmadıkça gerçek bir model çağırmıyor:
 
 ```bash
 cd backend
@@ -396,15 +422,16 @@ LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 KASA_LIVE_TESTS=1 pyt
 LLM_PROVIDER=gemini GOOGLE_API_KEY=... KASA_LIVE_TESTS=1 pytest -m live -s
 ```
 
-Defaults for Ollama, picked by running the three live flows on the team server:
-`gpt-oss:20b` for chat and tools (with `OLLAMA_REASONING_EFFORT=low`) and `qwen3-vl:8b` for
-receipts. Requests set `keep_alive=10m` so a shared server frees the memory afterwards.
-Expect 30 to 120 seconds per chat turn on that server, depending on what else is running.
-Gemini is much faster and is what the product uses.
+Ollama varsayılanlarını, üç canlı akışı ekip sunucusunda çalıştırarak seçtik: sohbet ve
+tool'lar için `gpt-oss:20b` (`OLLAMA_REASONING_EFFORT=low` ile), fişler için `qwen3-vl:8b`.
+İstekler `keep_alive=10m` ayarlıyor, böylece ortak sunucu iş bitince belleği bırakıyor. O
+sunucuda, başka ne çalıştığına bağlı olarak sohbet turu başına 30 ile 120 saniye arası bekle.
+Gemini çok daha hızlı ve ürün onu kullanıyor.
 
-## Auth
+## Kimlik doğrulama
 
-With `FIREBASE_PROJECT_ID` set, the backend accepts only Firebase ID tokens. The frontend
-uses the Firebase JS SDK (Google sign-in) when the `NEXT_PUBLIC_FIREBASE_*` variables are
-set, and sends the token as a Bearer header. Without them both sides fall back to the dev
-user box and the `X-User-Id` header. Never deploy the backend without `FIREBASE_PROJECT_ID`.
+`FIREBASE_PROJECT_ID` ayarlıysa backend sadece Firebase ID token'larını kabul ediyor.
+`NEXT_PUBLIC_FIREBASE_*` değişkenleri ayarlıysa frontend Firebase JS SDK'yı (Google ile giriş)
+kullanıyor ve token'ı Bearer header'ı olarak gönderiyor. Bunlar yoksa iki taraf da dev user
+kutusuna ve `X-User-Id` header'ına dönüyor. Backend'i asla `FIREBASE_PROJECT_ID` olmadan
+deploy etme.
