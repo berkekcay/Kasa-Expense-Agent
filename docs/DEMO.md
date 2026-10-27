@@ -12,8 +12,8 @@ kısmını onun yerine Mustafa sunuyor ve şu cümleyle açıyor:
 Kısaca:
 
 - **Süre:** yaklaşık 10 dakika, sonra sorular.
-- **Laptop:** demoyu tek bir laptop yürütüyor (Zehra'nınki). İkinci laptop aynı şekilde
-  kurulup yedekte bekliyor (Mustafa'nınki).
+- **Laptop:** demoyu tek bir laptop yürütüyor . İkinci laptop aynı şekilde
+  kurulup yedekte bekliyor .
 - **Veri:** demo kullanıcısı `demo` (görünen adı Deniz), tek komutla oluşan üç aylık veriyle.
   Deniz, Ali ve Ayşe ile birlikte "Moda evi" adlı evde yaşıyor.
 - **Veritabanı:** demo her laptopta SQLite ile çalışıyor. Production için Azure SQL Database
