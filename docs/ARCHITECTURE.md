@@ -301,7 +301,7 @@ inbox items only to their owner; `google_accounts` to its owner or a background 
 ### Changing the schema
 
 1. Edit `app/db/models.py`.
-2. `cd backend && alembic revision --autogenerate --rev-id 0003_short_name -m "what changed"`
+2. `cd backend && alembic revision --autogenerate --rev-id 0004_short_name -m "what changed"`
 3. Read the generated file. If the new table is user-owned, add its RLS predicate on SQL
    Server (drop and recreate `security.kasa_policy`, as `0002_sprints_2_4.py` does).
 4. `pytest tests/test_migrations.py` checks that migrations and models match.
