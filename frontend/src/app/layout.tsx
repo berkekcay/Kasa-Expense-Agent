@@ -29,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </a>
         <ToastProvider>
           <Nav />
-          <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:py-8">
+          <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:py-8 2xl:max-w-7xl">
             {children}
           </main>
         </ToastProvider>
