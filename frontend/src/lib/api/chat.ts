@@ -41,6 +41,7 @@ export type ChatReply = {
   cards?: ChatCard[];
   conversation_id?: string | null;
   message_id?: number | null;
+  report_saveable?: boolean;
 };
 
 export type Conversation = { id: string; title: string; created_at: string; updated_at: string; message_count: number };
@@ -54,6 +55,7 @@ export type SavedMessage = {
   cards: ChatCard[];
   card_state: Record<string, Record<string, unknown>>;
   files: { name: string; kind: "sheet" | "image" }[];
+  report_saveable?: boolean;
 };
 export type ConversationDetail = Conversation & { messages: SavedMessage[] };
 

@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import re
+from decimal import Decimal
 from typing import Any
 
 from google.adk.tools import ToolContext
@@ -60,6 +62,24 @@ async def _check(question: str, sql: str, canonical: str, tool_context: ToolCont
     result = verdict.as_dict()
     result["retries_left"] = MAX_CHECKER_REVISIONS - state["revisions"]
     return result
+
+
+_MONEY = re.compile(r"^-?\d+\.\d{2}$")
+
+
+def money_column_totals(result: dict) -> dict[str, str]:
+    """Exact sums of the money columns (values like "123.45") over every returned row, so the
+    model can quote an overall total instead of adding rows itself. Empty when the result was
+    cut off (a partial sum would mislead) or has fewer than two rows."""
+    rows = result["rows"]
+    if result.get("truncated") or len(rows) < 2:
+        return {}
+    totals = {}
+    for column in result["columns"]:
+        values = [row.get(column) for row in rows]
+        if values and all(isinstance(v, str) and _MONEY.match(v) for v in values):
+            totals[column] = str(sum((Decimal(v) for v in values), Decimal("0.00")))
+    return totals
 
 
 async def run_report(
@@ -135,6 +155,9 @@ async def run_report(
         "chart": chart,
         "checker": checker,
     }
+    totals = money_column_totals(result)
+    if totals:
+        response["column_totals"] = totals
     if chart_error:
         response["chart_error"] = chart_error
     return response

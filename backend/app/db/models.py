@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -439,6 +440,26 @@ class RecoveryCode(Base):
     code_hash: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[dt.datetime] = _now()
     used_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+
+
+class SavedReport(Base):
+    """A chart the report agent made, kept to run again later on fresh data without the LLM.
+    The SQL is the agent's, already approved by the guard and the checker when it was made;
+    every run goes through the same static guard and user-scoped relations again."""
+
+    __tablename__ = "saved_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(Unicode(200))
+    question: Mapped[str | None] = mapped_column(Unicode(1000))
+    sql: Mapped[str] = mapped_column(UnicodeText)
+    chart_type: Mapped[str] = mapped_column(String(10))  # bar, line, pie, table
+    x: Mapped[str | None] = mapped_column(Unicode(100))
+    y: Mapped[str | None] = mapped_column(Unicode(100))
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+    created_at: Mapped[dt.datetime] = _now()
+    last_run_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
 
 
 class HouseInvite(Base):

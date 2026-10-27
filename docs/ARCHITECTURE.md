@@ -243,6 +243,13 @@ bedelini yazıyor.
   sahibi henüz üye olmadığı için önizleme ve katılma sistem oturumunda çalışıyor. SQL Server'da
   `fn_member_write` bu yüzden sistem oturumuna da izin veriyor; kodu servis doğruluyor.
 
+- **ADR-13 Kaydedilen raporlar LLM'siz yeniden çalışıyor.** Rapor ajanının onaylanmış SQL'i
+  cevapla birlikte sunucuda saklanıyor, kullanıcı mesaj id'siyle kaydediyor (tarayıcı SQL
+  göndermiyor). Her çalıştırma `reports.run_report_query`'den geçiyor: aynı statik koruma,
+  aynı kullanıcıya özel tablolar, ama kontrol ajanı yok (SQL kaydedilirken onaylanmıştı).
+  Toplamları model değil araç veriyor (`column_totals`), çünkü lokal model satırları kendi
+  toplayıp yanlış sayı söyleyebiliyordu. Bedeli: SQL'de yazılı ay ("2026-10") sabit kalıyor.
+
 ### Güvenlik modeli
 
 | Katman | Onu ne koruyor | Nerede |

@@ -134,6 +134,25 @@ def _cards(run: runtime.AgentRun) -> list[ChatCard]:
     return cards
 
 
+def _report_spec(run: runtime.AgentRun) -> dict | None:
+    """The SQL and chart settings of the last report that drew a chart, to keep with the
+    answer on the server so it can be saved as a report later (POST /reports)."""
+    calls = [args for name, args in run.tool_calls if name == "run_report"]
+    results = [result for name, result in run.tool_results if name == "run_report"]
+    for args, result in reversed(list(zip(calls, results, strict=False))):
+        if result.get("status") == "ok" and result.get("chart") and args.get("sql"):
+            chart = result["chart"]
+            return {
+                "sql": str(args["sql"]),
+                "question": str(args.get("question") or ""),
+                "chart_type": chart.get("type") or "table",
+                "x": chart.get("x") or "",
+                "y": chart.get("y") or "",
+                "title": chart.get("title") or str(args.get("title") or ""),
+            }
+    return None
+
+
 def _reply(run: runtime.AgentRun) -> ChatOut:
     chart = None
     for name, result in reversed(run.tool_results):
@@ -146,6 +165,7 @@ def _reply(run: runtime.AgentRun) -> ChatOut:
         chart=chart,
         agent=run.agent,
         cards=_cards(run),
+        report_saveable=_report_spec(run) is not None,
     )
 
 
@@ -180,7 +200,7 @@ def _begin(
     return _Turn(conversation.id, conversation.adk_session_id, [types.Part(text=replay)] if replay else [])
 
 
-def _finish(user_id: str, turn: _Turn, reply: ChatOut) -> ChatOut:
+def _finish(user_id: str, turn: _Turn, reply: ChatOut, report: dict | None = None) -> ChatOut:
     """Store the answer (text, chart, cards) and remember the live agent session."""
     with session_for(user_id) as db:
         conversation = chat_history.get(db, user_id, turn.conversation_id)
@@ -190,6 +210,7 @@ def _finish(user_id: str, turn: _Turn, reply: ChatOut) -> ChatOut:
             "chart": reply.chart.model_dump(mode="json") if reply.chart else None,
             "agent": reply.agent,
             "cards": [c.model_dump(mode="json") for c in reply.cards],
+            "report": report,
         }
         message = chat_history.add_message(db, conversation, "assistant", reply.text, payload)
         db.commit()
@@ -209,7 +230,7 @@ async def chat(body: ChatIn, db: DB, user_id: CurrentUser) -> ChatOut:
         body.session_id or turn.session_id,
         new_session_parts=turn.replay,
     )
-    return _finish(user_id, turn, _reply(run))
+    return _finish(user_id, turn, _reply(run), _report_spec(run))
 
 
 @router.post(
@@ -235,7 +256,7 @@ async def chat_stream(body: ChatIn, db: DB, user_id: CurrentUser) -> StreamingRe
                 "chat", user_id, parts, body.session_id or turn.session_id, new_session_parts=turn.replay
             ):
                 if isinstance(item, runtime.AgentRun):
-                    reply = _finish(user_id, turn, _reply(item))
+                    reply = _finish(user_id, turn, _reply(item), _report_spec(item))
                     yield line({"type": "final", "reply": reply.model_dump(mode="json")})
                 else:
                     yield line(item)
@@ -341,6 +362,7 @@ def get_conversation(conversation_id: str, db: DB, user_id: CurrentUser) -> Conv
                 cards=payload.get("cards") or [],
                 card_state=payload.get("card_state") or {},
                 files=payload.get("files") or [],
+                report_saveable=bool(payload.get("report")),
             )
         )
     return ConversationDetailOut(

@@ -6,6 +6,7 @@ import {
   BarChart3,
   Check,
   Coffee,
+  FileBarChart,
   FileSpreadsheet,
   Home,
   ImageIcon,
@@ -39,11 +40,13 @@ import {
   confirmImport,
   dismissError,
   newConversation,
+  saveReport,
   sendMessage,
   stopWaiting,
   undoExpense,
   useChat,
 } from "./chatStore";
+import { reportMessages } from "@/features/reports/messages";
 import { messages } from "./messages";
 
 type T = ReturnType<typeof useT<(typeof messages)["en"]>>;
@@ -274,6 +277,9 @@ function Chat({ userId }: { userId: string }) {
                 <div className="rounded-2xl rounded-tl-md bg-foreground/[0.04] px-4 py-3">
                   {m.text && <Markdown text={m.text} />}
                   {m.chart && <ChartView spec={m.chart} />}
+                  {m.chart && m.reportSaveable && m.id && (
+                    <SaveReport saved={Boolean(m.savedReportId)} onSave={() => saveReport(userId, i)} />
+                  )}
                   {m.cards?.map((card, k) => (
                     <CardView
                       key={k}
@@ -572,6 +578,45 @@ function CardView({
         )}
         {state?.status === "error" && <span className="text-xs text-danger">{state.error}</span>}
       </div>
+    </div>
+  );
+}
+
+function SaveReport({ saved, onSave }: { saved: boolean; onSave: () => Promise<void> }) {
+  const t = useT(reportMessages);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (saved) {
+    return (
+      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-positive">
+        <Check aria-hidden className="size-3.5" /> {t("savedReport")}
+        <Link href="/reports" className="font-medium text-accent hover:underline">
+          {t("openReports")}
+        </Link>
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            await onSave();
+          } catch (e) {
+            setError(errorMessage(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium hover:bg-card-hover disabled:opacity-50"
+      >
+        <FileBarChart aria-hidden className="size-3.5" /> {t("saveReport")}
+      </button>
+      {error && <span className="text-xs text-danger">{error}</span>}
     </div>
   );
 }

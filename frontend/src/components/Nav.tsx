@@ -3,6 +3,7 @@
 import {
   CircleHelp,
   CreditCard,
+  FileBarChart,
   FileUp,
   Home,
   Inbox,
@@ -40,6 +41,7 @@ const messages = defineMessages({
     shared: "Shared",
     dashboard: "Dashboard",
     chat: "Ask Kasa",
+    reports: "Reports",
     expenses: "Expenses",
     receipts: "Scan receipt",
     import: "Import statement",
@@ -75,6 +77,7 @@ const messages = defineMessages({
     shared: "Ortak",
     dashboard: "Özet",
     chat: "Kasa'ya sor",
+    reports: "Raporlar",
     expenses: "Harcamalar",
     receipts: "Fiş tara",
     import: "Ekstre yükle",
@@ -114,6 +117,7 @@ const GROUPS: { title: Key; items: Item[] }[] = [
     items: [
       { href: "/", label: "dashboard", icon: LayoutDashboard },
       { href: "/chat", label: "chat", icon: MessageSquareText },
+      { href: "/reports", label: "reports", icon: FileBarChart },
     ],
   },
   {

@@ -77,6 +77,7 @@ class AgentRun:
     session_id: str
     text: str
     tool_results: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    tool_calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)  # name, arguments
     agents: list[str] = field(default_factory=list)  # authors of model events, in order
 
     def last_tool_result(self, name: str) -> dict[str, Any] | None:
@@ -152,6 +153,7 @@ async def stream_agent(
                 run.agents.append(event.author)
                 yield {"type": "agent", "agent": event.author}
             for call in event.get_function_calls():
+                run.tool_calls.append((call.name or "", dict(call.args or {})))
                 if call.name and call.name != "transfer_to_agent":
                     yield {"type": "tool", "name": call.name}
             for response in event.get_function_responses():

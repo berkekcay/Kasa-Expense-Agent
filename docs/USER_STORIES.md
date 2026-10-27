@@ -89,6 +89,7 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-ASK-08 | Kasa'nın ne yaptığını adım adım gör | 4 | Bitti | Berke | - |
 | US-ASK-09 | Eski sohbetlerime geri dön | 4 | Bitti | Berke | - |
 | US-ASK-10 | Sohbetin kaydettiğini geri al | 4 | Bitti | Berke | - |
+| US-ASK-11 | Grafiği rapor olarak kaydet, sonra güncel veriyle aç | 4 | Bitti | Berke | - |
 | US-INBOX-01 | CSV banka ekstresi yükle | 3 | Bitti | Berke | - |
 | US-INBOX-02 | PDF ekstre yükle | 3 | Kısmen | Berke | Yusuf: canlı bir çalıştırma kaydetmek |
 | US-INBOX-03 | Gelen kutusundaki kalemleri incele ve onayla | 3 | Bitti | Berke | - |
@@ -578,6 +579,21 @@ almak istiyorum.
 - Kanıt: `ChatOut.cards`, `POST /chat/receipt`, `PUT /chat/messages/{id}/cards/{i}`,
   `tests/test_chat_files.py`.
 
+### US-ASK-11 Grafiği rapor olarak kaydet, sonra güncel veriyle aç
+
+Elif olarak, "kategorilere göre bu ay" grafiğini her ay yeniden sormak istemiyorum; bir kere
+kaydedip istediğimde güncel haliyle görmek istiyorum.
+
+- Sprint 4 · **Bitti** · Sahip: Backend (REPORT), Frontend · Yapan: Berke
+- Diyelim ki Kasa bir grafik çizdi. Altındaki "Raporu kaydet" ile Raporlar sayfasına eklenir.
+  SQL tarayıcıya hiç gitmez, cevapla birlikte sunucuda saklanır.
+- Diyelim ki Raporlar sayfasını açtım. Her rapor yapay zeka beklemeden bugünkü veriyle yeniden
+  çalışır (aynı korumalı SQL ve kullanıcıya özel tablolar), CSV olarak iner, adı değişir,
+  silinir, en fazla dördü Özet'e sabitlenir.
+- Diyelim ki Kasa bir toplam söylüyor. Toplamı model değil araç hesaplar (`column_totals`).
+- Kanıt: `app/services/saved_reports.py`, `app/api/reports.py`, migration `0006`,
+  `tests/test_saved_reports.py`, `tests/test_reports.py`.
+
 ## Epik: gelen kutusu ve içe aktarma
 
 ### US-INBOX-01 CSV banka ekstresi yükle
@@ -889,6 +905,7 @@ yolları `backend/tests/` altında.
 | US-ASK-08 | Bitti | `POST /chat/stream` | `/chat` | `test_chat_files.py`, `chatStore.test.ts` |
 | US-ASK-09 | Bitti | `GET/PATCH/DELETE /chat/conversations/*` | `/chat` | `test_chat_files.py`, `test_migrations.py` |
 | US-ASK-10 | Bitti | `POST /chat/receipt`, `PUT /chat/messages/{id}/cards/{i}` | `/chat` | `test_chat_files.py` |
+| US-ASK-11 | Bitti | `POST/GET /reports`, `GET /reports/{id}/run`, `GET /reports/{id}/export.csv`, `PATCH/DELETE /reports/{id}` | `/chat`, `/reports`, `/` | `test_saved_reports.py`, `test_reports.py` |
 | US-INBOX-01 | Bitti | `POST /imports/statement` | `/import` | `test_ingest_statements.py` |
 | US-INBOX-02 | Kısmen | `POST /imports/statement` | `/import` | `test_ingest_statements.py` (sahte), `test_ingest_live.py` (yalnızca canlı) |
 | US-INBOX-03 | Bitti | `GET /inbox`, `PATCH /inbox/{id}`, `POST /inbox/{id}/approve`, `POST /inbox/{id}/reject`, `POST /inbox/approve`, `POST /inbox/reject` | `/inbox` | `test_ingest_inbox.py` |

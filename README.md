@@ -18,7 +18,9 @@ ilerlediği [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) içinde.
 ECharts grafikleri var (harcama hızı, kategoriler, son 6 ay, harcama takvimi, geçen aya göre
 değişim). Sohbette Kasa ne yaptığını adım adım gösteriyor, kaydettiği harcamayı bir kartla
 gösterip geri almaya izin veriyor, Excel ya da CSV dosyasını analiz edip grafik çiziyor ve
-sohbetler kaydediliyor. Hakkında, yardım, gizlilik (KVKK), kullanım koşulları ve çerez
+sohbetler kaydediliyor. Sohbette çizilen bir grafik "Raporlar" sayfasına kaydedilip yapay zeka
+beklemeden güncel veriyle yeniden açılabiliyor, Özet'e sabitlenebiliyor. Giriş e-posta ya da
+Google ile, Google Authenticator 2FA zorunlu; ev arkadaşları davet linkiyle katılıyor. Hakkında, yardım, gizlilik (KVKK), kullanım koşulları ve çerez
 sayfaları da var.
 
 Tek kural: LLM *ne* yapılacağına karar verir, para hesabının tamamını düz Python yapar.

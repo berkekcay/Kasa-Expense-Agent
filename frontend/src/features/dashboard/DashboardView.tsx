@@ -15,6 +15,7 @@ import {
   categoryVar,
 } from "@/components/charts";
 import { MonthPicker } from "@/components/pickers";
+import { PinnedReports } from "@/features/reports/ReportsView";
 import { Async, Badge, Card, Empty, Money, Skeleton, StatCard, cardLinkClass } from "@/components/ui";
 import { api, type Dashboard } from "@/lib/api";
 import { categoryLabel, common, periodLabel } from "@/lib/commonMessages";
@@ -167,6 +168,8 @@ function DashboardBody({ d, isCurrent, onPickMonth }: { d: Dashboard; isCurrent:
           }
         />
       </div>
+
+      <PinnedReports />
 
       {empty ? (
         <Card>

@@ -43,7 +43,15 @@ it("keeps the question and the streamed answer without any component mounted", a
     sessionId: "s1",
     messages: [
       { role: "user", text: "Evde kim kime borçlu?", files: [] },
-      { id: 7, role: "assistant", text: "Ayşe owes you", chart: null, agent: "house_agent", cards: [] },
+      {
+        id: 7,
+        role: "assistant",
+        text: "Ayşe owes you",
+        chart: null,
+        agent: "house_agent",
+        cards: [],
+        reportSaveable: false,
+      },
     ],
   });
   newConversation("chat-a");

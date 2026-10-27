@@ -60,6 +60,7 @@ class ChatOut(BaseModel):
     cards: list[ChatCard] = []
     conversation_id: str | None = None
     message_id: int | None = None  # the saved answer, for PUT /chat/messages/{id}/cards/{i}
+    report_saveable: bool = False  # POST /reports {message_id} can keep this chart
 
 
 class SheetOut(BaseModel):
@@ -97,6 +98,7 @@ class ChatMessageOut(BaseModel):
     cards: list[ChatCard] = []
     card_state: dict[str, dict[str, Any]] = {}
     files: list[dict[str, str]] = []
+    report_saveable: bool = False
 
 
 class ConversationDetailOut(ConversationOut):

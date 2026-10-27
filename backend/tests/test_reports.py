@@ -153,3 +153,20 @@ class TestRunReport:
         assert ChartSpec(**table).columns == ["merchant", "expense_date", "total"]
         with pytest.raises(ValueError, match="bar, line, pie or table"):
             build_chart(result, "donut", "merchant", "total")
+
+
+def test_money_column_totals_are_exact_and_only_for_complete_results():
+    from app.agents.tools.report_tools import money_column_totals
+
+    result = {
+        "columns": ["category", "total", "count"],
+        "rows": [
+            {"category": "rent", "total": "6000.00", "count": 1},
+            {"category": "groceries", "total": "1544.99", "count": 4},
+            {"category": "food", "total": "0.10", "count": 2},
+        ],
+        "truncated": False,
+    }
+    assert money_column_totals(result) == {"total": "7545.09"}
+    assert money_column_totals({**result, "truncated": True}) == {}
+    assert money_column_totals({**result, "rows": result["rows"][:1]}) == {}

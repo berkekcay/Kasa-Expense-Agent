@@ -15,6 +15,7 @@ import { inboxApi } from "./inbox";
 import { integrationsApi } from "./integrations";
 import { meApi } from "./me";
 import { receiptsApi } from "./receipts";
+import { reportsApi } from "./reports";
 import { subscriptionsApi } from "./subscriptions";
 
 export * from "./auth";
@@ -30,6 +31,7 @@ export * from "./inbox";
 export * from "./integrations";
 export * from "./me";
 export * from "./receipts";
+export * from "./reports";
 export * from "./subscriptions";
 
 export const api = {
@@ -46,5 +48,6 @@ export const api = {
   imports: importsApi,
   integrations: integrationsApi,
   me: meApi,
+  reports: reportsApi,
   auth: authApi,
 };

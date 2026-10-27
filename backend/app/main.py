@@ -26,6 +26,7 @@ from app.api import (
     integrations,
     internal,
     invites,
+    reports,
     subscriptions,
     users,
 )
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
         inbox,
         imports,
         internal,
+        reports,
     ):
         app.include_router(module.router)
     app.include_router(agents.files_router)  # chat files and imports, no LLM needed

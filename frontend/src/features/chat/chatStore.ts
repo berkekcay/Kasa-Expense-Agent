@@ -40,6 +40,8 @@ export type Message = {
   cards?: ChatCard[];
   cardState?: Record<number, CardState>;
   files?: { name: string; kind: "sheet" | "image" }[];
+  reportSaveable?: boolean; // the chart can be kept on the Reports page
+  savedReportId?: number;
 };
 
 export type Step = { kind: "agent" | "tool"; name: string; done: boolean; failed?: boolean };
@@ -235,6 +237,7 @@ export async function sendMessage(userId: string, text: string, attachments: Att
             chart: reply.chart,
             agent: reply.agent,
             cards: reply.cards ?? [],
+            reportSaveable: reply.report_saveable ?? false,
           },
         ],
       }));
@@ -276,6 +279,18 @@ export async function undoExpense(userId: string, messageIndex: number, cardInde
   } catch (err) {
     setCard(userId, messageIndex, cardIndex, { status: "error", error: errorMessage(err) });
   }
+}
+
+/** Keep the chart of an answer on the Reports page. */
+export async function saveReport(userId: string, messageIndex: number): Promise<void> {
+  const message = get(userId).messages[messageIndex];
+  if (!message?.id || message.savedReportId) return;
+  const report = await api.reports.save(message.id);
+  set(userId, (s) => ({
+    ...s,
+    messages: s.messages.map((m, i) => (i === messageIndex ? { ...m, savedReportId: report.id } : m)),
+  }));
+  dataChanged("reports");
 }
 
 /** Confirm a file import: the prepared rows become inbox items. */
@@ -320,6 +335,7 @@ export async function openConversation(userId: string, conversationId: string) {
         agent: m.agent,
         cards: m.cards,
         files: m.files,
+        reportSaveable: m.report_saveable,
         cardState: Object.fromEntries(Object.entries(m.card_state).map(([k, v]) => [Number(k), v as CardState])),
       })),
     }));

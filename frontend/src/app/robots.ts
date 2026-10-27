@@ -11,6 +11,7 @@ export default function robots(): MetadataRoute.Robots {
       disallow: [
         "/budgets",
         "/chat",
+        "/reports",
         "/expenses",
         "/houses",
         "/import",

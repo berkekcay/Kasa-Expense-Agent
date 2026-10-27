@@ -6,6 +6,7 @@ import { Swatch } from "@/components/charts";
 import { EChart } from "@/components/chart/EChart";
 import { type ChartTokens, axisBase, tooltipBase } from "@/components/chart/tokens";
 import type { ChartSpec } from "@/lib/api";
+import { categoryLabel } from "@/lib/commonMessages";
 import { formatAxis, formatNumber } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { messages } from "./messages";
@@ -59,7 +60,12 @@ export function DataTable({ spec }: { spec: ChartSpec }) {
 export function ChartView({ spec }: { spec: ChartSpec }) {
   const t = useT(messages);
   const points = useMemo(
-    () => spec.data.map((r) => ({ x: String(r[spec.x] ?? ""), y: toNumber(r[spec.y]) })),
+    () =>
+      spec.data.map((r) => {
+        const raw = String(r[spec.x] ?? "");
+        // Category keys from the database ("groceries") read as words in the UI language.
+        return { x: spec.x === "category" ? categoryLabel(raw) : raw, y: toNumber(r[spec.y]) };
+      }),
     [spec],
   );
   const slices = useMemo(() => {
@@ -107,6 +113,13 @@ export function ChartView({ spec }: { spec: ChartSpec }) {
           boundaryGap: !line,
           ...axisBase(t),
           splitLine: { show: false },
+          // Every label, tilted when there are many bars, rather than every other one.
+          axisLabel: {
+            ...axisBase(t).axisLabel,
+            interval: 0,
+            rotate: points.length > 6 ? 30 : 0,
+            hideOverlap: true,
+          },
         },
         yAxis: {
           type: "value",
