@@ -44,6 +44,7 @@ flowchart TB
             report["Rapor ajanı"]
             budget["Bütçe ajanı"]
             inbox["Gelen kutusu ajanı"]
+            file["Dosya ajanı (Excel, CSV)"]
             checker["Kontrol ajanı"]
             parsers["E-posta ve ekstre ayrıştırıcıları"]
         end
@@ -69,9 +70,9 @@ flowchart TB
     rest -->|"POST /chat"| coord
     rest -->|"POST /receipts"| receipt
     rest -->|"geri kalan her şey"| services
-    coord --> receipt & house & report & budget & inbox
+    coord --> receipt & house & report & budget & inbox & file
     report -->|"run_report sorar"| checker
-    receipt & house & report & budget & inbox & parsers --> tools
+    receipt & house & report & budget & inbox & file & parsers --> tools
     tools --> services
     services -->|"Gmail senkronu, PDF içe aktarma"| parsers
     services --> dblayer
@@ -85,7 +86,7 @@ flowchart TB
 ```
 
 Tek cümleyle: Next.js uygulaması bir FastAPI backend'i çağırıyor, orada koordinatör ajan her
-sohbet mesajını beş uzman ajandan birine veriyor, bu ajanların tool'ları da para hesabının
+sohbet mesajını altı uzman ajandan birine veriyor, bu ajanların tool'ları da para hesabının
 hepsini yapan ve veritabanı, Google ve TCMB ile konuşan düz Python service'lerini çağırıyor.
 
 ### Fiş fotoğrafından kaydedilen harcamaya
@@ -158,7 +159,7 @@ sequenceDiagram
     RT-->>RA: TL cinsinden satırlar ve grafik tanımı
     RA-->>A: Tool'un sayılarını aktaran bir ile üç cümle
     A-->>W: Metin, grafik tanımı, cevap veren ajanın adı
-    W-->>U: Cevap ve bir bar grafik (recharts)
+    W-->>U: Cevap ve bir bar grafik (ECharts)
 ```
 
 ### Temel kararlar
@@ -197,6 +198,35 @@ bedelini yazıyor.
   uygulama, şemayı değiştiremeyen bir kullanıcıyla bağlanacak. Bedeli: RLS sadece SQL
   Server'da var ve henüz bir Azure SQL veritabanı olmadığı için gerçek bir sunucuda hiç
   çalışmadı (bkz. [Veritabanı: şimdi SQLite, sonra Azure SQL](#veritabanı-şimdi-sqlite-sonra-azure-sql)).
+- **ADR-7 Sohbette dosya analizi kod çalıştırmadan, sorgu araçlarıyla.** Kullanıcı sohbete
+  Excel ya da CSV ekleyebiliyor. Dosya bir kez okunup sadece o kullanıcı için iki saat bellekte
+  tutuluyor (`services/sheets.py`), veritabanına yazılmıyor. Dosya ajanı dosyayı dört araçla
+  görüyor: `describe_file` (kolonlar, tipler, örnekler), `read_rows` (sayfa sayfa), `query_file`
+  (tablo adı `data` olan tek bir SELECT, istenirse grafik) ve `prepare_expense_import`.
+  `query_file` dosyayı geçici bir bellek içi SQLite'a yüklüyor ve bir authorizer ile sadece o
+  tabloyu okumaya izin veriyor. Model kod çalıştırmıyor. `prepare_expense_import` hiçbir şey
+  kaydetmiyor, sadece bir önizleme ve taslak döndürüyor. Kullanıcı sohbetteki karttan onaylayınca
+  satırlar gelen kutusuna düşüyor, yani ADR-4 burada da geçerli. Bedeli: dosyalar tek instance'ın
+  belleğinde, birden fazla instance'ta paylaşılan bir depo gerekecek.
+- **ADR-8 Sohbet akışla (streaming) çalışıyor ve yaptığını gösteriyor.** Yerel modelde bir cevap
+  30 saniyeyi bulabiliyor, boş bir "düşünüyor" yazısı güven vermiyor. `POST /chat/stream`
+  satır satır JSON gönderiyor: hangi ajan devraldı, hangi tool çalıştı ve bitti, en sonda da
+  cevap. Ajanların kaydettiği her şey cevabın altında bir kart olarak çıkıyor (harcama
+  kaydedildi, geri al; dosyadan aktarım hazır, onayla). Prompt'lar bölümlere ayrıldı
+  (`<data_safety>`, `<accuracy>`, `<tools>`, `<language>`, `<formatting>`), bir tur en fazla
+  24 model çağrısı yapabiliyor, böylece döngüye giren bir model kendiliğinden duruyor.
+- **ADR-9 Sohbet geçmişi veritabanında, ajan oturumu bellekte.** Kullanıcı eski sohbetlerini
+  açabilmeli. Mesajlar, grafikler ve kartlar `chat_conversations` ve `chat_messages`
+  tablolarında (migration `0004`, SQL Server'da sahip RLS'si). ADK oturumu hâlâ bellekte; sunucu
+  yeniden başlayıp oturum kaybolursa, o sohbete yazılan ilk mesajın önüne son 10 mesaj
+  `<earlier_conversation>` olarak eklenir. Bedeli: model eski turların tool sonuçlarını görmez,
+  sadece metinlerini görür.
+- **ADR-10 Arayüz iki dilli, her özellik kendi metinlerini tutuyor.** Türkçe ve İngilizce
+  metinler her özelliğin yanındaki `messages.ts` dosyasında, `defineMessages` Türkçe'de eksik
+  anahtarı derleme hatası yapıyor. Seçilen dil localStorage'da, ilk boyamadan önce
+  `<html lang>` ayarlanıyor. Sohbet dili mesajın dilinden, belli değilse arayüzün dilinden
+  seçiliyor. Bedeli: sunucu her zaman İngilizce render ediyor, Türkçe kullanıcıda ilk yüklemede
+  çok kısa bir an İngilizce görünebiliyor.
 - **ADR-6 Üründe Gemini, geliştirmede Ollama.** Gemini hızlı ve ücretsiz bir kotası var. Ekibin
   Ollama sunucusu sayesinde key ya da kota olmadan geliştirme yapıp eval çalıştırabiliyoruz.
   `LLM_PROVIDER` ikisi arasında ADK üzerinden geçiş yapıyor (`Gemini` ya da `LiteLlm`).
@@ -216,7 +246,8 @@ bedelini yazıyor.
 | İçe aktarma neyi değiştirebiliyor | Sadece gelen kutusu kayıtlarını. Her harcamayı bir insan onaylıyor. | `app/services/inbox.py`, `app/agents/tools/inbox_tools.py` |
 | Gizli bilgiler | Sadece ortam değişkenleri (Cloud Run'da Secret Manager). `.env` gitignore'da. Google refresh token'ları Fernet ile şifreleniyor ve hiç loglanmıyor. | `app/config.py`, `app/services/crypto.py` |
 | Arka plan endpoint'leri | `/internal/*` için `X-Kasa-Task-Token` gerekiyor. Gmail push'u bir Pub/Sub OIDC token'ı istiyor. | `app/api/internal.py` |
-| Yüklemeler | Fiş için sadece görsel türleri, ekstre için CSV ya da PDF, 10 MB sınır. | `app/api/agents.py`, `app/api/imports.py` |
+| Yüklemeler | Fiş için sadece görsel türleri, ekstre için CSV, Excel ya da PDF, sohbet için Excel ya da CSV, 10 MB sınır. | `app/api/agents.py`, `app/api/imports.py` |
+| Sohbete eklenen dosyalar | Sadece o kullanıcının belleğinde, iki saat. Ajan tek SELECT'le, authorizer'lı bellek içi SQLite'ta okuyor. Aktarım kullanıcı onaylamadan hiçbir şey yazmıyor. | `app/services/sheets.py`, `app/agents/tools/file_tools.py` |
 
 Bilinen eksikler (bkz. [USER_STORIES.md](USER_STORIES.md)): `/chat` ve `/receipts` için
 kullanıcı başına istek sınırı yok. Evin herhangi bir üyesi herhangi bir user id'yi ekleyebiliyor
@@ -252,7 +283,7 @@ backend/
     agents/
       common.py             chat_model() / vision_model() (Gemini or Ollama), GUARDRAILS
       runtime.py            runner registry: chat, receipt, email-parse, statement-parse
-      coordinator.py        root agent, routes to the five specialists below
+      coordinator.py        root agent, routes to the six specialists below
       receipt_agent.py  house_agent.py  report_agent.py  budget_agent.py  email_agent.py
       statement_agent.py  checker_agent.py
       tools/                ADK function tools, one module per agent
@@ -262,9 +293,20 @@ frontend/src/
   app/<route>/page.tsx      /, /expenses, /receipts, /import, /inbox, /houses, /budgets,
                             /subscriptions, /chat, /settings
   features/<feature>/       the views; placeholders where a track has not landed
+  features/chat/chatStore.ts  the conversation, outside React, so it survives page changes
+  components/Nav.tsx        sidebar (drawer on phones), theme switch, dev user box
+  components/ui.tsx         cards, buttons, fields, stat cards, empty states
+  components/pickers.tsx    month and date pickers (same look in every browser)
+  components/charts.tsx     ECharts charts; components/chart/ loads ECharts lazily
   lib/api/                  fetch client (client.ts) plus one module per feature
   lib/auth.ts, lib/user.ts  Firebase sign-in or the dev user box
+  lib/theme.ts              light, dark or system theme, applied before first paint
 ```
+
+Grafikler ECharts ile çiziliyor. Renkler `globals.css` içindeki token'lardan geliyor, açık ve
+koyu temada ayrı ayrı renk körlüğü kontrolünden geçmiş bir palet. Her kategorinin rengi her
+grafikte aynı. Paralar grafikte sadece çizim için float oluyor, ekrandaki her rakam API'nin
+string tutarından geliyor.
 
 Frontend testleri `src/` altında `*.test.ts` ve `*.test.tsx` dosyalarında bulunur.
 `cd frontend && npm test`, Vitest ile React Testing Library testlerini jsdom ortamında

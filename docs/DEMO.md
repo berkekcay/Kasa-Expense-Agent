@@ -250,10 +250,11 @@ güvenlik uyarısıyla hemen kapanırsa tekrar çalıştırın, ikinci seferde d
 
 ### 8. Demo kullanıcısına geç
 
-Üstteki menüde **Dev user** kutusuna `demo` yazıp **Switch** butonuna basın. Yanında **Deniz**
-adı çıkıyor. Pencere yaklaşık 1280 pikselden darsa linkler bir **Menu** butonunun içine
-giriyor, Dev user kutusu da o menünün içinde. Demo için tarayıcıyı tam ekran yapın ve salondan
-okunabilsin diye %110 ya da %125'e yakınlaştırın (Ctrl ve +).
+Sol menünün en altındaki **Dev user** kutusuna `demo` yazıp **Switch** butonuna basın. Kutunun
+üstünde **Deniz** adı çıkıyor. Pencere yaklaşık 1024 pikselden darsa sol menü gizleniyor, sol
+üstteki menü butonuyla açılıyor. Demo için tarayıcıyı tam ekran yapın ve salondan okunabilsin
+diye %110'a yakınlaştırın (Ctrl ve +). Tema düğmesi de sol menünün altında: projeksiyonda açık
+tema (Light) daha net görünüyor.
 
 ### 9. Sağlık kontrolü
 
@@ -325,7 +326,7 @@ Berke'nin yerine Mustafa sunuyor.
 **Söyle (İngilizce):** "Berke, our product owner, designed the architecture. He can't be here
 today, so I'll present it. The browser talks to a Next.js app. It calls our FastAPI backend.
 When you chat or upload a receipt, a coordinator agent built with Google's Agent Development
-Kit hands the message to one of five specialists: receipts, house, reports, budgets and the
+Kit hands the message to one of six specialists: receipts, house, reports, budgets, files and the
 inbox. The specialists never do math. They call tools, and the tools call plain Python
 services that work in kuruş, as whole numbers. Today it runs on SQLite; we are moving
 production to Azure SQL, and the migrations and row-level security for it are already written

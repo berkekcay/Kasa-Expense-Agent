@@ -14,6 +14,13 @@ Coding agent'lar [AGENTS.md](AGENTS.md) dosyasını okur.
 Modül haritası, veri modeli, hangi dosyanın kime ait olduğu ve bir isteğin sistemde nasıl
 ilerlediği [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) içinde.
 
+**Arayüz:** Türkçe ve İngilizce, açık ve koyu tema, telefonda da çalışıyor. Ana sayfada
+ECharts grafikleri var (harcama hızı, kategoriler, son 6 ay, harcama takvimi, geçen aya göre
+değişim). Sohbette Kasa ne yaptığını adım adım gösteriyor, kaydettiği harcamayı bir kartla
+gösterip geri almaya izin veriyor, Excel ya da CSV dosyasını analiz edip grafik çiziyor ve
+sohbetler kaydediliyor. Hakkında, yardım, gizlilik (KVKK), kullanım koşulları ve çerez
+sayfaları da var.
+
 Tek kural: LLM *ne* yapılacağına karar verir, para hesabının tamamını düz Python yapar.
 Tutarlar float olarak değil, tam sayı alt birim (kuruş/cent) olarak saklanır.
 
@@ -40,6 +47,7 @@ yapacağı [veritabanı planı](docs/DATABASE.md) dosyasında.
    |                 --> report_agent    (korumalı, salt okunur SQL -> grafik tanımı)
    |                 --> budget_agent    (bütçeler, abonelikler, döviz kurları)
    |                 --> inbox_agent     (Gmail'de ve banka ekstrelerinde bulunan harcamalar)
+   |                 --> file_agent      (sohbete eklenen Excel/CSV: analiz, grafik, aktarım)
    |-- services/   düz Python veri katmanı + para hesapları (unit test'li)
    |-- db/         SQLAlchemy modelleri + session'lar (MSSQL'de SESSION_CONTEXT ayarlar)
    |-- alembic/    migration'lar, SQL Server için row-level security dahil
@@ -135,7 +143,7 @@ cp .env.example .env.local         # PowerShell: Copy-Item .env.example .env.loc
 npm run dev                        # http://localhost:3000
 ```
 
-Farklı kullanıcılar gibi davranmak için nav bar'daki "Dev user" kutusunu kullan. Örneğin
+Farklı kullanıcılar gibi davranmak için sol menünün altındaki "Dev user" kutusunu kullan. Örneğin
 `ali` olarak bir ev oluştur, `ayse`'yi ekle, sonra `ayse`'ye geç.
 
 ### Frontend testleri
@@ -216,7 +224,7 @@ tetiklenir, sadece `main`). Anahtar dosyası yerine Workload Identity Federation
 - [x] Harcama listesi ve elle ekleme formu
 - [x] Üyeleriyle bir ev, eşit bölüşüm (kalan kuruşlar dağıtılıyor, paylar her zaman toplama eşit)
 - [x] Ev bakiyeleri ve greedy hesaplaşma transferleri
-- [x] Soru report agent'a gidiyor, agent korumalı SQL çalıştırıp recharts'ın çizdiği bir grafik tanımı döndürüyor
+- [x] Soru report agent'a gidiyor, agent korumalı SQL çalıştırıp ECharts'ın çizdiği bir grafik tanımı döndürüyor
 - [x] Cloud Run için Dockerfile'lar (backend ve frontend)
 - [x] pytest: para hesapları, SQL koruması, API'nin normal akışları ve script'li sahte bir LLM ile ADK bağlantıları
 - [ ] Gerçek bir anahtarla canlı Gemini çağrılarını denemek (fiş doğruluğu, yönlendirme kalitesi)

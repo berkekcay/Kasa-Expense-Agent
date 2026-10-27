@@ -69,6 +69,7 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-BUDGET-03 | Ayımı tek bakışta gör | 3 | Bitti | Berke | - |
 | US-BUDGET-04 | Aboneliklerimi bul | 3 | Bitti | Berke | - |
 | US-BUDGET-05 | Bütçe, abonelik ve kurları sohbette sor | 3 | Kısmen | Berke | Yusuf: cevap dili, Gemini'de doğrulamak |
+| US-BUDGET-06 | Ayımı grafiklerle geçen ayla karşılaştır | 4 | Bitti | Berke | - |
 | US-HOUSE-01 | Ev oluştur, ev arkadaşlarını ekle | 1 | Bitti | Berke | - |
 | US-HOUSE-02 | Ev arkadaşını linkle davet et | 4 | Başlanmadı | - | Ömer (#6), Zehra (#11) |
 | US-HOUSE-03 | Faturayı eşit böl | 1 | Bitti | Berke | - |
@@ -84,6 +85,10 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-ASK-04 | Sohbet benim dilimde cevap verir | 4 | Kısmen | Berke | Yusuf (#5) |
 | US-ASK-05 | Doğru uzman ajan cevap verir | 1 | Kısmen | Berke | Yusuf (#4) |
 | US-ASK-06 | Kasa Gemini'de çalışır | 4 | Kısmen | Berke | Yusuf (#4) |
+| US-ASK-07 | Excel ya da CSV dosyamı sohbette analiz et | 4 | Kısmen | Berke | Yusuf: Gemini'de doğrulamak |
+| US-ASK-08 | Kasa'nın ne yaptığını adım adım gör | 4 | Bitti | Berke | - |
+| US-ASK-09 | Eski sohbetlerime geri dön | 4 | Bitti | Berke | - |
+| US-ASK-10 | Sohbetin kaydettiğini geri al | 4 | Bitti | Berke | - |
 | US-INBOX-01 | CSV banka ekstresi yükle | 3 | Bitti | Berke | - |
 | US-INBOX-02 | PDF ekstre yükle | 3 | Kısmen | Berke | Yusuf: canlı bir çalıştırma kaydetmek |
 | US-INBOX-03 | Gelen kutusundaki kalemleri incele ve onayla | 3 | Bitti | Berke | - |
@@ -101,6 +106,7 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-ACCOUNT-02 | Dev modunda herhangi bir kullanıcı ol | 1 | Bitti | Berke | - |
 | US-ACCOUNT-03 | Görünen adımı değiştir | 4 | Bitti | Berke | - |
 | US-ACCOUNT-04 | Kasa'yı herkese açık bir adreste aç | 4 | Kısmen | Berke | Mustafa, Yusuf: ilk Cloud Run deploy'u |
+| US-ACCOUNT-05 | Kasa'yı Türkçe ya da İngilizce kullan | 4 | Bitti | Berke | - |
 
 ## Personalar
 
@@ -288,6 +294,20 @@ TL?" diye sormak istiyorum, böylece sayfa açmadan cevabı alırım.
   `route-budget-set-tr` ve `route-subscriptions-en` eval vakaları.
 - Eksik: Ollama'da `route-subscriptions-en` İngilizce bir soruya Türkçe cevap verdi
   (`evals/latest.md`). Gemini'de doğrulanmadı.
+
+### US-BUDGET-06 Ayımı grafiklerle geçen ayla karşılaştır
+
+Elif olarak, ana sayfada bu ayın geçen aya göre nasıl gittiğini grafiklerle görmek istiyorum,
+böylece nerede fazla harcadığımı bir bakışta anlarım.
+
+- Sprint 4 · **Bitti** · Sahip: Frontend, Backend (MONEY) · Yapan: Berke
+- Diyelim ki bu ay ve geçen ay harcamam var. Ana sayfada ayın içinde biriken toplamı geçen ayla
+  aynı grafikte, kategori dağılımını, son 6 ayı, gün gün harcama takvimini, en çok harcadığım
+  yerleri ve kategori bazında geçen aya göre artış ve azalışı görürüm.
+- Diyelim ki başka bir ayı seçtim. Ay seçiciyle ya da son 6 ay grafiğinde bir aya tıklayarak o
+  aya geçerim; gelecek aylar seçilemez.
+- Kanıt: `GET /dashboard` (`daily`, `previous_daily`, `top_merchants`, `previous_by_category`),
+  sayfa `/`, `tests/test_money_dashboard.py`.
 
 ## Epik: ortak evler
 
@@ -495,6 +515,62 @@ istiyorum, böylece ürün ekibin Ollama sunucusu olmadan da çalışır.
   erişimi olmayabilir. Fiş okuma dahil, henüz hiç canlı Gemini çağrısı yapılmadı. Bunu ayrı bir
   issue (#4) takip ediyor.
 
+### US-ASK-07 Excel ya da CSV dosyamı sohbette analiz et
+
+Elif olarak, bankadan indirdiğim Excel dosyasını sohbete ekleyip "en çok neye harcamışım?"
+diye sormak ve istersem satırları harcamalarıma eklemek istiyorum.
+
+- Sprint 4 · **Kısmen** · Sahip: Agents 3 / QA (dosya ajanı), Frontend (sohbet) · Yapan: Berke
+- Diyelim ki bir .xlsx ya da CSV ekledim. Dosya ajanı kolonları tanır, tek SELECT'lik
+  sorgularla toplar ve istersem grafik çizer. Dosya veritabanına yazılmaz, iki saat sonra
+  bellekten silinir.
+- Diyelim ki "bunları harcamalarıma ekle" dedim. Bir önizleme kartı gelir (kaç satır, toplam,
+  atlanan satırlar). Onaylarsam satırlar gelen kutusuna düşer, orada tek tek ya da toplu onaylarım.
+- Diyelim ki dosyada "önceki talimatları unut" gibi bir yazı var. Ajan onu veri olarak görür.
+- Kanıt: `POST /chat/files`, `POST /chat/imports/{draft_id}`, `app/services/sheets.py`,
+  `app/agents/file_agent.py`, `tests/test_sheets.py`, `tests/test_chat_files.py`. "Ekstre yükle"
+  sayfası da artık Excel kabul ediyor (`test_ingest_statements.py`).
+- Eksik: Gemini'de doğrulanmadı; dosyalar tek instance'ın belleğinde.
+
+### US-ASK-08 Kasa'nın ne yaptığını adım adım gör
+
+Elif olarak, cevap beklerken Kasa'nın ne yaptığını görmek istiyorum, böylece takıldığını değil
+çalıştığını bilirim.
+
+- Sprint 4 · **Bitti** · Sahip: Backend (sohbet), Frontend · Yapan: Berke
+- Diyelim ki bir soru sordum. Cevap gelene kadar "Sorun okunuyor", "Raporlar ajanı devraldı",
+  "Rapor hazırlanıyor" gibi adımlar sırayla ve bitince işaretlenerek görünür.
+- Diyelim ki başka bir sayfaya geçtim. Soru iptal olmaz, menüde bir nokta cevap beklendiğini
+  gösterir, geri döndüğümde cevap oradadır.
+- Kanıt: `POST /chat/stream`, `app/agents/runtime.py::stream_agent`,
+  `tests/test_chat_files.py::test_stream_shows_agents_and_tools_then_the_reply_with_a_card`,
+  `frontend/src/features/chat/chatStore.test.ts`.
+
+### US-ASK-09 Eski sohbetlerime geri dön
+
+Elif olarak, geçen hafta Kasa'ya sorduklarımı tekrar açmak istiyorum.
+
+- Sprint 4 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki sohbet ettim. Sohbet, ilk mesajım başlık olarak kaydedilir ve sohbet sayfasının
+  solundaki listede görünür. Açtığımda mesajlar, grafikler ve kartlar geri gelir; silebilirim.
+- Diyelim ki sunucu yeniden başladı. Eski bir sohbete yazınca son mesajlar yeni ajan
+  oturumuna bağlam olarak verilir, Kasa konuyu kaldığı yerden sürdürür.
+- Diyelim ki başka bir kullanıcıyım. Onun sohbetlerini ne listede görürüm ne de id'yle açabilirim.
+- Kanıt: `GET/PATCH/DELETE /chat/conversations/*`, migration `0004_chat_history` (SQL Server'da
+  RLS ile), `tests/test_chat_files.py`.
+
+### US-ASK-10 Sohbetin kaydettiğini geri al
+
+Elif olarak, "Starbucks'a 85 TL verdim" yazdığımda kaydedileni görmek ve yanlışsa tek tıkla geri
+almak istiyorum.
+
+- Sprint 4 · **Bitti** · Sahip: Frontend, Backend · Yapan: Berke
+- Diyelim ki Kasa bir harcama kaydetti. Cevabın altında bir kart çıkar (işyeri, tarih, tutar) ve
+  "Geri al" harcamayı siler. Kartın durumu sohbet yeniden açıldığında da korunur.
+- Diyelim ki sohbete fiş fotoğrafı ekledim. Fiş okunur ve aynı kartla kaydedilir.
+- Kanıt: `ChatOut.cards`, `POST /chat/receipt`, `PUT /chat/messages/{id}/cards/{i}`,
+  `tests/test_chat_files.py`.
+
 ## Epik: gelen kutusu ve içe aktarma
 
 ### US-INBOX-01 CSV banka ekstresi yükle
@@ -689,7 +765,7 @@ Elif olarak, Google hesabımla giriş yapmak istiyorum, böylece verilerim her c
 - Diyelim ki `FIREBASE_PROJECT_ID` ayarlı. Korumalı her uygulama endpoint'i bir Firebase ID
   token'ı ister (`/health`, Google OAuth callback'i ve kendi kontrolü olan `/internal/*` hariç),
   adım ve e-postam da bu token'dan kaydedilir.
-- Kanıt: `app/auth.py`, `frontend/src/lib/auth.ts`, nav bar'daki "Sign in with Google" butonu,
+- Kanıt: `app/auth.py`, `frontend/src/lib/auth.ts`, sol menüdeki "Sign in with Google" butonu,
   `tests/test_foundation_api.py` (`test_requires_bearer_token`,
   `test_valid_token_sets_user_and_profile`, sahte bir doğrulayıcıyla).
 - Eksik: ayarlı bir Firebase projesi yok, bu yüzden gerçek giriş hiç çalışmadı.
@@ -728,6 +804,18 @@ dışında da kullanabilirim.
   edilmedi. Production veritabanı olarak planlanan Azure SQL Database de henüz yok
   ([DATABASE.md](DATABASE.md)); bugün Kasa SQLite ile çalışıyor.
 
+### US-ACCOUNT-05 Kasa'yı Türkçe ya da İngilizce kullan
+
+Elif olarak, arayüzü Türkçe kullanmak, yabancı ev arkadaşım Tom olarak da İngilizce kullanmak
+istiyorum.
+
+- Sprint 4 · **Bitti** · Sahip: Frontend · Yapan: Berke
+- Diyelim ki tarayıcım Türkçe. Kasa Türkçe açılır; sol menüdeki TR / EN düğmesiyle ya da
+  Ayarlar'dan dili değiştirebilirim, seçim hatırlanır. Ay adları ve kategoriler de çevrilir.
+- Diyelim ki mesajım dil belli etmiyor ("Netflix?"). Kasa arayüzün dilinde cevap verir.
+- Kanıt: `frontend/src/lib/i18n.ts`, her özelliğin `messages.ts` dosyası,
+  `app/agents/language.py`, `tests/test_chat_files.py::test_reply_language_follows_the_ui_when_the_message_is_neutral`.
+
 ## Takip tablosu
 
 Her story için bir satır. "Yalnızca canlı" testler `KASA_LIVE_TESTS=1` ile çalışır. Tüm test
@@ -746,6 +834,7 @@ yolları `backend/tests/` altında.
 | US-BUDGET-03 | Bitti | `GET /dashboard` | `/` | `test_money_dashboard.py` |
 | US-BUDGET-04 | Bitti | `GET /subscriptions`, `POST /subscriptions/detect`, `GET /subscriptions/upcoming`, `POST /subscriptions/{id}/dismiss` | `/subscriptions`, `/` | `test_money_subscriptions.py` |
 | US-BUDGET-05 | Kısmen | `POST /chat` | `/chat` | `test_money_tools.py`, eval'ler |
+| US-BUDGET-06 | Bitti | `GET /dashboard` | `/` | `test_money_dashboard.py` |
 | US-HOUSE-01 | Bitti | `POST/GET /houses`, `POST /houses/{id}/members` | `/houses` | `test_api.py` |
 | US-HOUSE-02 | Başlanmadı | yok | yok | yok |
 | US-HOUSE-03 | Bitti | `POST /houses/{id}/expenses` | `/houses` | `test_settlement.py`, `test_api.py` |
@@ -761,6 +850,10 @@ yolları `backend/tests/` altında.
 | US-ASK-04 | Kısmen | `POST /chat` | `/chat` | `test_integration.py`, eval'ler |
 | US-ASK-05 | Kısmen | `POST /chat` | `/chat` | `test_agents_offline.py`, eval'ler |
 | US-ASK-06 | Kısmen | `POST /chat`, `POST /receipts` | `/chat`, `/receipts` | `test_live.py` (yalnızca canlı), eval'ler |
+| US-ASK-07 | Kısmen | `POST /chat/files`, `POST /chat/imports/{id}` | `/chat` | `test_sheets.py`, `test_chat_files.py` |
+| US-ASK-08 | Bitti | `POST /chat/stream` | `/chat` | `test_chat_files.py`, `chatStore.test.ts` |
+| US-ASK-09 | Bitti | `GET/PATCH/DELETE /chat/conversations/*` | `/chat` | `test_chat_files.py`, `test_migrations.py` |
+| US-ASK-10 | Bitti | `POST /chat/receipt`, `PUT /chat/messages/{id}/cards/{i}` | `/chat` | `test_chat_files.py` |
 | US-INBOX-01 | Bitti | `POST /imports/statement` | `/import` | `test_ingest_statements.py` |
 | US-INBOX-02 | Kısmen | `POST /imports/statement` | `/import` | `test_ingest_statements.py` (sahte), `test_ingest_live.py` (yalnızca canlı) |
 | US-INBOX-03 | Bitti | `GET /inbox`, `PATCH /inbox/{id}`, `POST /inbox/{id}/approve`, `POST /inbox/{id}/reject`, `POST /inbox/approve`, `POST /inbox/reject` | `/inbox` | `test_ingest_inbox.py` |
@@ -774,10 +867,11 @@ yolları `backend/tests/` altında.
 | US-GUARD-06 | Bitti | `/integrations/google/*` | `/settings` | `test_ingest_oauth.py`, `test_categories_crypto.py` |
 | US-GUARD-07 | Başlanmadı | `POST /chat`, `POST /receipts` | yok | yok |
 | US-GUARD-08 | Başlanmadı | yok | yok | yok |
-| US-ACCOUNT-01 | Kısmen | her endpoint (Bearer token) | nav bar | `test_foundation_api.py` (sahte doğrulayıcı) |
-| US-ACCOUNT-02 | Bitti | her endpoint (`X-User-Id`) | nav bar | `test_api.py` |
+| US-ACCOUNT-01 | Kısmen | her endpoint (Bearer token) | sol menü | `test_foundation_api.py` (sahte doğrulayıcı) |
+| US-ACCOUNT-02 | Bitti | her endpoint (`X-User-Id`) | sol menü | `test_api.py` |
 | US-ACCOUNT-03 | Bitti | `GET/PATCH /me` | `/settings` | `test_expenses_api.py` |
 | US-ACCOUNT-04 | Kısmen | `GET /health` | hepsi | yok (deploy script'leri yalnızca dry-run) |
+| US-ACCOUNT-05 | Bitti | `POST /chat` (`locale`) | hepsi | `test_chat_files.py`, `pickers.test.tsx` |
 
 ## Açık story'ler
 

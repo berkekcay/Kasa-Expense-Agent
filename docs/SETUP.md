@@ -433,7 +433,7 @@ Bunları Cloud Shell'de `source deploy/config.sh`'tan sonra çalıştır:
 
 Sonra tarayıcıda, `$WEB_URL` adresinde bir test kullanıcısıyla giriş yapmışken:
 
-- [ ] Google ile giriş çalışıyor ve nav bar'da dev user kutusu değil senin adın görünüyor.
+- [ ] Google ile giriş çalışıyor ve sol menünün altında dev user kutusu değil senin adın görünüyor.
 - [ ] Elle bir harcama ekle; listede görünüyor.
 - [ ] Bir fiş fotoğrafı yükle; receipt agent kaydediyor (ilk canlı Gemini çağrısı).
 - [ ] Sohbete "bu ay kategoriye göre ne kadar harcadım?" diye sor; bir grafik geliyor.
