@@ -127,7 +127,7 @@ in `frontend/.env.example`. The ones you need most:
 | `AUTO_MIGRATE` | backend | `true` | Prod: `false`, and migrate as a deploy step |
 | `LLM_PROVIDER` | backend | `gemini` | `ollama` for dev and tests |
 | `GOOGLE_API_KEY` | backend | empty | Gemini key. Empty disables the agent endpoints (503). |
-| `GEMINI_MODEL` | backend | `gemini-2.5-flash` | Any Gemini model id your key can use |
+| `GEMINI_MODEL` | backend | `gemini-3.5-flash-lite` | Any Gemini model id your key can use. New keys cannot use the 2.5 models. |
 | `FIREBASE_PROJECT_ID` | backend | empty | Set in prod. Empty means dev mode (X-User-Id) |
 | `TOKEN_ENCRYPTION_KEY` | backend | empty | Fernet key for Google refresh tokens: `python -m app.services.crypto` |
 | `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | backend | empty | Gmail and Calendar connection |

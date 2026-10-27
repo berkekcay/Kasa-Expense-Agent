@@ -66,7 +66,7 @@ API_SECRETS=(
 )
 
 # --- Backend settings (plain env vars) -------------------------------------------------------
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.5-flash}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash-lite}"
 FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-$PROJECT_ID}"  # same project unless you split them
 CORS_ORIGINS="${CORS_ORIGINS:-$WEB_URL}"  # comma-separated browser origins allowed to call the API
 API_MEMORY="${API_MEMORY:-1Gi}"
