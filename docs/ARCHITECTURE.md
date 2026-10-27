@@ -391,7 +391,7 @@ model unless `KASA_LIVE_TESTS=1`:
 ```bash
 cd backend
 # Ollama
-LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://10.34.0.19:11434 KASA_LIVE_TESTS=1 pytest -m live -s
+LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 KASA_LIVE_TESTS=1 pytest -m live -s
 # Gemini
 LLM_PROVIDER=gemini GOOGLE_API_KEY=... KASA_LIVE_TESTS=1 pytest -m live -s
 ```

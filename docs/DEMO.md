@@ -292,7 +292,7 @@ Tick every line on Thursday. If one fails, see [troubleshooting](#troubleshootin
 - Open these tabs in order: Dashboard, Expenses, Receipt, House, Import, Inbox, Ask Kasa,
   and the architecture page on GitHub
   (https://github.com/berkekcay/Kasa-Expense-Agent/blob/main/docs/ARCHITECTURE.md), scrolled
-  to the system diagram. Until this branch is merged, open the same file on the branch.
+  to the system diagram.
 - Have the receipt image and the CSV file in an easy folder, for example the Desktop.
 
 ## The demo script
@@ -537,7 +537,6 @@ Gemini. Thank you, we are happy to take questions."
 | The laptop or its setup breaks | Switch to the backup laptop, which was seeded the same way. |
 | The data looks wrong after a mistake | Run `python -m scripts.seed_demo --user demo --reset` (about 10 seconds), refresh the browser, continue. |
 | Everything fails | Play the recorded video from Thursday and talk over it, step by step, using this script. |
-| Last resort for the chat, only on the school network | The team's Ollama server: in `.env` set `LLM_PROVIDER=ollama` and `OLLAMA_BASE_URL=http://10.34.0.19:11434`, restart. It is much slower (30 to 120 seconds per answer). |
 
 What still works without any model: the dashboard, expenses (manual, in any currency),
 budgets, subscriptions, the house (all splits, balances, payments, reminders without
