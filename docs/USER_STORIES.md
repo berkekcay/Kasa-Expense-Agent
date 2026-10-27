@@ -33,7 +33,7 @@ Owner roles come from the project page. The names of the people are in [TEAM.md]
 
 | Short name | Role | Main areas |
 | --- | --- | --- |
-| Product owner | Product owner and architecture | user stories, architecture, demo, priorities |
+| Product owner | Product owner and architecture | user stories, architecture, demo, priorities; also co-owns Backend, Frontend and the database |
 | Backend | Database and backend | data model, migrations, RLS, REST API, Google OAuth and Gmail plumbing |
 | Agents 1 | Agent developer #1 | coordinator, receipt agent, budget agent (MONEY track), inbox and statement parsing agents |
 | Agents 2 | Agent developer #2 | house agent, splits, balances, settle-up, Calendar reminders (HOUSE track) |

@@ -602,9 +602,10 @@ needs cloud accounts and OAuth approval, which we are setting up now. Each item 
 USER_STORIES.md with an owner.
 
 **11. How did you split the work?**
-Five roles: product owner and architecture (Berke), database and backend (Mustafa), agent
+Five roles: product owner and architecture (Berke, who also works on the backend, database and
+frontend), database and backend (Mustafa), agent
 developer for the coordinator, receipts and budgets (Yusuf), agent developer for the house
-features (Ömer), frontend (Zehra). QA and cloud is shared by Mustafa and Yusuf. Every folder
+features (Ömer), frontend (Zehra, with Berke). QA and cloud is shared by Mustafa and Yusuf. Every folder
 has an owner (TEAM.md), every change is a pull request with a review and green CI.
 
 **12. Where is the data, and can I delete it?**

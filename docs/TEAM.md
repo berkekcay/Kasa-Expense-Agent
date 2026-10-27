@@ -7,16 +7,17 @@ team better, then update this file in a PR.
 ## Roles and owners
 
 The five roles come from the project page. Agent developer #3 (QA and cloud) has no person
-yet, so Mustafa and Yusuf share it until someone else joins.
+yet, so Mustafa and Yusuf share it until someone else joins. Besides the product owner role,
+Berke co-owns everything outside the agents: backend, database, frontend and cloud.
 
 | Person | GitHub | Role | Owns |
 | --- | --- | --- | --- |
-| Berke | @berkekcay | Product owner, architecture | user stories, architecture, priorities, issue triage, demo kit, final review of docs |
-| Mustafa | @MustafaPar | Database and backend | data model, migrations and RLS, auth, REST API, Google OAuth and Gmail plumbing, statement CSV parsing |
+| Berke | @berkekcay | Product owner, architecture, backend, database, frontend | user stories, architecture, priorities, issue triage, demo kit, final review of docs; with Mustafa the data model, migrations and RLS, REST API and cloud; with Zehra the frontend |
+| Mustafa | @MustafaPar | Database and backend (with Berke) | data model, migrations and RLS, auth, REST API, Google OAuth and Gmail plumbing, statement CSV parsing |
 | Yusuf | @Yusufrmak497 | Agent developer #1 | coordinator, receipt agent, budget agent and the MONEY track, email and statement parser agents |
 | Ömer | @omertarikcandir | Agent developer #2 | house agent, splits, balances, settle-up, payments, Calendar reminders (HOUSE track) |
-| Zehra | @zehraoz36 | Frontend | every page and component in `frontend/` |
-| Mustafa and Yusuf | | Agent developer #3, QA and cloud (shared) | Yusuf: report agent, checker agent, evals. Mustafa: CI, Cloud Run deploy, Azure SQL |
+| Zehra | @zehraoz36 | Frontend (with Berke) | every page and component in `frontend/` |
+| Mustafa and Yusuf | | Agent developer #3, QA and cloud (shared) | Yusuf: report agent, checker agent, evals. Mustafa and Berke: CI, Cloud Run deploy, Azure SQL |
 
 ### Who owns which files
 
@@ -26,19 +27,19 @@ person on each row. Backend paths are under `backend/app/` and frontend paths un
 
 | Area | Owner | Backend files | Frontend files |
 | --- | --- | --- | --- |
-| Shared core | Mustafa | `main.py`, `config.py`, `auth.py`, `db/*`, `backend/alembic/*`, `api/expenses.py`, `api/users.py`, `api/internal.py`, `services/expenses.py`, `services/users.py`, `services/categories.py`, `services/crypto.py`, `services/clock.py`, `schemas/common.py`, `schemas/expenses.py`, `schemas/users.py` | `lib/api/client.ts`, `lib/auth.ts` (with Zehra) |
+| Shared core | Mustafa, Berke | `main.py`, `config.py`, `auth.py`, `db/*`, `backend/alembic/*`, `api/expenses.py`, `api/users.py`, `api/internal.py`, `services/expenses.py`, `services/users.py`, `services/categories.py`, `services/crypto.py`, `services/clock.py`, `schemas/common.py`, `schemas/expenses.py`, `schemas/users.py` | `lib/api/client.ts`, `lib/auth.ts` (with Zehra and Berke) |
 | Agent runtime | Yusuf | `agents/common.py`, `agents/runtime.py`, `agents/coordinator.py`, `agents/language.py`, `api/agents.py`, `schemas/agents.py`, `agents/receipt_agent.py`, `agents/tools/receipt_tools.py` | |
 | HOUSE | Ömer | `services/splits.py`, `services/settlement.py`, `services/houses.py`, `services/reminders.py`, `integrations/google_calendar.py`, `api/houses.py`, `schemas/houses.py`, `agents/house_agent.py`, `agents/tools/house_tools.py` | `features/houses` (with Zehra) |
 | MONEY | Yusuf | `services/fx.py`, `integrations/tcmb.py`, `services/budgets.py`, `services/subscriptions.py`, `services/dashboard.py`, `api/budgets.py`, `api/subscriptions.py`, `api/dashboard.py`, `api/fx.py`, `schemas/budgets.py`, `schemas/subscriptions.py`, `schemas/dashboard.py`, `schemas/fx.py`, `agents/budget_agent.py`, `agents/tools/budget_tools.py` | `features/dashboard`, `features/budgets`, `features/subscriptions` (with Zehra) |
-| INGEST plumbing | Mustafa | `integrations/google_oauth.py`, `integrations/gmail.py`, `services/gmail_sync.py`, `services/inbox.py`, `services/statements.py`, `api/integrations.py`, `api/inbox.py`, `api/imports.py`, `schemas/inbox.py`, `schemas/imports.py`, `schemas/integrations.py` | `features/inbox`, `features/imports`, `features/settings` (with Zehra) |
+| INGEST plumbing | Mustafa, Berke | `integrations/google_oauth.py`, `integrations/gmail.py`, `services/gmail_sync.py`, `services/inbox.py`, `services/statements.py`, `api/integrations.py`, `api/inbox.py`, `api/imports.py`, `schemas/inbox.py`, `schemas/imports.py`, `schemas/integrations.py` | `features/inbox`, `features/imports`, `features/settings` (with Zehra) |
 | INGEST agents | Yusuf | `agents/email_agent.py`, `agents/statement_agent.py`, `agents/tools/inbox_tools.py` | |
 | REPORT | Yusuf (QA share) | `services/reports.py`, `agents/report_agent.py`, `agents/tools/report_tools.py`, `agents/checker_agent.py`, `backend/evals/` | `features/chat` (with Zehra) |
-| Cloud and CI | Mustafa (QA share) | `backend/Dockerfile`, `deploy/*`, `.github/workflows/*`, `docs/SETUP.md` | `frontend/Dockerfile` |
-| Frontend | Zehra | | `frontend/src/**` |
+| Cloud and CI | Mustafa (QA share), Berke | `backend/Dockerfile`, `deploy/*`, `.github/workflows/*`, `docs/SETUP.md` | `frontend/Dockerfile` |
+| Frontend | Zehra, Berke | | `frontend/src/**` |
 | Product docs and demo | Berke | `docs/USER_STORIES.md`, `docs/ARCHITECTURE.md`, `docs/TEAM.md`, `docs/DEMO.md`, `README.md`, `backend/scripts/seed_demo.py` | |
 
-"With Zehra" means the track owner decides what the page needs and Zehra builds or reviews
-it. Everyone writes tests for their own files.
+"With Zehra" means the track owner decides what the page needs and Zehra or Berke builds or
+reviews it. Everyone writes tests for their own files.
 
 ### First issues for each person
 
@@ -61,8 +62,10 @@ The open ones, with a ready prompt for a coding agent in each:
 - **Zehra:** [#10](https://github.com/berkekcay/Kasa-Expense-Agent/issues/10) frontend tests in
   CI, [#11](https://github.com/berkekcay/Kasa-Expense-Agent/issues/11) invite code pages
   (US-HOUSE-02). Later: "delete my data" in Settings (US-GUARD-08).
-- **Berke:** keep USER_STORIES and the board current, review every PR for scope, present the
-  architecture in labs.
+- **Berke:** keep USER_STORIES and the board current, review every PR for scope, review the
+  backend, database and frontend PRs with their owners, present the architecture in labs.
+  Later: the Azure SQL database with Mustafa (US-GUARD-04) and "delete my data" with Zehra
+  (US-GUARD-08).
 
 ## Working agreement
 
