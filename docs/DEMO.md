@@ -12,16 +12,20 @@ kısmını onun yerine Mustafa sunuyor ve şu cümleyle açıyor:
 Kısaca:
 
 - **Süre:** yaklaşık 10 dakika, sonra sorular.
-- **Laptop:** demoyu tek bir laptop yürütüyor . İkinci laptop aynı şekilde
+- **Laptop:** demoyu tek bir laptop yürütüyor. İkinci laptop aynı şekilde
   kurulup yedekte bekliyor.
 - **Veri:** demo kullanıcısı `demo` (görünen adı Deniz), tek komutla oluşan üç aylık veriyle.
+  Giriş gerçek: e-posta, şifre ve Google Authenticator kodu (2FA zorunlu).
   Deniz, Ali ve Ayşe ile birlikte "Moda evi" adlı evde yaşıyor.
 - **Veritabanı:** demo her laptopta SQLite ile çalışıyor. Production için Azure SQL Database
   (Microsoft SQL Server) planlandı. Migration'lar, row-level security ve bağlantı kodu yazıldı
   ve offline test edildi, ama henüz bir Azure veritabanı yok.
 - **İnternet gerekiyor:** fiş fotoğrafı ve sohbet (Gemini) için. Geri kalan her şey offline
   çalışıyor.
-- **`backend/.env` dosyasını asla projeksiyonda açmayın.** İçinde API anahtarı var.
+- **`backend/.env` dosyasını asla projeksiyonda açmayın.** İçinde API anahtarı ve şifreleme
+  anahtarları var. Demo şifresini de projeksiyonda göstermeyin.
+- **Arayüz dili:** sunumdan önce sol menünün altındaki **EN** düğmesine basın. Bu rehberdeki
+  buton adları İngilizce arayüze göre.
 
 ## Kim neyi sunuyor
 
@@ -160,13 +164,27 @@ cp .env.example .env             # macOS
 open -e .env
 ```
 
-Şu üç satırı değiştirip kaydedin. Gerisine dokunmayın.
+Şu satırları değiştirip kaydedin. Gerisine dokunmayın.
 
 ```bash
 LLM_PROVIDER=gemini
 GOOGLE_API_KEY=paste-your-key-here
 GEMINI_MODEL=gemini-3.5-flash-lite
+AUTH_MODE=accounts
+TOKEN_ENCRYPTION_KEY=paste-the-first-generated-value
+AUTH_SECRET=paste-the-second-generated-value
 ```
+
+İki anahtarı sanal ortam açıkken `backend` klasöründe üretin ve çıktıyı doğrudan `.env`
+dosyasına yapıştırın. Kimseye göndermeyin:
+
+```bash
+python -m app.services.crypto
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+`AUTH_MODE=accounts` her sayfada giriş istiyor. `TOKEN_ENCRYPTION_KEY` 2FA anahtarlarını
+şifreliyor; değiştirirseniz demo girişini seed ile yeniden oluşturmanız gerekir.
 
 `.env` dosyası `.gitignore` içinde, yani git onu hiç commit etmiyor. `git status` ile kontrol
 edin: `.env` listede görünmemeli.
@@ -192,6 +210,21 @@ Seeded demo data for 'demo' (Deniz):
   pending inbox items: 3
   settle up: demo-ayse pays demo 11348.33 TRY
   settle up: demo-ali pays demo 6128.33 TRY
+Sign-in (shown once; run again with --login-only for new ones):
+  demo: demo@kasa.demo  password kasa-...  2FA key ...
+  demo-ali: ali.demo@kasa.demo  password kasa-...  2FA key ...
+  demo-ayse: ayse.demo@kasa.demo  password kasa-...  2FA key ...
+Scan this with Google Authenticator for demo@kasa.demo:
+(terminalde bir QR kod)
+```
+
+**Demo girişi:** laptopu kullanacak kişi (Zehra) telefonundaki Google Authenticator ile
+terminaldeki QR kodu okutsun (uygulamada **+**, sonra **QR kodu tara**). Şifreyi bir şifre
+yöneticisine ya da kâğıda yazın; WhatsApp grubuna atmayın. Şifre ve 2FA anahtarı seed her
+çalıştığında yenileniyor: `--reset` sonrası QR kodu tekrar okutun. Sadece girişi yenilemek için:
+
+```bash
+python -m scripts.seed_demo --user demo --login-only
 ```
 
 Verinin içinde ne var:
@@ -248,11 +281,13 @@ npm run dev
 `localhost` yazın, yoksa tarayıcı API çağrılarını engelliyor). `npm run dev` bir Next.js
 güvenlik uyarısıyla hemen kapanırsa tekrar çalıştırın, ikinci seferde devam ediyor.
 
-### 8. Demo kullanıcısına geç
+### 8. Demo hesabıyla giriş yap
 
-Sol menünün en altındaki **Dev user** kutusuna `demo` yazıp **Switch** butonuna basın. Kutunun
-üstünde **Deniz** adı çıkıyor. Pencere yaklaşık 1024 pikselden darsa sol menü gizleniyor, sol
-üstteki menü butonuyla açılıyor. Demo için tarayıcıyı tam ekran yapın ve salondan okunabilsin
+http://localhost:3000 adresi sizi giriş sayfasına götürüyor. `demo@kasa.demo` e-postasını ve
+seed'in yazdığı şifreyi girin, **Sign in** butonuna basın. Sonra Google Authenticator'daki 6
+haneli kodu yazın; altı hane tamamlanınca kendiliğinden gönderiliyor. Sol menünün altında
+**Deniz** ve `demo@kasa.demo` görünüyor. Pencere yaklaşık 1024 pikselden darsa sol menü
+gizleniyor, sol üstteki menü butonuyla açılıyor. Demo için tarayıcıyı tam ekran yapın ve salondan okunabilsin
 diye %110'a yakınlaştırın (Ctrl ve +). Tema düğmesi de sol menünün altında: projeksiyonda açık
 tema (Light) daha net görünüyor.
 
@@ -263,18 +298,19 @@ bakın.
 
 - [ ] **API ayakta ve Gemini açık.** Windows: `Invoke-RestMethod http://localhost:8000/health`.
   macOS: `curl http://localhost:8000/health`. `agents_enabled` True (curl ile true),
-  `llm_provider` gemini ve `auth` dev görmelisiniz. False görüyorsanız anahtar eksik.
-- [ ] **Demo kullanıcısı.** Menüde Deniz yazıyor ve Dev user kutusunda `demo` var.
-- [ ] **Dashboard.** Bir banner "3 expenses are waiting for review in your inbox" diyor.
-  Bütçelerde Entertainment "Close to limit · 84%" görünüyor. Ev bakiyesinde "Moda evi, You are
-  owed ₺17.476,66" yazıyor. Upcoming charges altında Spotify ve Netflix var.
-- [ ] **Ev.** House sayfasında Balances, Ali'nin ₺6.128,33 ve Ayşe'nin ₺11.348,33 borçlu
-  olduğunu ve iki önerilen transferi gösteriyor.
+  `llm_provider` gemini ve `auth` accounts görmelisiniz. False görüyorsanız anahtar eksik.
+- [ ] **Giriş.** Şifre ve 2FA koduyla giriş çalışıyor, menünün altında Deniz yazıyor.
+- [ ] **Dashboard.** Bir banner "3 expenses are waiting for review" diyor. Budgets kartında
+  "1 needs a look" ve aşağıdaki bütçe listesinde Entertainment sınıra yakın (%84) görünüyor.
+  House balances kartında "Moda evi, You are owed ₺17.476,66" yazıyor. Upcoming charges altında
+  Spotify ve Netflix var.
+- [ ] **Ev.** House sayfasında borç kartında Ali ₺6.128,33 ve Ayşe ₺11.348,33 borçlu, **Settle
+  up** kartında iki önerilen transfer var.
 - [ ] **Sohbet açık.** Ask Kasa sayfasında "Chat is off" uyarısı yok. `Merhaba` yazıp
   gönderin. Yaklaşık 10 saniye içinde cevap geliyor.
 - [ ] **Grafik.** `Bu ay kategoriye göre ne kadar harcadım? Grafik çiz` gönderin. Bir çubuk
   grafik çıkıyor.
-- [ ] **Fiş.** Receipt sayfasında "Receipt reading is off" uyarısı yok.
+- [ ] **Fiş.** Scan receipt sayfasında "Receipt reading is off" uyarısı yok.
   `backend/tests/fixtures/receipt_market.png` dosyasını bir kere yükleyin (senaryonun 4.
   adımına bakın).
 - [ ] **Ekstre dosyası.** Tarayıcının dosya seçicisinden
@@ -296,7 +332,8 @@ bakın.
    python -m scripts.seed_demo --user demo --reset
    ```
 
-5. Sohbet sayfasında **New conversation** butonuna tıklayın.
+5. Seed girişi de yeniledi: QR kodu Google Authenticator'a tekrar okutun ve yeni şifreyle
+   giriş yapın. Sonra sohbet sayfasında **New conversation** butonuna tıklayın.
 
 ### Cuma sabahı
 
@@ -305,8 +342,9 @@ bakın.
 - Sağlık kontrolünü yapın, ama fişi yüklemeyin ve grafik sorusunu sormayın (ikisi de veriyi
   değiştiriyor ya da kota harcıyor). Sohbette `Merhaba` yeterli.
 - Diğer uygulamaları ve bildirimleri kapatın. "Rahatsız etmeyin" modunu açın.
-- Şu sekmeleri bu sırayla açın: Dashboard, Expenses, Receipt, House, Import, Inbox, Ask Kasa
-  ve GitHub'daki mimari sayfası
+- Giriş yapın (8. adım) ve arayüzü **EN** yapın.
+- Şu sekmeleri bu sırayla açın: Dashboard, Expenses, Scan receipt, House, Import statement,
+  Inbox, Ask Kasa, Reports ve GitHub'daki mimari sayfası
   (https://github.com/berkekcay/Kasa-Expense-Agent/blob/main/docs/ARCHITECTURE.md), sistem
   diyagramına kaydırılmış halde.
 - Fiş görselini ve CSV dosyasını kolay bulunan bir klasöre koyun, mesela masaüstüne.
@@ -332,7 +370,8 @@ services that work in kuruş, as whole numbers. Today it runs on SQLite; we are 
 production to Azure SQL, and the migrations and row-level security for it are already written
 and tested. With row-level security, the database itself makes sure every query only sees the
 current user's rows. Outside, we use Gemini as the model and TCMB for exchange rates. Gmail,
-Calendar and Google sign-in are written, but not connected yet."
+Calendar and Google sign-in are written, but not connected yet. Signing in uses our own
+accounts, and every account must use a two-factor code from Google Authenticator."
 
 Veritabanı planının tamamı [DATABASE.md](DATABASE.md) dosyasında, soru gelirse oradan bakın.
 
@@ -349,16 +388,19 @@ Deniz paid. Here are the categories, the last six months, the budgets (entertain
 already close to its limit), the flat's balance, and the subscriptions due next month. Three
 purchases from the bank statement are waiting for review."
 
-**Ekranda görünmeli:** bu ay için "Spent in" yaklaşık ₺11.338,22, kategori çubukları, çizgi
-grafik, üç bütçe göstergesi (Entertainment "Close to limit · 84%"), "Moda evi, You are owed
-₺17.476,66", Upcoming charges altında Spotify ve Netflix, gelen kutusu banner'ı.
+**Ekranda görünmeli:** bu ay için "Spent in" yaklaşık ₺11.338,22 (provada kontrol edin),
+**Spending pace** grafiği, **By category** halkası, **Last 6 months** çubukları, **Spending
+calendar**, bütçe göstergeleri (Entertainment %84), "Moda evi, You are owed ₺17.476,66",
+Upcoming charges altında Spotify ve Netflix, gelen kutusu banner'ı.
 
-**Olmazsa:** dashboard boşsa Dev user kutusunda `demo` yazmıyordur. `demo` yazıp Switch'e
-basın. Kırmızı bir hata varsa backend çalışmıyordur: başlatın (kurulumun 6. adımı).
+**Olmazsa:** dashboard boşsa başka bir hesapla girilmiştir: çıkış yapıp `demo@kasa.demo` ile
+girin. "Checking your session" yazısında kalıyorsa ya da kırmızı bir hata varsa backend
+çalışmıyordur: başlatın (kurulumun 6. adımı).
 
 ### Adım 3: Dolarla harcama (60 saniye)
 
-**Yap:** **Expenses** sayfasını açın. **Add expense** formunu şöyle doldurun:
+**Yap:** **Expenses** sayfasını açın. Sağdaki (dar ekranda listenin altındaki) **Add expense**
+formunu şöyle doldurun:
 
 - Merchant: `Steam`
 - Amount: `15`
@@ -373,10 +415,10 @@ Bank's rate for that day. On a weekend or a holiday it takes the last published 
 amount is stored in kuruş, as a whole number, and rounded once, half to even. Because
 entertainment was already at 84%, Kasa warns that this purchase takes it over the limit."
 
-**Ekranda görünmeli:** yeşil bir "Saved Steam." kutusu ve içinde "Converted 15.00 USD to
-738.24 TRY at TCMB rate 49.2160 (date)" gibi bir satır, bir de "Entertainment budget exceeded
-this month: ... of 1,200.00 TRY" gibi sarı bir uyarı. "Overall budget: 80% used this month"
-da görünebilir.
+**Ekranda görünmeli:** "Saved Steam." bildirimi ve "Converted 15.00 USD to 738.24 TRY at TCMB
+rate 49.2160 (date)" gibi bir satır, bir de "Entertainment budget exceeded this month: ... of
+1,200.00 TRY" gibi bir uyarı (bildirimler sağ altta çıkıyor). "Overall budget: 80% used this
+month" da görünebilir. Kur ve tutarları provada kontrol edin.
 
 Kur, TCMB daha yeni bir kur yayımlamadıysa ya da laptop ona ulaşamadıysa seed'in son hafta için
 kaydettiği demo kurudur. Biri sorarsa şöyle cevaplayın: "The seed stores a recent rate so the
@@ -392,9 +434,9 @@ demo works offline. In normal use Kasa downloads the bulletin from TCMB."
 
 ### Adım 4: Fiş fotoğrafı (45 saniye)
 
-**Yap:** **Receipt** sayfasını açın, **Choose a file** butonuna tıklayın,
-`backend/tests/fixtures/receipt_market.png` dosyasını seçin, **Read and save** butonuna
-tıklayın.
+**Yap:** **Scan receipt** sayfasını açın, **Choose a file** butonuna tıklayın (ya da dosyayı
+kutuya sürükleyin), `backend/tests/fixtures/receipt_market.png` dosyasını seçin, **Read and
+save** butonuna tıklayın.
 
 **Söyle (İngilizce):** "Now a paper receipt. The receipt agent reads the photo with Gemini's
 vision model and calls one tool, save_expense, with the merchant, date, lines and total. The
@@ -417,14 +459,15 @@ rules', that would be treated as text on a receipt, nothing more."
 
 ### Adım 5: Ortak ev (90 saniye)
 
-**Yap:** **House** sayfasını açın. Önce **Balances** sekmesini gösterin.
+**Yap:** **House** sayfasını açın. Önce borçları gösteren kartı ve sağdaki **Settle up**
+kartını gösterin.
 
 **Söyle (İngilizce):** "Deniz pays the rent and collects the shares. Every bill can be split
 differently: the rent equally, electricity by room size, internet by exact amounts, a Migros
 receipt by who had which item. The balances always add up to zero, and Kasa suggests a short
 list of transfers: never more than one fewer than the number of people."
 
-**Yap:** **Add expense** sekmesine tıklayın, sonra:
+**Yap:** sağ üstteki **Add expense** butonuna tıklayın (form sayfanın üstünde açılıyor), sonra:
 
 - How to split: **Percent**
 - What: `Su faturası`
@@ -434,19 +477,24 @@ list of transfers: never more than one fewer than the number of people."
 - Percent per person: Deniz `40`, Ali `30`, Ayşe `30` (alanların altındaki satır 100% given
   olarak değişiyor)
 
-**Add shared expense** butonuna, sonra **Balances** sekmesine tıklayın.
+**Add shared expense** butonuna tıklayın. Bakiyeler hemen güncelleniyor.
 
-**Ekranda görünmeli:** Ali ₺6.308,33 ve Ayşe ₺11.528,33 borçlu, iki önerilen transfer var:
-"Ayşe pays you ₺11.528,33" ve "Ali pays you ₺6.308,33".
+**Ekranda görünmeli:** borç kartında Ali ₺6.308,33 ve Ayşe ₺11.528,33 borçlu, **Settle up**
+kartında iki önerilen transfer var (biri Ayşe'den, biri Ali'den Deniz'e).
 
 **Söyle (İngilizce):** "Deniz's room is bigger, so Deniz pays 40%. The shares are 240, 180 and
 180, and they always add up exactly. Now Ali sends the money."
 
-**Yap:** "Ali pays you ₺6.308,33" satırının yanındaki **Record payment** butonuna tıklayın.
+**Yap:** **Settle up** kartında Ali'nin transferindeki **Record payment** butonuna tıklayın.
 Form zaten dolu geliyor. Not olarak `Havale` yazıp **Record payment** butonuna tıklayın.
 
-**Ekranda görünmeli:** Ali'nin transferi kayboluyor. Sadece "Ayşe pays you ₺11.528,33"
-kalıyor. Ödeme **Payments** sekmesinde listeleniyor.
+**Ekranda görünmeli:** Ali'nin transferi kayboluyor, sadece Ayşe'ninki (₺11.528,33) kalıyor.
+Ödeme aşağıdaki **Payments** kartında listeleniyor.
+
+**İsteğe bağlı (15 saniye):** **Invite flatmates** kartında davet linki oluşturup **Copy**
+butonunu gösterin: "A new flatmate opens this link, signs in, and joins the house. Nobody can
+be added without accepting."
+
 
 **Söyle (İngilizce, isteğe bağlı, 10 saniye):** "If Deniz typed 63,000 by mistake, Kasa would
 refuse it, because nobody can pay back more than they owe unless it is marked as a loan."
@@ -456,13 +504,13 @@ refuse it, because nobody can pay back more than they owe unless it is marked as
 - "must add up to 100": üç yüzdeyi kontrol edin.
 - Ödeme fazla büyük diye reddediliyor: bakiyeler provada değişmiş. Önerilen transferde
   görünen tutarı kullanın.
-- Başka bir sorun: evin seed'den gelen **Expenses** sekmesini gösterin (dört bölüşme türü de
-  orada var), bir de Ali'nin 6,000 TL'lik ödemesini içeren **Payments** sekmesini.
+- Başka bir sorun: sayfadaki **Shared expenses** kartını gösterin (dört bölüşme türü de orada
+  var), bir de Ali'nin 6,000 TL'lik ödemesini içeren **Payments** kartını.
 
 ### Adım 6: Banka ekstresi ve gelen kutusu (60 saniye)
 
-**Yap:** **Import** sayfasını açın, `backend/tests/fixtures/statement_garanti_like.csv`
-dosyasını seçin, **Import statement** butonuna tıklayın.
+**Yap:** **Import statement** sayfasını açın, `backend/tests/fixtures/statement_garanti_like.csv`
+dosyasını seçin (Excel .xlsx de kabul ediliyor), **Import statement** butonuna tıklayın.
 
 **Söyle (İngilizce):** "This is a bank export, in the Turkish format banks use. Kasa reads it
 in plain Python, not with the AI. Incoming money like the scholarship is skipped. Nothing
@@ -470,9 +518,9 @@ becomes an expense yet: every line goes to the inbox, and Deniz approves what is
 
 **Ekranda görünmeli:** Lines read 14, New in inbox 12, Duplicates 0, Skipped 3.
 
-**Yap:** **Inbox** sayfasını açın. MİGROS KADIKÖY İSTANBUL TR, iki STARBUCKS MODA satırından
-birini ve NETFLIX.COM'u işaretleyip **Approve 3** butonuna tıklayın. Sonra PARA ÇEKME ATM
-satırını bulup **Reject** butonuna tıklayın.
+**Yap:** **Inbox** sayfasını açın. MİGROS KADIKÖY İSTANBUL TR, iki STARBUCKS MODA kartından
+birini ve NETFLIX.COM'u işaretleyin; üstte çıkan çubukta **Approve 3** butonuna tıklayın. Sonra
+PARA ÇEKME ATM kartındaki **Reject** butonuna tıklayın.
 
 **Söyle (İngilizce):** "Three approved purchases are now expenses. A cash withdrawal is not a
 purchase, so Deniz rejects it. Emails from Gmail work the same way: they only ever become
@@ -482,12 +530,14 @@ inbox items, and an email cannot approve anything by itself."
 yeni bir şey eklenmiyor.
 
 **Olmazsa:** "Import failed" çıkarsa fiş görselini değil `.csv` dosyasını seçtiğinizi kontrol
-edin. Gelen kutusu boşsa Dev user `demo` değildir.
+edin. Gelen kutusu boşsa başka bir hesapla girilmiştir.
 
 ### Adım 7: Ask Kasa (90 saniye)
 
 **Yap:** **Ask Kasa** sayfasını açın ve şu soruları sırayla yazın. Her cevabı bekleyin. Salon
-Türkçeyse Türkçe soruları, değilse İngilizce olanları kullanın.
+Türkçeyse Türkçe soruları, değilse İngilizce olanları kullanın. Cevap beklerken Kasa ne
+yaptığını adım adım gösteriyor ("Reading your question", "Reports agent took over", "Running a
+report"); bunu gösterip "you can see which agent is working" deyin.
 
 1. `Bu ay kategoriye göre ne kadar harcadım? Grafik çiz`
    (English: `How much did I spend this month by category? Draw a chart.`)
@@ -498,6 +548,10 @@ Türkçeyse Türkçe soruları, değilse İngilizce olanları kullanın.
    **Söyle (Yusuf, İngilizce):** "The report agent wrote one SQL query, a second agent checked
    that it matches the question, and the numbers come straight from the database. Rent counts
    only Deniz's share."
+
+   **Yap (isteğe bağlı, 15 saniye):** grafiğin altındaki **Save report** butonuna, sonra
+   **Open Reports** linkine tıklayın. "Saved reports run again on today's data without calling
+   the AI, and can be pinned to the dashboard."
 
 2. `Son 6 ayın harcamalarını çizgi grafik olarak göster`
    (English: `Show my spending over the last 6 months as a line chart.`)
@@ -548,12 +602,27 @@ tested. Nothing in a chat message can widen what you see."
 tried, the guard said no, and the data is untouched." Rakamların aynı kaldığını göstermek için
 Dashboard'u yenileyin.
 
+### Vakit kalırsa: iki kısa ek (her biri 30 ila 45 saniye)
+
+**Güvenlik ve 2FA.** Sol menünün altından **Sign out**, sonra tekrar giriş yapın; 6 haneli kod
+adımını gösterin. **Söyle (İngilizce):** "Every account must use a code from Google
+Authenticator. Ten one-time recovery codes are shown once at sign-up. Five wrong tries lock the
+account for fifteen minutes. Google sign-in can never take over an existing password account,
+because we do not verify email addresses yet."
+
+**Excel ile soru.** Ask Kasa'da ataş butonuna basıp
+`backend/tests/fixtures/statement_garanti_like.csv` dosyasını ekleyin ve
+`Bu dosyada en çok neye harcamışım? Grafikle göster` yazın (English: `What did I spend the most
+on in this file? Show a chart.`). **Söyle (İngilizce):** "A file agent reads the spreadsheet
+with query tools, never by running code. If we ask it to add the rows, it only prepares a
+preview; nothing is saved until we confirm, and then it goes to the inbox."
+
 ### Adım 9: Kapanış (15 saniye)
 
 **Söyle (İngilizce):** "That is Kasa: four ways to capture spending, fair splits for shared
 flats, budgets and subscriptions, and a chat that answers with charts and can only read your
-own data. Our next steps are moving production to Azure SQL and Google Cloud, real Google
-sign-in, and verifying everything on Gemini. Thank you, we are happy to take questions."
+own data. Our next steps are moving production to Azure SQL and Google Cloud, connecting
+Gmail and Google sign-in, and verifying everything on Gemini. Thank you, we are happy to take questions."
 
 ## Yedek plan
 
@@ -563,7 +632,8 @@ sign-in, and verifying everything on Gemini. Thank you, we are happy to take que
 | Gemini model hatası (400, model not found) | `.env` içinde `GEMINI_MODEL=gemini-3.5-flash-lite` olduğunu kontrol edin. Backend'i yeniden başlatın. Hâlâ olmuyorsa 4, 7 ve 8. adımlar için kaydı kullanın. |
 | İnternet yok | 1 (yerel Markdown önizleme), 2, 3, 5 ve 6. adımlar offline çalışıyor. Dolar çevirisi kayıtlı kuru kullanıyor. 4, 7 ve 8. adımlar için kaydı oynatın ya da ekran görüntülerini gösterin. |
 | Laptop ya da kurulumu bozuldu | Aynı şekilde seed edilmiş yedek laptopa geçin. |
-| Bir hatadan sonra veri yanlış görünüyor | `python -m scripts.seed_demo --user demo --reset` çalıştırın (yaklaşık 10 saniye), tarayıcıyı yenileyin, devam edin. |
+| Bir hatadan sonra veri yanlış görünüyor | `python -m scripts.seed_demo --user demo --reset` çalıştırın (yaklaşık 10 saniye). Şifre ve 2FA anahtarı da yenilenir: QR kodu tekrar okutup giriş yapın, devam edin. |
+| 2FA kodu kabul edilmiyor | Telefonun saati otomatik olsun (kodlar saate bağlı). Olmazsa seed'in kurulumda gösterdiği kurtarma kodu yok, o yüzden `python -m scripts.seed_demo --user demo --login-only` çalıştırıp yeni QR'ı okutun. |
 | Hiçbir şey çalışmıyor | Perşembe çekilen videoyu oynatın ve bu senaryoyu takip ederek adım adım üstünden anlatın. |
 
 Hiç model olmadan çalışanlar: dashboard, harcamalar (elle, her para biriminde), bütçeler,
@@ -628,9 +698,9 @@ weekends and holidays, and caches it. The original amount, the rate and its date
 with the expense.
 
 **10. What is not finished, and why?**
-We have not deployed yet: there is no Azure SQL database and nothing runs on Cloud Run. Real
-Google sign-in (Firebase) and the real Gmail and Calendar connection are not set up, and the
-agents are verified on Ollama but not yet on Gemini. The code and the deploy scripts are ready
+We have not deployed yet: there is no Azure SQL database and nothing runs on Cloud Run. Google
+sign-in and the real Gmail and Calendar connection are written but need a Google OAuth client,
+and the agents are verified on Ollama but not yet on Gemini. The code and the deploy scripts are ready
 and tested with fakes. The remaining work needs cloud accounts and OAuth approval, which we are
 setting up now. Each item is a story in USER_STORIES.md with an owner.
 
@@ -643,9 +713,26 @@ folder has an owner (TEAM.md), and every change is a pull request with a review 
 
 **12. Where is the data, and can I delete it?**
 Today it runs on SQLite; we are moving production to Azure SQL, and the migrations and
-row-level security for it are already written and tested. Google tokens are encrypted, and
-keys live only in environment variables. Deleting your account and data is not built yet; it
-is a story for the next sprint.
+row-level security for it are already written and tested. Google tokens and two-factor secrets
+are encrypted, passwords are stored only as scrypt hashes, and keys live only in environment
+variables. Deleting your account and data is not built yet; it is a story for the next sprint.
+
+**13. How does sign-in work, and why 2FA?**
+Kasa has its own accounts: email and password, or Google. Every account must add Google
+Authenticator; without the six-digit code there is no session. Codes cannot be used twice, five
+wrong tries lock the account for fifteen minutes, and sessions can be listed and ended in
+Settings. Money data deserves more than a password.
+
+**14. How does the chat know which agent to use?**
+The coordinator agent reads the message and calls transfer_to_agent with one of six
+specialists. The answer is streamed, so the page shows which agent took over and which tool is
+running. Conversations are saved, and when the server restarts the last messages are given back
+to the agent as context.
+
+**15. Can the AI change my data?**
+Only through tools, and only for the signed-in user. When it saves an expense from a chat
+message, the answer shows a card with an Undo button. Rows from an Excel file or an email never
+become expenses directly: they wait in the inbox until you approve them.
 
 ## Henüz bitmeyenler ve plan
 
@@ -657,9 +744,9 @@ bir story.
 | Azure SQL veritabanı yok, Cloud Run'a deploy edilmedi | Google Cloud projesi, faturalandırma ayarı ve Azure SQL veritabanı gerekiyor | `deploy/` scriptlerini ve `docs/SETUP.md` içindeki smoke test'i çalıştırmak (Mustafa, Yusuf) |
 | Row-level security Azure SQL üzerinde çalıştırılmadı | Deploy ile birlikte gelecek. Migration'lar ve RLS yazıldı, offline test edildi | Migration'ları ve `docs/SETUP.md` içindeki RLS kontrolünü çalıştırmak (Mustafa) |
 | Gemini canlı ortamda doğrulanmadı, fiş okuma dahil | Varsayılan model yeni değişti: `gemini-3.5-flash-lite` | Gemini üzerinde canlı testler ve eval'ler, ayrı bir issue'da takip ediliyor (Yusuf) |
-| Google ile giriş (Firebase) ayarlanmadı | Bir Firebase projesi gerekiyor | Firebase'i ayarlamak, sonra production'da dev modunu kapatmak (Mustafa, Zehra) |
+| Google ile giriş bağlı değil | Kendi hesap sistemimiz ve 2FA çalışıyor, Google için bir OAuth client gerekiyor | OAuth client'ı açıp giriş adresini eklemek (Mustafa) |
 | Gerçek Gmail ve Calendar bağlı değil | Bir OAuth client ve onay ekranı gerekiyor | Bunları oluşturup senkronizasyonu ve hatırlatmaları test etmek (Mustafa, Ömer) |
-| Davet linki yok, rate limit yok, "verimi sil" yok | Başlanmadı | Gelecek sprint (Ömer ve Zehra; Mustafa) |
+| Rate limit yok, "verimi sil" yok, e-posta doğrulaması ve "şifremi unuttum" yok | Başlanmadı | Gelecek sprint (Mustafa #9, Mustafa ve Zehra #13). Davet linkleri bitti, Ömer (#6) ve Zehra (#11) test ediyor |
 
 ## Sorun giderme
 
@@ -672,6 +759,9 @@ bir story.
 | 8000 portu kullanımda | Diğer backend penceresini kapatın, ya da 8001'de başlatıp `frontend/.env.local` içinde `NEXT_PUBLIC_API_URL=http://localhost:8001` yazın, sonra `npm run dev` komutunu yeniden başlatın. |
 | Sayfada "Failed to fetch" ya da boş kutular var | Backend çalışmıyor, ya da `localhost:3000` yerine `127.0.0.1:3000` açtınız. |
 | "Chat is off" ya da "Receipt reading is off" | `backend/.env` içinde `GOOGLE_API_KEY` boş ya da yanlış yazılmış, veya dosyayı düzenledikten sonra backend yeniden başlatılmamış. `/health` adresini kontrol edin. |
-| Dashboard boş | Dev user kutusunda `demo` yazmıyor. `demo` yazıp Switch'e basın. |
+| Giriş sayfasında "wrong email or password" | Şifreyi seed çıktısından tekrar kontrol edin. Seed sonradan yeniden çalıştıysa şifre değişmiştir. |
+| "Too many failed attempts" (423) | 15 dakika bekleyin ya da `python -m scripts.seed_demo --user demo --login-only` çalıştırıp yeni şifreyle girin. |
+| "Checking your session" yazısında kalıyor | Backend çalışmıyor. 6. adımdaki komutla başlatın. |
+| Dashboard boş | Başka bir hesapla girilmiş. Çıkış yapıp `demo@kasa.demo` ile girin. |
 | `npm run dev` bir Next.js güvenlik uyarısıyla kapanıyor | Tekrar çalıştırın. İkinci seferde devam ediyor. |
-| Sohbet eski bir konuşmada kalıyor | Mesaj kutusunun altındaki **New conversation** butonuna tıklayın. |
+| Sohbet eski bir konuşmada kalıyor | Sohbet kartının üstündeki ya da soldaki **Conversations** listesindeki **New conversation** butonuna tıklayın. |
