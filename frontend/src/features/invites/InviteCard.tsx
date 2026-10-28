@@ -4,7 +4,7 @@
 // and see or cancel the links that still work.
 
 import { Check, Copy, Link2, MessageCircle, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type House, type HouseInvite } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -71,7 +71,7 @@ export function InviteCard({ house, className = "" }: { house: House; className?
     >
       <div className="flex flex-col gap-5">
         {current ? (
-          <InviteLink house={house} invite={current} />
+          <InviteLink key={current.id} house={house} invite={current} focusOnCreate={created?.id === current.id} />
         ) : (
           <Button id={CREATE_BUTTON_ID} onClick={create} disabled={creating} className="self-start">
             <Link2 aria-hidden className="size-4" /> {creating ? t("creating") : t("createLink")}
@@ -107,12 +107,18 @@ export function InviteCard({ house, className = "" }: { house: House; className?
   );
 }
 
-function InviteLink({ house, invite }: { house: House; invite: HouseInvite }) {
+function InviteLink({ house, invite, focusOnCreate }: { house: House; invite: HouseInvite; focusOnCreate: boolean }) {
   const t = useT(inviteMessages);
   const notify = useToast();
   const [copied, setCopied] = useState(false);
+  const fieldRef = useRef<HTMLInputElement>(null);
   const fieldId = `invite-link-${invite.id}`;
+  const termsId = `${fieldId}-terms`;
   const whatsapp = `https://wa.me/?text=${encodeURIComponent(t("shareText", { house: house.name, url: invite.url }))}`;
+
+  useEffect(() => {
+    if (focusOnCreate) fieldRef.current?.focus();
+  }, [focusOnCreate]);
 
   async function copy() {
     try {
@@ -121,8 +127,8 @@ function InviteLink({ house, invite }: { house: House; invite: HouseInvite }) {
       notify(t("copiedToast"), "success");
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      const field = document.getElementById(fieldId) as HTMLInputElement | null;
-      field?.select();
+      fieldRef.current?.focus();
+      fieldRef.current?.select();
       notify(t("copyFailed"), "warning");
     }
   }
@@ -134,7 +140,9 @@ function InviteLink({ house, invite }: { house: House; invite: HouseInvite }) {
       </label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
+          ref={fieldRef}
           id={fieldId}
+          aria-describedby={termsId}
           readOnly
           value={invite.url}
           onFocus={(e) => e.currentTarget.select()}
@@ -146,7 +154,7 @@ function InviteLink({ house, invite }: { house: House; invite: HouseInvite }) {
         </Button>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted">
+        <p id={termsId} className="text-xs text-muted">
           {t("linkTerms", { date: formatDateTime(invite.expires_at), n: invite.max_uses })}
         </p>
         <a
