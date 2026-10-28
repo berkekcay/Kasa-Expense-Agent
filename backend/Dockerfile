@@ -1,5 +1,5 @@
-# Kasa backend for Google Cloud Run. Built and deployed by deploy/deploy_backend.sh, which
-# also runs `alembic upgrade head` from this image as a Cloud Run job (docs/SETUP.md).
+# Kasa backend image. Used by deploy/digitalocean/docker-compose.yml (SQL Server on a Droplet,
+# docs/DIGITALOCEAN.md) and by the Google Cloud Run scripts in deploy/ (docs/SETUP.md).
 # Debian 12 (bookworm) pinned: it is a supported target for Microsoft's msodbcsql18 packages.
 FROM python:3.12-slim-bookworm
 
@@ -27,6 +27,8 @@ RUN pip install -r requirements.txt -r requirements-mssql.txt
 COPY app ./app
 COPY alembic.ini ./
 COPY alembic ./alembic
+# The demo data command, so a server can be seeded with `python -m scripts.seed_demo`.
+COPY scripts ./scripts
 
 RUN useradd --create-home --uid 10001 kasa
 USER kasa

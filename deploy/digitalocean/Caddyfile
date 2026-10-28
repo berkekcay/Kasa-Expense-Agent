@@ -1,0 +1,28 @@
+# HTTPS for Kasa with an automatic Let's Encrypt certificate. DOMAIN is your domain, or
+# <ip-with-dashes>.sslip.io when you have none (setup.sh fills it in).
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# The API lives under /api; the prefix is removed before it reaches FastAPI.
+	handle_path /api/* {
+		# -1 sends every chunk at once, so the chat's live steps (NDJSON) are not buffered.
+		reverse_proxy api:8080 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+	}
+}

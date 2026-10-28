@@ -1,0 +1,137 @@
+# Kasa on one DigitalOcean Droplet: SQL Server 2022 (Express), the API, the web UI and Caddy
+# for HTTPS, all in Docker. Run from this folder on the Droplet (setup.sh does it for you):
+#
+#   docker compose up -d --build
+#
+# Settings come from ./.env (see .env.example; setup.sh generates the passwords and keys).
+# Guide: docs/DIGITALOCEAN.md.
+#
+# Start order: mssql (healthy) -> db-init (database, kasa_app login) -> migrate (alembic, as
+# sa, builds tables and the row-level security policy) -> db-lockdown (kasa_app may not touch
+# alembic_version) -> api -> web, caddy.
+
+name: kasa
+
+x-sqlcmd: &sqlcmd
+  image: mcr.microsoft.com/mssql/server:${MSSQL_IMAGE_TAG:-2022-latest}
+  restart: "no"
+  depends_on:
+    mssql:
+      condition: service_healthy
+  volumes:
+    - ./sql:/sql:ro
+  environment:
+    MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    KASA_APP_PASSWORD: ${KASA_APP_PASSWORD}
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:${MSSQL_IMAGE_TAG:-2022-latest}
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      # Express: free for production (one database up to 10 GB, enough for Kasa). Row-level
+      # security works in every edition.
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-1536}
+      TZ: Europe/Istanbul
+    volumes:
+      - mssql-data:/var/opt/mssql
+      - ./backups:/var/opt/mssql/backup
+    # Only on the Droplet itself. From your PC use an SSH tunnel (docs/DIGITALOCEAN.md),
+    # never an open 1433 on the internet.
+    ports:
+      - "127.0.0.1:1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  db-init:
+    <<: *sqlcmd
+    command:
+      - /bin/bash
+      - -c
+      - /opt/mssql-tools18/bin/sqlcmd -C -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -b -i /sql/init.sql -v KASA_APP_PASSWORD="$$KASA_APP_PASSWORD"
+
+  migrate:
+    build: ../../backend
+    image: kasa-api:local
+    restart: "no"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      MIGRATION_DATABASE_URL: mssql+pyodbc://sa:${MSSQL_SA_PASSWORD}@mssql:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes
+      DATABASE_URL: mssql+pyodbc://sa:${MSSQL_SA_PASSWORD}@mssql:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes
+    command: ["alembic", "upgrade", "head"]
+
+  db-lockdown:
+    <<: *sqlcmd
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command:
+      - /bin/bash
+      - -c
+      - /opt/mssql-tools18/bin/sqlcmd -C -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -b -i /sql/lockdown.sql
+
+  api:
+    build: ../../backend
+    image: kasa-api:local  # same image as migrate; the second build is a cache hit
+    restart: unless-stopped
+    depends_on:
+      db-lockdown:
+        condition: service_completed_successfully
+    environment:
+      # The app connects as kasa_app: no DDL, and every query passes the RLS policy.
+      DATABASE_URL: mssql+pyodbc://kasa_app:${KASA_APP_PASSWORD}@mssql:1433/kasa?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes
+      AUTO_MIGRATE: "false"
+      AUTH_MODE: accounts
+      AUTH_SECRET: ${AUTH_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      LLM_PROVIDER: gemini
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      FRONTEND_URL: https://${DOMAIN}
+      CORS_ORIGINS: https://${DOMAIN}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: https://${DOMAIN}/api/integrations/google/callback
+      GOOGLE_LOGIN_REDIRECT_URI: https://${DOMAIN}/api/auth/google/callback
+      PORT: "8080"
+
+  web:
+    build:
+      context: ../../frontend
+      args:
+        # Same origin as the page: Caddy sends /api/* to the API, so no CORS in the browser.
+        NEXT_PUBLIC_API_URL: https://${DOMAIN}/api
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:${CADDY_IMAGE_TAG:-2}
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  mssql-data:
+  caddy-data:
+  caddy-config:

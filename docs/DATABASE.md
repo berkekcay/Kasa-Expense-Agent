@@ -1,16 +1,20 @@
-# Veritabanı planı: şimdi SQLite, sonra Azure SQL
+# Veritabanı planı: şimdi SQLite, sonra SQL Server
 
-Kısaca: Kasa bugün **SQLite** ile çalışıyor. Production için **Azure SQL Database**'e
-(Microsoft SQL Server) geçeceğiz. Geçişin kod tarafı yazıldı ve offline test edildi, ama henüz
-gerçek bir Azure veritabanı açılmadı. Bu dosya neyin hazır olduğunu, neyin kaldığını ve kimin
-yaptığını anlatıyor.
+Kısaca: Kasa bugün geliştirmede **SQLite** ile çalışıyor. Production için **SQL Server**'a
+geçiyoruz. Seçilen yer bir **DigitalOcean Droplet'inde Docker içinde SQL Server 2022 Express**:
+tek sunucuda uygulamayla birlikte duruyor, ekip kendi bilgisayarından SSMS ile bağlanabiliyor.
+Kurulum paketi hazır: [DIGITALOCEAN.md](DIGITALOCEAN.md). Azure SQL Database (ücretsiz teklif)
+ikinci seçenek olarak duruyor; ikisi de aynı SQL Server motoru, aynı migration'lar ve aynı
+row-level security. Kod tarafı yazıldı ve offline test edildi, gerçek bir sunucuda henüz
+çalışmadı. Bu dosya neyin hazır olduğunu, neyin kaldığını ve kimin yaptığını anlatıyor.
 
 | Ortam | Veritabanı | Durum |
 | --- | --- | --- |
 | Geliştirme (herkesin laptopu) | SQLite, `backend/kasa.db` dosyası | Çalışıyor |
 | Testler ve CI | SQLite, her test oturumunda geçici bir dosya | Çalışıyor, 600'den fazla test |
 | Demo (Cuma 30 Ekim) | SQLite, veriyi `python -m scripts.seed_demo --user demo` kuruyor | Hazır |
-| Production | Azure SQL Database, ücretsiz teklif (serverless) | Planlı, [#12](https://github.com/berkekcay/Kasa-Expense-Agent/issues/12) |
+| Production | SQL Server 2022 Express, DigitalOcean Droplet'inde Docker'da ([DIGITALOCEAN.md](DIGITALOCEAN.md)) | Kurulum paketi hazır, sunucu açılmadı, [#12](https://github.com/berkekcay/Kasa-Expense-Agent/issues/12) |
+| Production (ikinci seçenek) | Azure SQL Database, ücretsiz teklif (serverless) | Kod hazır, [SETUP.md](SETUP.md) |
 
 Hangi veritabanının kullanılacağına sadece `DATABASE_URL` karar veriyor. Kodda başka bir şey
 değişmiyor.
