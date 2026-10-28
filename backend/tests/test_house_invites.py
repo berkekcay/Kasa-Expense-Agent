@@ -1,5 +1,6 @@
 """House invite links: create, list, revoke, preview, accept (track HOUSE, US-HOUSE-02)."""
 
+import concurrent.futures
 import datetime as dt
 from types import SimpleNamespace
 
@@ -167,6 +168,80 @@ def test_last_use_is_taken_once(client, house):
     assert client.post(f"/invites/{code}/accept", headers=as_user("inv-first")).status_code == 200
     r = client.post(f"/invites/{code}/accept", headers=as_user("inv-second"))
     assert r.status_code == 409 and "maximum" in r.json()["detail"]
+
+
+def test_concurrent_accepts_respect_max_uses(client, house):
+    house_id, owner = house
+    code = create(client, house_id, owner, max_uses=1)["code"]
+
+    def try_accept(user_id: str):
+        return client.post(f"/invites/{code}/accept", headers=as_user(user_id))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(try_accept, "inv-race-1")
+        f2 = executor.submit(try_accept, "inv-race-2")
+        r1 = f1.result()
+        r2 = f2.result()
+
+    statuses = sorted([r1.status_code, r2.status_code])
+    assert statuses == [200, 409]
+    conflict = r1 if r1.status_code == 409 else r2
+    assert "maximum" in conflict.json()["detail"]
+
+    # Verify uses in DB is exactly 1 (max_uses reached so it is now used_up)
+    with session_for("test", system=True) as db:
+        inv = db.query(HouseInvite).filter_by(code=code).one()
+        assert inv.uses == 1 and inv.max_uses == 1
+
+
+def test_preview_and_accept_with_spaces_dashes_and_lowercase(client, house):
+    house_id, owner = house
+    code = create(client, house_id, owner)["code"]
+
+    # Code with spaces inside and surrounding
+    spaced = f"  {code[:4]}   {code[4:7]}  {code[7:]} "
+    r_prev = client.get(f"/invites/{spaced}", headers=as_user("inv-user-spaces"))
+    assert r_prev.status_code == 200 and r_prev.json()["house_name"] == "Moda evi"
+    r_acc = client.post(f"/invites/{spaced}/accept", headers=as_user("inv-user-spaces"))
+    assert r_acc.status_code == 200
+
+    # Lowercase with dashes and spaces
+    lowered = f" {code[:5].lower()}-{code[5:].lower()} "
+    r_prev = client.get(f"/invites/{lowered}", headers=as_user("inv-user-lower"))
+    assert r_prev.status_code == 200 and r_prev.json()["house_name"] == "Moda evi"
+    r_acc = client.post(f"/invites/{lowered}/accept", headers=as_user("inv-user-lower"))
+    assert r_acc.status_code == 200
+
+
+def test_non_member_access_on_all_invite_endpoints(client, house):
+    house_id, owner = house
+    inv = create(client, house_id, owner)
+    code = inv["code"]
+    inv_id = inv["id"]
+    stranger = as_user("inv-complete-stranger")
+
+    # Member endpoints must 404 for stranger
+    assert client.post(f"/houses/{house_id}/invites", json={"days": 3}, headers=stranger).status_code == 404
+    assert client.get(f"/houses/{house_id}/invites", headers=stranger).status_code == 404
+    assert client.delete(f"/houses/{house_id}/invites/{inv_id}", headers=stranger).status_code == 404
+
+    # Public invite endpoints work for any signed-in user
+    assert client.get(f"/invites/{code}", headers=stranger).status_code == 200
+    assert client.post(f"/invites/{code}/accept", headers=stranger).status_code == 200
+
+
+def test_invite_expiry_at_exact_boundary(client, house):
+    house_id, owner = house
+    code = create(client, house_id, owner)["code"]
+    now = invites.utcnow()
+    # Exactly now is expired (expires_at <= now)
+    set_invite(code, expires_at=now)
+
+    r_prev = client.get(f"/invites/{code}", headers=as_user("inv-boundary-user"))
+    assert r_prev.status_code == 200 and r_prev.json()["reason"] == "expired"
+    r_acc = client.post(f"/invites/{code}/accept", headers=as_user("inv-boundary-user"))
+    assert r_acc.status_code == 409
+    assert "expired" in r_acc.json()["detail"]
 
 
 def test_agent_tool_returns_a_link(client, house):
