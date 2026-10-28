@@ -333,3 +333,11 @@ def test_run_case_with_a_fake_turn(monkeypatch, db):
     result = asyncio.run(run_evals.run_case(case, TODAY))
     assert result.passed, result.notes
     assert result.checker == {"approve": 1}
+
+
+def test_eval_turn_sends_the_reply_language_note_like_the_api():
+    english = [p.text for p in run_evals.chat_parts("Which subscriptions am I paying for?")]
+    turkish = [p.text for p in run_evals.chat_parts("Bu ay ne kadar harcadım?")]
+
+    assert english == ["Which subscriptions am I paying for?", "(Kasa: reply in English.)"]
+    assert turkish == ["Bu ay ne kadar harcadım?", "(Kasa: reply in Turkish.)"]

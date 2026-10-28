@@ -229,7 +229,7 @@ tetiklenir, sadece `main`). Anahtar dosyası yerine Workload Identity Federation
 - [x] Soru report agent'a gidiyor, agent korumalı SQL çalıştırıp ECharts'ın çizdiği bir grafik tanımı döndürüyor
 - [x] Cloud Run için Dockerfile'lar (backend ve frontend)
 - [x] pytest: para hesapları, SQL koruması, API'nin normal akışları ve script'li sahte bir LLM ile ADK bağlantıları
-- [ ] Gerçek bir anahtarla canlı Gemini çağrılarını denemek (fiş doğruluğu, yönlendirme kalitesi)
+- [x] Gerçek bir anahtarla canlı Gemini çağrılarını denemek (8/8 canlı test, 17/17 eval, `gemini-3.5-flash-lite`)
 - [ ] SQL Server kurmak, migration'ları çalıştırmak ve RLS'i uçtan uca test etmek (Azure SQL adımları docs/SETUP.md içinde)
 - [ ] İlk Cloud Run deploy'u (`deploy/` içindeki script'ler hazır ama gerçek bir projede çalışmadı)
 

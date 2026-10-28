@@ -451,8 +451,8 @@ rules', that would be treated as text on a receipt, nothing more."
 
 - "Receipt reading is off": backend'de anahtar yok. `.env` dosyasını düzeltip backend'i
   yeniden başlatın ya da ekran görüntüsüne geçin.
-- Bir hata ya da yanlış rakamlar: Gemini ile fiş okuma en yeni kısım ve henüz tam
-  doğrulanmadı. Bunu açıkça söyleyin, perşembeden kalan ekran görüntüsünü ya da videoyu
+- Bir hata ya da yanlış rakamlar: fiş okuma canlı testte Gemini'de geçti, ama model bir
+  fotoğrafı farklı okuyabilir. Bunu açıkça söyleyin, perşembeden kalan ekran görüntüsünü ya da videoyu
   gösterin ve devam edin. Vakit kalırsa aynı fişi Expenses sayfasında elle ekleyin.
 - 30 saniyeden uzun sürüyor: "the free tier is slow today" deyin, bir dakikaya kadar bekleyin,
   sonra devam edin.
@@ -622,13 +622,13 @@ preview; nothing is saved until we confirm, and then it goes to the inbox."
 **Söyle (İngilizce):** "That is Kasa: four ways to capture spending, fair splits for shared
 flats, budgets and subscriptions, and a chat that answers with charts and can only read your
 own data. Our next steps are moving production to Azure SQL and Google Cloud, connecting
-Gmail and Google sign-in, and verifying everything on Gemini. Thank you, we are happy to take questions."
+Gmail and Google sign-in. Thank you, we are happy to take questions."
 
 ## Yedek plan
 
 | Sorun | Ne yapılacak |
 | --- | --- |
-| Gemini kota aşıldı, 429 ya da "resource exhausted" diyor | 60 saniye bekleyip bir kere tekrar deneyin. Sonra anahtar değiştirin: `backend/.env` dosyasını **projeksiyonda değilken** açın, `GOOGLE_API_KEY` değerini başka bir sunucunun anahtarıyla değiştirin, kaydedin, backend'i Ctrl+C ile durdurup tekrar başlatın (`uvicorn app.main:app --port 8000`). Veri yerinde kalıyor. |
+| Gemini kota aşıldı, 429 ya da "resource exhausted" diyor | Kasa kotaya takılınca kendisi yaklaşık bir dakika bekleyip tekrar deniyor, o yüzden bir cevap bazen 30-60 saniye sürebilir; konuşmaya devam edin. Hata yine de çıkarsa 60 saniye bekleyip bir kere tekrar deneyin. Sonra anahtar değiştirin: `backend/.env` dosyasını **projeksiyonda değilken** açın, `GOOGLE_API_KEY` değerini başka bir sunucunun anahtarıyla değiştirin, kaydedin, backend'i Ctrl+C ile durdurup tekrar başlatın (`uvicorn app.main:app --port 8000`). Veri yerinde kalıyor. |
 | Gemini model hatası (400, model not found) | `.env` içinde `GEMINI_MODEL=gemini-3.5-flash-lite` olduğunu kontrol edin. Backend'i yeniden başlatın. Hâlâ olmuyorsa 4, 7 ve 8. adımlar için kaydı kullanın. |
 | İnternet yok | 1 (yerel Markdown önizleme), 2, 3, 5 ve 6. adımlar offline çalışıyor. Dolar çevirisi kayıtlı kuru kullanıyor. 4, 7 ve 8. adımlar için kaydı oynatın ya da ekran görüntülerini gösterin. |
 | Laptop ya da kurulumu bozuldu | Aynı şekilde seed edilmiş yedek laptopa geçin. |
@@ -685,7 +685,7 @@ generous free tier.
 Three levels. About 600 offline pytest tests with a scripted fake model, so CI never needs a
 key. Live tests for the receipt, house and chat flows (`KASA_LIVE_TESTS=1`). And an eval set of
 17 chat cases that checks routing, the SQL results and the refusals. In the last full run on
-Ollama, 14 of 15 passed; the one failure was an English question answered in Turkish.
+Gemini (`gemini-3.5-flash-lite`), all 17 passed, and so did all 8 live tests.
 
 **8. How does settle-up find the transfers?**
 It computes each person's net balance from bills and payments, then repeatedly matches the
@@ -699,8 +699,8 @@ with the expense.
 
 **10. What is not finished, and why?**
 We have not deployed yet: there is no Azure SQL database and nothing runs on Cloud Run. Google
-sign-in and the real Gmail and Calendar connection are written but need a Google OAuth client,
-and the agents are verified on Ollama but not yet on Gemini. The code and the deploy scripts are ready
+sign-in and the real Gmail and Calendar connection are written but need a Google OAuth client.
+The code and the deploy scripts are ready
 and tested with fakes. The remaining work needs cloud accounts and OAuth approval, which we are
 setting up now. Each item is a story in USER_STORIES.md with an owner.
 
@@ -743,7 +743,6 @@ bir story.
 | --- | --- | --- |
 | Azure SQL veritabanı yok, Cloud Run'a deploy edilmedi | Google Cloud projesi, faturalandırma ayarı ve Azure SQL veritabanı gerekiyor | `deploy/` scriptlerini ve `docs/SETUP.md` içindeki smoke test'i çalıştırmak (Mustafa, Yusuf) |
 | Row-level security Azure SQL üzerinde çalıştırılmadı | Deploy ile birlikte gelecek. Migration'lar ve RLS yazıldı, offline test edildi | Migration'ları ve `docs/SETUP.md` içindeki RLS kontrolünü çalıştırmak (Mustafa) |
-| Gemini canlı ortamda doğrulanmadı, fiş okuma dahil | Varsayılan model yeni değişti: `gemini-3.5-flash-lite` | Gemini üzerinde canlı testler ve eval'ler, ayrı bir issue'da takip ediliyor (Yusuf) |
 | Google ile giriş bağlı değil | Kendi hesap sistemimiz ve 2FA çalışıyor, Google için bir OAuth client gerekiyor | OAuth client'ı açıp giriş adresini eklemek (Mustafa) |
 | Gerçek Gmail ve Calendar bağlı değil | Bir OAuth client ve onay ekranı gerekiyor | Bunları oluşturup senkronizasyonu ve hatırlatmaları test etmek (Mustafa, Ömer) |
 | Rate limit yok, "verimi sil" yok, e-posta doğrulaması ve "şifremi unuttum" yok | Başlanmadı | Gelecek sprint (Mustafa #9, Mustafa ve Zehra #13). Davet linkleri bitti, Ömer (#6) ve Zehra (#11) test ediyor |

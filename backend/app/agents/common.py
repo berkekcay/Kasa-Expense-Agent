@@ -9,9 +9,22 @@ from __future__ import annotations
 
 from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.models import BaseLlm, Gemini
+from google.genai import types
 
 from app.config import get_settings
 from app.services import clock
+
+# A free AI Studio key allows about 15 requests a minute per model, and one chat turn makes
+# several calls (coordinator, specialist, checker). On 429 and transient 5xx errors the
+# Gemini client waits and retries instead of failing the turn: about 2, 4, 8, 16 and 30
+# seconds, so roughly one minute, which is how long the per-minute quota needs to reset.
+GEMINI_RETRY = types.HttpRetryOptions(
+    attempts=6,
+    initial_delay=2,
+    max_delay=30,
+    exp_base=2,
+    http_status_codes=[429, 500, 502, 503, 504],
+)
 
 GUARDRAILS = """Rules you must always follow, in sections:
 
@@ -73,7 +86,11 @@ def build_model(model_name: str, *, vision: bool = False) -> BaseLlm:
             keep_alive=settings.ollama_keep_alive,
             **extra,
         )
-    return Gemini(model=model_name, client_kwargs={"api_key": settings.google_api_key})
+    return Gemini(
+        model=model_name,
+        client_kwargs={"api_key": settings.google_api_key},
+        retry_options=GEMINI_RETRY,
+    )
 
 
 def chat_model() -> BaseLlm:

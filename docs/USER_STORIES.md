@@ -59,7 +59,7 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | Story | Başlık | Sprint | Durum | Yapan | Kalan iş |
 | --- | --- | --- | --- | --- | --- |
 | US-CAPTURE-01 | Harcamayı elle ekle | 1 | Bitti | Berke | - |
-| US-CAPTURE-02 | Fişi fotoğraftan kaydet | 1 | Kısmen | Berke | Yusuf (#4): fiş okumayı Gemini'de doğrulamak |
+| US-CAPTURE-02 | Fişi fotoğraftan kaydet | 1 | Bitti | Berke, Yusuf | - |
 | US-CAPTURE-03 | Alışverişi sohbete yaz | 1 | Kısmen | Berke | Yusuf: Gemini'de doğrulamak |
 | US-CAPTURE-04 | Başka para biriminde öde | 3 | Bitti | Berke | - |
 | US-CAPTURE-05 | Harcamayı düzelt ya da sil | 4 | Bitti | Berke | - |
@@ -84,7 +84,7 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-ASK-03 | Her sorguyu ikinci bir ajan kontrol eder | 4 | Bitti | Berke | - |
 | US-ASK-04 | Sohbet benim dilimde cevap verir | 4 | Kısmen | Berke | Yusuf (#5) |
 | US-ASK-05 | Doğru uzman ajan cevap verir | 1 | Kısmen | Berke | Yusuf (#4) |
-| US-ASK-06 | Kasa Gemini'de çalışır | 4 | Kısmen | Berke | Yusuf (#4) |
+| US-ASK-06 | Kasa Gemini'de çalışır | 4 | Bitti | Berke, Yusuf | - |
 | US-ASK-07 | Excel ya da CSV dosyamı sohbette analiz et | 4 | Kısmen | Berke | Yusuf: Gemini'de doğrulamak |
 | US-ASK-08 | Kasa'nın ne yaptığını adım adım gör | 4 | Bitti | Berke | - |
 | US-ASK-09 | Eski sohbetlerime geri dön | 4 | Bitti | Berke | - |
@@ -152,7 +152,7 @@ Elif olarak, harcamayı elle eklemek istiyorum, böylece fişi olmayan alışver
 Elif olarak, fişin fotoğrafını çekmek istiyorum, böylece mağaza, tarih, kalemler ve toplam hiç
 yazmadan kaydedilir.
 
-- Sprint 1 · **Kısmen** · Sahip: Agents 1 (fiş ajanı), Frontend (yükleme sayfası) · Yapan: Berke
+- Sprint 1 · **Bitti** · Sahip: Agents 1 (fiş ajanı), Frontend (yükleme sayfası) · Yapan: Berke, Yusuf
 - Diyelim ki sunucuda bir LLM sağlayıcısı var. `receipt_market.png` dosyasını yüklediğimde,
   2026-10-05 tarihli, 239.35 TRY tutarında "ÖZDEMİR MARKET" harcaması beş kalemiyle birlikte
   kaydedilir.
@@ -162,8 +162,8 @@ yazmadan kaydedilir.
 - Kanıt: `POST /receipts`, sayfa `/receipts`,
   `tests/test_agents_offline.py::test_receipt_upload_saves_expense_via_agent` (senaryolu sahte
   model), `tests/test_live.py::test_live_receipt_image` (yalnızca canlı).
-- Eksik: Ollama'da (`qwen3-vl:8b`) canlı olarak geçti. Gemini'de hiç çalışmadı, yani
-  `gemini-3.5-flash-lite` ile fiş okuma doğrulanmadı.
+- Canlı: 2026-10-28'de `gemini-3.5-flash-lite` ile `test_live_receipt_image` geçti (Yusuf, #4).
+  Daha önce Ollama'da (`qwen3-vl:8b`) da geçmişti.
 
 ### US-CAPTURE-03 Alışverişi sohbete yaz
 
@@ -518,14 +518,17 @@ gelen kutusu) gitmesini istiyorum, böylece her şeyi tek bir sohbette sorabilir
 Product owner olarak, ajanların ücretsiz bir AI Studio anahtarıyla Gemini'de çalışmasını
 istiyorum, böylece ürün ekibin Ollama sunucusu olmadan da çalışır.
 
-- Sprint 4 · **Kısmen** · Sahip: Agents 3 / QA · Yapan: Berke
+- Sprint 4 · **Bitti** · Sahip: Agents 3 / QA · Yapan: Berke, Yusuf
 - Diyelim ki `LLM_PROVIDER=gemini`, bir anahtar ve `GEMINI_MODEL=gemini-3.5-flash-lite` ayarlı.
   `KASA_LIVE_TESTS=1 pytest -m live -s` ve `python -m evals.run_evals` komutlarını
   çalıştırdığımda canlı testler geçer ve eval puanı en az Ollama'daki kadar olur.
-- Kanıt: `app/agents/common.py` (`build_model`), `app/config.py`.
-- Eksik: varsayılan model artık `gemini-3.5-flash-lite`, çünkü yeni anahtarların 2.5 modellerine
-  erişimi olmayabilir. Fiş okuma dahil, henüz hiç canlı Gemini çağrısı yapılmadı. Bunu ayrı bir
-  issue (#4) takip ediyor.
+- Diyelim ki ücretsiz anahtarın dakikalık kotası (15 istek) doldu ve Gemini 429 döndü. Kasa
+  hata vermek yerine birkaç saniye bekleyip tekrar dener, toplam yaklaşık bir dakika.
+- Kanıt: `app/agents/common.py` (`build_model`, `GEMINI_RETRY`), `app/config.py`,
+  `tests/test_gemini_retry.py`, `evals/latest.md`.
+- Canlı: 2026-10-28'de `gemini-3.5-flash-lite` ile 8 canlı testin 8'i ve 17 eval vakasının
+  17'si geçti (Ollama'da 15 vakanın 14'ü). Varsayılan model `gemini-3.5-flash-lite`, çünkü yeni
+  anahtarların 2.5 modellerine erişimi olmayabilir (Yusuf, #4).
 
 ### US-ASK-07 Excel ya da CSV dosyamı sohbette analiz et
 
@@ -880,7 +883,7 @@ yolları `backend/tests/` altında.
 | Story | Durum | API endpoint(ler)i | Frontend sayfası | Testler |
 | --- | --- | --- | --- | --- |
 | US-CAPTURE-01 | Bitti | `POST /expenses`, `GET /categories` | `/expenses` | `test_api.py`, `test_foundation_api.py` |
-| US-CAPTURE-02 | Kısmen | `POST /receipts` | `/receipts` | `test_agents_offline.py`, `test_live.py` (yalnızca canlı) |
+| US-CAPTURE-02 | Bitti | `POST /receipts` | `/receipts` | `test_agents_offline.py`, `test_live.py` (yalnızca canlı) |
 | US-CAPTURE-03 | Kısmen | `POST /chat` | `/chat` | eval `route-receipt-tr` |
 | US-CAPTURE-04 | Bitti | `POST /expenses`, `GET /fx/*` | `/expenses` | `test_money_fx.py`, `test_foundation_api.py` |
 | US-CAPTURE-05 | Bitti | `PATCH /expenses/{id}`, `DELETE /expenses/{id}` | `/expenses` | `test_expenses_api.py` |
@@ -905,7 +908,7 @@ yolları `backend/tests/` altında.
 | US-ASK-03 | Bitti | `POST /chat` | `/chat` | `test_report_checker.py` |
 | US-ASK-04 | Kısmen | `POST /chat` | `/chat` | `test_integration.py`, eval'ler |
 | US-ASK-05 | Kısmen | `POST /chat` | `/chat` | `test_agents_offline.py`, eval'ler |
-| US-ASK-06 | Kısmen | `POST /chat`, `POST /receipts` | `/chat`, `/receipts` | `test_live.py` (yalnızca canlı), eval'ler |
+| US-ASK-06 | Bitti | `POST /chat`, `POST /receipts` | `/chat`, `/receipts` | `test_gemini_retry.py`, `test_live.py` (yalnızca canlı), eval'ler |
 | US-ASK-07 | Kısmen | `POST /chat/files`, `POST /chat/imports/{id}` | `/chat` | `test_sheets.py`, `test_chat_files.py` |
 | US-ASK-08 | Bitti | `POST /chat/stream` | `/chat` | `test_chat_files.py`, `chatStore.test.ts` |
 | US-ASK-09 | Bitti | `GET/PATCH/DELETE /chat/conversations/*` | `/chat` | `test_chat_files.py`, `test_migrations.py` |
@@ -936,7 +939,6 @@ yolları `backend/tests/` altında.
 
 Kısmen:
 
-- US-CAPTURE-02 Fişi fotoğraftan kaydet: fiş okumayı Gemini'de doğrulamak. Yusuf (#4).
 - US-CAPTURE-03 Alışverişi sohbete yaz: Gemini'de doğrulamak. Yusuf.
 - US-BUDGET-05 Bütçe, abonelik ve kurlar sohbette: cevap dilini düzeltmek, Gemini'de
   doğrulamak. Yusuf.
@@ -945,8 +947,6 @@ Kısmen:
 - US-ASK-01 Grafikli harcama soruları: Gemini'de doğrulamak. Yusuf.
 - US-ASK-04 Benim dilimde cevap: kalan vakayı düzeltmek, Gemini'de ölçmek. Yusuf (#5).
 - US-ASK-05 Yönlendirme: Gemini'de doğrulamak. Yusuf (#4).
-- US-ASK-06 Kasa Gemini'de çalışır: `gemini-3.5-flash-lite` ile canlı testler ve eval'ler.
-  Yusuf (#4).
 - US-INBOX-02 PDF ekstreler: canlı bir çalıştırma kaydetmek. Yusuf.
 - US-INBOX-04 Gmail: OAuth client'ı ve onay ekranını oluşturup gerçek akışı çalıştırmak. Mustafa.
 - US-INBOX-05 Sohbette gelen kutusu: Gemini'de doğrulamak. Yusuf.
