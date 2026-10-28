@@ -345,6 +345,16 @@ def _counts(db) -> dict[str, int]:
     return {t: db.execute(text(f"SELECT COUNT(*) FROM {t}")).scalar() for t in USER_TABLES}
 
 
+def chat_parts(message: str) -> list:
+    """The parts the chat API sends for a typed message (`app.api.agents`): the text and
+    the reply-language note. The eval sends the same, so it scores what users really get."""
+    from google.genai import types
+
+    from app.agents.language import reply_language_note
+
+    return [types.Part(text=message), types.Part(text=reply_language_note(message))]
+
+
 async def run_turn(user_id: str, message: str) -> ChatTurn:
     """One message through the real "chat" runner (coordinator + specialists), keeping the
     tool calls with their arguments, which `runtime.run_agent` does not return."""
@@ -363,7 +373,7 @@ async def run_turn(user_id: str, message: str) -> ChatTurn:
         async for event in runner.run_async(
             user_id=user_id,
             session_id=session.id,
-            new_message=types.Content(role="user", parts=[types.Part(text=message)]),
+            new_message=types.Content(role="user", parts=chat_parts(message)),
         ):
             if (
                 event.author
