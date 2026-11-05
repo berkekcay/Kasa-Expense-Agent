@@ -173,8 +173,10 @@ async def check_email(tool_context: ToolContext) -> dict:
     else:
         return {
             "status": "not_connected",
-            "how_to_connect": "Settings page, Email: the address and an app password (Gmail: "
-            "Google account > Security > App passwords). Or upload an email saved as .eml on the Inbox page.",
+            "how_to_connect": "Settings page (Turkish UI: Ayarlar), card 'Purchase emails' (Alışveriş "
+            "e-postaları): the email address and an app password (Gmail: Google account > Security > "
+            "App passwords). Or, on the Inbox page (Gelen kutusu), 'Upload email (.eml)' "
+            "(E-posta yükle) with an email saved as a file.",
         }
     if result.error:
         return {"status": "error", "error": result.error}

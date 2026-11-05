@@ -1,4 +1,4 @@
-// Google account connection (owner: track INGEST).
+// Google account connection, and a mailbox over IMAP with an app password (owner: track INGEST).
 import { del, request } from "./client";
 
 export type GoogleStatus = {
@@ -20,9 +20,27 @@ export type SyncResult = {
   error: string | null;
 };
 
+/** A mailbox read over IMAP with an app password: purchase emails without Google Cloud. */
+export type MailStatus = {
+  ready: boolean;
+  connected: boolean;
+  address: string | null;
+  host: string | null;
+  folder: string | null;
+  last_sync_at: string | null;
+  last_error: string | null;
+};
+
+export type MailConnect = { address: string; password: string; host?: string | null; folder?: string };
+
 export const integrationsApi = {
   googleConnectUrl: () => request<{ url: string }>("/integrations/google/connect"),
   googleStatus: () => request<GoogleStatus>("/integrations/google/status"),
   googleSync: () => request<SyncResult>("/integrations/google/sync", { method: "POST" }),
   googleDisconnect: () => request<void>("/integrations/google", del),
+  mailStatus: () => request<MailStatus>("/integrations/mail"),
+  mailConnect: (body: MailConnect) =>
+    request<MailStatus>("/integrations/mail", { method: "POST", body: JSON.stringify(body) }),
+  mailSync: () => request<SyncResult>("/integrations/mail/sync", { method: "POST" }),
+  mailDisconnect: () => request<void>("/integrations/mail", del),
 };
