@@ -104,8 +104,15 @@ ortam açıkken (`.\.venv\Scripts\Activate.ps1`):
 
    ```powershell
    uvicorn app.main:app --port 8000          # backend klasöründe
-   npm run dev                               # frontend klasöründe
+   npm run build                             # frontend klasöründe, kod değiştiyse
+   npm run start                             # frontend klasöründe
    ```
+
+   Frontend demoda **production modunda** çalışıyor, `npm run dev` ile değil: sayfalar daha
+   hızlı açılıyor, JavaScript küçültülmüş ve rastgele adlı birkaç dosya oluyor, kaynak kod
+   (source map) tarayıcıya gitmiyor, köşedeki Next.js geliştirici rozeti de çıkmıyor.
+   `npm run build` bir Next.js güvenlik uyarısıyla durursa aynı komutu tekrar çalıştırın,
+   ikinci seferde bitiyor. Kod değişmediyse build'i tekrar almaya gerek yok.
 
 4. **Sağlık kontrolü.** `Invoke-RestMethod http://localhost:8000/health`: `database` mssql,
    `llm_provider` ollama, `agents_enabled` True, `auth` accounts olmalı.
