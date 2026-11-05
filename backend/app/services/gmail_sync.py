@@ -233,44 +233,52 @@ async def process_messages(
     user_id: str, ids: list[str], result: SyncResult, fetch: Callable[[str], gmail.GmailMessage]
 ) -> bool:
     """Parse and store each message (`fetch` gets one by id; Gmail API or IMAP). Returns
-    False when the run stopped early."""
+    False when the run stopped early.
+
+    The parser runs on settings.email_parse_parallel messages at once (one model call each,
+    the slow part); results are then handled in order, as if they ran one by one."""
     complete = True
     consecutive_failures = 0
     unparsed: list[tuple[gmail.GmailMessage, str]] = []
-    for message_id in ids:
-        if _known(user_id, message_id):
-            result.duplicates += 1
-            continue
-        try:
-            msg = await asyncio.to_thread(fetch, message_id)
-        except DomainError as exc:
-            log.warning("could not fetch a message for %s: %s", user_id, exc)
-            result.failed += 1
-            complete = False
-            continue
-        result.fetched += 1
-        try:
-            outcome = await parse_email(user_id, msg)
-        except Exception as exc:  # noqa: BLE001 - provider down, timeout, bad model output
-            log.warning("email parser failed for %s: %s", user_id, type(exc).__name__)
-            unparsed.append((msg, type(exc).__name__))
-            consecutive_failures += 1
-            if consecutive_failures >= _MAX_CONSECUTIVE_PARSER_FAILURES:
-                result.failed += len(unparsed)
-                return False  # looks like an outage: retry all of these next time
-            continue
-        consecutive_failures = 0
-        # A single failure followed by a success was about that message: keep it as failed
-        # so the user can fill it in by hand.
-        for bad, reason in unparsed:
-            _store(
-                user_id,
-                bad,
-                ParseOutcome("failed", error=f"could not be read automatically ({reason})"),
-                result,
-            )
-        unparsed.clear()
-        _store(user_id, msg, outcome, result)
+    width = max(1, get_settings().email_parse_parallel)
+    pending = list(ids)
+    while pending:
+        window: list[gmail.GmailMessage] = []
+        while pending and len(window) < width:
+            message_id = pending.pop(0)
+            if _known(user_id, message_id):
+                result.duplicates += 1
+                continue
+            try:
+                window.append(await asyncio.to_thread(fetch, message_id))
+            except DomainError as exc:
+                log.warning("could not fetch a message for %s: %s", user_id, exc)
+                result.failed += 1
+                complete = False
+                continue
+            result.fetched += 1
+        outcomes = await asyncio.gather(*(parse_email(user_id, m) for m in window), return_exceptions=True)
+        for msg, outcome in zip(window, outcomes, strict=True):
+            if isinstance(outcome, BaseException):  # provider down, timeout, bad model output
+                log.warning("email parser failed for %s: %s", user_id, type(outcome).__name__)
+                unparsed.append((msg, type(outcome).__name__))
+                consecutive_failures += 1
+                if consecutive_failures >= _MAX_CONSECUTIVE_PARSER_FAILURES:
+                    result.failed += len(unparsed)
+                    return False  # looks like an outage: retry all of these next time
+                continue
+            consecutive_failures = 0
+            # A single failure followed by a success was about that message: keep it as
+            # failed so the user can fill it in by hand.
+            for bad, reason in unparsed:
+                _store(
+                    user_id,
+                    bad,
+                    ParseOutcome("failed", error=f"could not be read automatically ({reason})"),
+                    result,
+                )
+            unparsed.clear()
+            _store(user_id, msg, outcome, result)
     if unparsed:  # the last message failed alone: retry it next run
         result.failed += len(unparsed)
         complete = False

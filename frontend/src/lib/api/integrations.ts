@@ -31,6 +31,8 @@ export type MailStatus = {
   last_error: string | null;
 };
 
+export type MailAutoSync = { ran: boolean; result: SyncResult | null };
+
 export type MailConnect = { address: string; password: string; host?: string | null; folder?: string };
 
 export const integrationsApi = {
@@ -42,5 +44,7 @@ export const integrationsApi = {
   mailConnect: (body: MailConnect) =>
     request<MailStatus>("/integrations/mail", { method: "POST", body: JSON.stringify(body) }),
   mailSync: () => request<SyncResult>("/integrations/mail/sync", { method: "POST" }),
+  /** Check the mailbox if it is due (the server allows one check every few minutes). */
+  mailAutoSync: () => request<MailAutoSync>("/integrations/mail/auto-sync", { method: "POST" }),
   mailDisconnect: () => request<void>("/integrations/mail", del),
 };

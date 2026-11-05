@@ -323,3 +323,26 @@ def test_check_email_tool(mailbox, parser):
     mailbox.add(ORDER)
     result = asyncio.run(inbox_tools.check_email(context))
     assert result["status"] == "ok" and result["new_items_to_review"] == 1 and result["pending_items"] == 1
+
+
+# --- the check when the app opens ------------------------------------------------------------
+
+
+def test_auto_sync_runs_only_when_due(client, mailbox, parser, monkeypatch):
+    user = "mail-auto"
+    assert client.post("/integrations/mail/auto-sync", headers=as_user(user)).json() == {
+        "ran": False,
+        "result": None,
+    }
+    connect(user)
+    mailbox.add(ORDER)
+    first = client.post("/integrations/mail/auto-sync", headers=as_user(user)).json()
+    assert first["ran"] and first["result"]["created"] == 1
+
+    mailbox.add(eml("Fatura: Getir siparişi", "GTR-55120 toplam", message_id="getir-2@getir.com"))
+    again = client.post("/integrations/mail/auto-sync", headers=as_user(user)).json()
+    assert again == {"ran": False, "result": None}  # checked a moment ago
+
+    monkeypatch.setattr(get_settings(), "mail_auto_sync_minutes", 0)
+    later = client.post("/integrations/mail/auto-sync", headers=as_user(user)).json()
+    assert later["ran"] and later["result"]["created"] == 1

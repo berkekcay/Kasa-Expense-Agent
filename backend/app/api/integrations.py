@@ -23,6 +23,7 @@ from app.schemas.integrations import (
     GoogleConnectOut,
     GoogleExchangeIn,
     GoogleStatusOut,
+    MailAutoSyncOut,
     MailConnectIn,
     MailStatusOut,
     SyncResultOut,
@@ -184,6 +185,13 @@ def mail_connect(body: MailConnectIn, db: DB, user_id: CurrentUser) -> MailStatu
 async def mail_sync_now(user_id: CurrentUser) -> SyncResultOut:
     """Manual "check my email now": new purchase emails become inbox items to approve."""
     return sync_out(await mail_sync.sync_user(user_id))
+
+
+@mail_router.post("/auto-sync", response_model=MailAutoSyncOut)
+async def mail_auto_sync(user_id: CurrentUser) -> MailAutoSyncOut:
+    """Called by the app when the user opens it: checks the mailbox if it is due."""
+    result = await mail_sync.sync_if_due(user_id)
+    return MailAutoSyncOut(ran=result is not None, result=sync_out(result) if result else None)
 
 
 @mail_router.delete("", status_code=204)

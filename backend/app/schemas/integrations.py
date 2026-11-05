@@ -49,6 +49,11 @@ class MailStatusOut(BaseModel):
     last_error: str | None = None
 
 
+class MailAutoSyncOut(BaseModel):
+    ran: bool  # False: no mailbox, or it was checked a few minutes ago
+    result: SyncResultOut | None = None
+
+
 class MailConnectIn(BaseModel):
     address: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=200)  # an app password, not the main one
