@@ -108,6 +108,23 @@ def test_sql_server_ddl_renders_offline(monkeypatch):
     assert BASELINE_REVISION in sql
 
 
+def test_sql_server_policy_drops_name_only_the_table(monkeypatch):
+    """SQL Server rejects `DROP BLOCK PREDICATE <function> ON ...`: a DROP names only the
+    table and operation. The full downgrade also drops default constraints before columns."""
+    monkeypatch.setenv(
+        "MIGRATION_DATABASE_URL", "mssql+pyodbc://u:p@offline/kasa?driver=ODBC+Driver+18+for+SQL+Server"
+    )
+    buffer = io.StringIO()
+    cfg = alembic_config()
+    cfg.output_buffer = buffer
+    command.upgrade(cfg, "head", sql=True)
+    command.downgrade(cfg, "head:base", sql=True)
+    sql = buffer.getvalue()
+    assert "DROP BLOCK PREDICATE ON dbo.house_members AFTER INSERT" in sql
+    assert not re.search(r"DROP\s+(BLOCK|FILTER)\s+PREDICATE\s+security\.", sql)
+    assert "sys.default_constraints WHERE parent_object_id = OBJECT_ID(N'dbo.users')" in sql
+
+
 def test_sql_server_ddl_fits_azure_sql_database(monkeypatch):
     """Azure SQL Database is one database without server-level access: no USE, no
     cross-database names, no logins, filegroups or server settings in the migrations."""

@@ -14,7 +14,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import Engine, create_engine, event, text
+from sqlalchemy import Engine, create_engine, event, make_url, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
@@ -76,6 +76,18 @@ def install_connect_retry(engine: Engine):
         return connect_with_retry(dialect, cargs, cparams)
 
     return _do_connect
+
+
+def describe_database(url: str) -> str:
+    """The database URL without secrets, for logs and console output. Hides the password of a
+    normal URL and everything but the server and database of an ODBC connection string."""
+    parsed = make_url(url)
+    odbc = parsed.query.get("odbc_connect")
+    if not odbc:
+        return parsed.render_as_string(hide_password=True)
+    pairs = dict(part.split("=", 1) for part in str(odbc).split(";") if "=" in part)
+    keep = {k.upper(): v for k, v in pairs.items() if k.upper() in ("SERVER", "DATABASE")}
+    return f"{parsed.drivername} server={keep.get('SERVER', '?')} database={keep.get('DATABASE', '?')}"
 
 
 def get_engine() -> Engine:
