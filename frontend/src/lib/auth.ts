@@ -207,7 +207,8 @@ export async function signOutSession(): Promise<void> {
   if (session) {
     try {
       const { API_URL } = await import("@/lib/api/client");
-      await fetch(`${API_URL}/auth/logout`, {
+      const { secureFetch } = await import("@/lib/api/secure");
+      await secureFetch(API_URL, "/auth/logout", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.token}` },
       });

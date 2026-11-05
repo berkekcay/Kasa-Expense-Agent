@@ -14,7 +14,7 @@ import datetime as dt
 import io
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -59,7 +59,7 @@ def save_from_message(db: Session, user_id: str, message_id: int, title: str | N
 def list_reports(db: Session, user_id: str, *, pinned_only: bool = False) -> list[SavedReport]:
     stmt = select(SavedReport).where(SavedReport.user_id == user_id)
     if pinned_only:
-        stmt = stmt.where(SavedReport.pinned.is_(True))
+        stmt = stmt.where(SavedReport.pinned == true())  # "IS 1" is not valid on SQL Server
     return list(db.scalars(stmt.order_by(SavedReport.pinned.desc(), SavedReport.created_at.desc())))
 
 

@@ -12,6 +12,7 @@ def test_health(client):
         "auth": "dev",
         "google_login": False,
         "database": "sqlite",
+        "secure_channel": "off",
     }
 
 

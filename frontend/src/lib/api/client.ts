@@ -2,6 +2,7 @@
 // Money arrives as decimal strings ("123.45") plus exact *_minor integers; never use floats for sums.
 
 import { authHeader, onUnauthorized } from "@/lib/auth";
+import { secureFetch } from "./secure";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -58,7 +59,7 @@ async function send(path: string, init: RequestInit): Promise<Response> {
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, { ...init, headers });
+    res = await secureFetch(API_URL, path, { ...init, headers });
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new ApiError(0, `Cannot reach the API at ${API_URL}. Is the backend running?`);
@@ -108,6 +109,9 @@ export type Health = {
   auth: AuthMode;
   /** True when the server can do "Continue with Google". */
   google_login?: boolean;
+  database?: string;
+  /** The encrypted API channel: off, optional or required (lib/api/secure.ts). */
+  secure_channel?: "off" | "optional" | "required";
 };
 export const health = () => request<Health>("/health");
 

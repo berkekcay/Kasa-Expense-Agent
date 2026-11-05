@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
     environment: "jsdom",
+    env: { NEXT_PUBLIC_SECURE_CHANNEL: "off" }, // lib/api/secure.test.ts turns it on itself
     setupFiles: ["./vitest.setup.ts"],
     clearMocks: true,
     restoreMocks: true,

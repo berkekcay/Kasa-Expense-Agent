@@ -668,6 +668,12 @@ EXEC sp_set_session_context @key = N'user_id', @value = N'demo-ali';
 SELECT COUNT(*) FROM expenses;                                  -- 6, sadece ev faturaları
 ```
 
+**İsteğe bağlı, şifreli ağ trafiği (30 saniye):** tarayıcıda F12, **Network** sekmesi, sonra
+Dashboard'u yenileyin. Bütün çağrılar `secure/tunnel` adlı tek bir adrese gidiyor, içerikleri
+okunmuyor. **Söyle (İngilizce):** "On top of HTTPS, every call is encrypted again with a key
+the browser and the server agree on with ECDH. The network tab, proxies and logs see one opaque
+endpoint: no URLs, no session token, no data. A captured call cannot be replayed."
+
 **Söyle (İngilizce):** "Same table, same query. Without a user the database returns nothing,
 even to me as the admin. Deniz sees her own expenses and the house bills, Ali only the house
 bills. This filter lives in SQL Server, not in our Python code."
@@ -818,7 +824,15 @@ read-only, never marks mail as read, only talks to port 993 on public servers, a
 password encrypted. On Gmail it uses Gmail's own search for purchase emails; elsewhere only
 order and invoice subjects reach the model. A saved .eml file works the same way.
 
-**17. What if the model gets stuck in a loop?**
+**17. Why encrypt again on top of HTTPS?**
+HTTPS protects the wire. Our channel also keeps URLs, the session token and the data out of the
+browser's network tab, proxy and server access logs and TLS-inspecting middleboxes, and it stops
+replays. The browser and the server agree on a fresh key with ECDH P-256, then every call is
+AES-256-GCM through one endpoint, large answers gzipped first, the chat streamed frame by frame.
+It does not hide anything from the user's own browser, since the page holds the key, so it is
+defence in depth, not a replacement for HTTPS.
+
+**18. What if the model gets stuck in a loop?**
 Every agent runs with a loop guard. If it calls the same tool with the same arguments a fourth
 time in one answer, or a tool fails three times, the tool is not run and the model is told to
 use what it has or explain the problem. A tool that crashes becomes an error message to the
@@ -853,6 +867,7 @@ bir story.
 | "Checking your session" yazısında kalıyor | Backend çalışmıyor. 6. adımdaki komutla başlatın. |
 | Dashboard boş | Başka bir hesapla girilmiş. Çıkış yapıp `demo@kasa.demo` ile girin. |
 | `npm run dev` bir Next.js güvenlik uyarısıyla kapanıyor | Tekrar çalıştırın. İkinci seferde devam ediyor. |
+| Bir şey garip ve şifreli kanaldan şüpheleniyorsanız | `backend/.env` içinde `API_ENCRYPTION=off` yapıp backend'i yeniden başlatın; uygulama düz çağrılara kendiliğinden döner. |
 | Sohbet cevabı bir dakikadan uzun sürüyor | Ollama sunucusu meşgul. `python -m scripts.pick_ollama`, sonra backend'i yeniden başlatın. |
 | `/health` içinde `database` sqlite görünüyor | `.env` SQL Server'ı göstermiyor. `python -m scripts.local_sqlserver` çalıştırıp backend'i yeniden başlatın. |
 | Sohbet eski bir konuşmada kalıyor | Sohbet kartının üstündeki ya da soldaki **Conversations** listesindeki **New conversation** butonuna tıklayın. |
