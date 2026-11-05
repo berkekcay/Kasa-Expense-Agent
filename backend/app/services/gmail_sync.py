@@ -24,6 +24,7 @@ import asyncio
 import datetime as dt
 import logging
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from google.oauth2.credentials import Credentials
@@ -214,7 +215,7 @@ async def sync_user(user_id: str, *, max_messages: int | None = None) -> SyncRes
             result.error = str(exc)
             return result
 
-        complete = await _process(user_id, creds, ids, result)
+        complete = await process_messages(user_id, ids, result, lambda mid: gmail.get_message(creds, mid))
         if complete and new_history:
             with session_for(user_id) as db:
                 account = google_oauth.get_account(db, user_id)
@@ -228,8 +229,11 @@ async def sync_user(user_id: str, *, max_messages: int | None = None) -> SyncRes
     return result
 
 
-async def _process(user_id: str, creds: Credentials, ids: list[str], result: SyncResult) -> bool:
-    """Parse and store each message. Returns False when the run stopped early."""
+async def process_messages(
+    user_id: str, ids: list[str], result: SyncResult, fetch: Callable[[str], gmail.GmailMessage]
+) -> bool:
+    """Parse and store each message (`fetch` gets one by id; Gmail API or IMAP). Returns
+    False when the run stopped early."""
     complete = True
     consecutive_failures = 0
     unparsed: list[tuple[gmail.GmailMessage, str]] = []
@@ -238,9 +242,9 @@ async def _process(user_id: str, creds: Credentials, ids: list[str], result: Syn
             result.duplicates += 1
             continue
         try:
-            msg = await asyncio.to_thread(gmail.get_message, creds, message_id)
+            msg = await asyncio.to_thread(fetch, message_id)
         except DomainError as exc:
-            log.warning("could not fetch Gmail message for %s: %s", user_id, exc)
+            log.warning("could not fetch a message for %s: %s", user_id, exc)
             result.failed += 1
             complete = False
             continue

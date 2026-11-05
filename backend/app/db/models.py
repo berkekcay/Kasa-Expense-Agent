@@ -337,6 +337,27 @@ class GoogleAccount(Base):
     )
 
 
+class MailAccount(Base):
+    """A mailbox read over IMAP with an app password (Gmail, Outlook, Yandex...), the way to
+    bring purchase emails in without a Google Cloud OAuth client. Read-only: messages are
+    fetched with BODY.PEEK so nothing is marked as read. The password is stored encrypted
+    with Fernet (`services.crypto`), never in plain text."""
+
+    __tablename__ = "mail_accounts"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    host: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer)
+    username: Mapped[str] = mapped_column(Unicode(320))
+    password_enc: Mapped[str] = mapped_column(Text)
+    folder: Mapped[str] = mapped_column(Unicode(200), default="INBOX")
+    uid_validity: Mapped[str | None] = mapped_column(String(40))
+    last_uid: Mapped[int | None] = mapped_column(BigInteger)
+    last_sync_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    last_error: Mapped[str | None] = mapped_column(Unicode(500))
+    created_at: Mapped[dt.datetime] = _now()
+
+
 class Subscription(Base):
     """A recurring charge detected from the user's expenses (Netflix, Spotify, gym...)."""
 

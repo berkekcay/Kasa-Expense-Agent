@@ -153,6 +153,44 @@ def gmail_connection_status(tool_context: ToolContext) -> dict:
         }
 
 
+CHECK_EMAIL_MAX = 5  # each email is one parser call; keep a chat turn short
+
+
+async def check_email(tool_context: ToolContext) -> dict:
+    """Look for new purchase emails now (the connected IMAP mailbox, else Gmail) and put the
+    ones found in the review inbox. Nothing is approved or saved as an expense here."""
+    from app.integrations import google_oauth
+    from app.services import gmail_sync, mail_sync
+
+    with tool_db(tool_context) as (db, user_id):
+        imap = mail_sync.get_account(db, user_id) is not None
+        google = google_oauth.get_account(db, user_id)
+        gmail = google is not None and google_oauth.has_scope(google, google_oauth.GMAIL_SCOPE)
+    if imap:
+        result = await mail_sync.sync_user(user_id, max_messages=CHECK_EMAIL_MAX)
+    elif gmail:
+        result = await gmail_sync.sync_user(user_id, max_messages=CHECK_EMAIL_MAX)
+    else:
+        return {
+            "status": "not_connected",
+            "how_to_connect": "Settings page, Email: the address and an app password (Gmail: "
+            "Google account > Security > App passwords). Or upload an email saved as .eml on the Inbox page.",
+        }
+    if result.error:
+        return {"status": "error", "error": result.error}
+    with tool_db(tool_context) as (db, user_id):
+        pending = inbox_service.count_pending(db, user_id)
+    return {
+        "status": "ok",
+        "emails_read": result.fetched,
+        "new_items_to_review": result.created,
+        "not_purchases": result.ignored,
+        "already_in_inbox": result.duplicates,
+        "unreadable": result.failed,
+        "pending_items": pending,
+    }
+
+
 # --- parser tools (email-parse / statement-parse runners) -----------------------------------
 
 

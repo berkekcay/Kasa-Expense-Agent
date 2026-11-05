@@ -1,4 +1,5 @@
-"""Google account connection for Gmail + Calendar (owner: track INGEST).
+"""Google account connection for Gmail + Calendar, and an IMAP mailbox with an app password
+for people without a Google OAuth client (owner: track INGEST).
 
 The callback is hit by the browser coming back from Google, so it carries no Kasa auth
 header; the user is identified by the signed `state` value instead. A frontend-hosted
@@ -18,14 +19,22 @@ from app.auth import DB, CurrentUser
 from app.config import get_settings
 from app.db.session import session_for
 from app.integrations import google_oauth
-from app.schemas.integrations import GoogleConnectOut, GoogleExchangeIn, GoogleStatusOut, SyncResultOut
-from app.services import gmail_sync
+from app.schemas.integrations import (
+    GoogleConnectOut,
+    GoogleExchangeIn,
+    GoogleStatusOut,
+    MailConnectIn,
+    MailStatusOut,
+    SyncResultOut,
+)
+from app.services import gmail_sync, mail_sync
 from app.services.errors import DomainError, Forbidden, InvalidInput, NotConfigured
 from app.services.expenses import ensure_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/integrations/google", tags=["integrations"])
+mail_router = APIRouter(prefix="/integrations/mail", tags=["integrations"])
 
 
 def _status(db, user_id: str) -> GoogleStatusOut:
@@ -115,7 +124,10 @@ def status(db: DB, user_id: CurrentUser) -> GoogleStatusOut:
 @router.post("/sync", response_model=SyncResultOut)
 async def sync_now(user_id: CurrentUser) -> SyncResultOut:
     """Manual "check my email now" button."""
-    result = await gmail_sync.sync_user(user_id)
+    return sync_out(await gmail_sync.sync_user(user_id))
+
+
+def sync_out(result: gmail_sync.SyncResult) -> SyncResultOut:
     return SyncResultOut(
         fetched=result.fetched,
         created=result.created,
@@ -129,3 +141,51 @@ async def sync_now(user_id: CurrentUser) -> SyncResultOut:
 @router.delete("", status_code=204)
 def disconnect(db: DB, user_id: CurrentUser) -> None:
     google_oauth.disconnect(db, user_id)
+
+
+# --- IMAP mailbox ----------------------------------------------------------------------------
+
+
+def _mail_status(db, user_id: str) -> MailStatusOut:
+    from app.agents import runtime
+
+    try:
+        runtime.ensure_available()
+        model_ready = True
+    except runtime.AgentsUnavailable:
+        model_ready = False
+    account = mail_sync.get_account(db, user_id)
+    return MailStatusOut(
+        ready=model_ready and bool(get_settings().token_encryption_key),
+        connected=account is not None,
+        address=account.username if account else None,
+        host=account.host if account else None,
+        folder=account.folder if account else None,
+        last_sync_at=account.last_sync_at if account else None,
+        last_error=account.last_error if account else None,
+    )
+
+
+@mail_router.get("", response_model=MailStatusOut)
+def mail_status(db: DB, user_id: CurrentUser) -> MailStatusOut:
+    return _mail_status(db, user_id)
+
+
+@mail_router.post("", response_model=MailStatusOut)
+def mail_connect(body: MailConnectIn, db: DB, user_id: CurrentUser) -> MailStatusOut:
+    """Check the address and app password against the mail server, then keep them encrypted."""
+    mail_sync.connect(
+        db, user_id, username=body.address, password=body.password, host=body.host, folder=body.folder
+    )
+    return _mail_status(db, user_id)
+
+
+@mail_router.post("/sync", response_model=SyncResultOut)
+async def mail_sync_now(user_id: CurrentUser) -> SyncResultOut:
+    """Manual "check my email now": new purchase emails become inbox items to approve."""
+    return sync_out(await mail_sync.sync_user(user_id))
+
+
+@mail_router.delete("", status_code=204)
+def mail_disconnect(db: DB, user_id: CurrentUser) -> None:
+    mail_sync.disconnect(db, user_id)

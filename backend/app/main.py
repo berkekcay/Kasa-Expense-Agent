@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     ):
         app.include_router(module.router)
     app.include_router(agents.files_router)  # chat files and imports, no LLM needed
+    app.include_router(integrations.mail_router)  # IMAP mailbox with an app password
     return app
 
 

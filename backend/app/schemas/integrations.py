@@ -35,3 +35,22 @@ class SyncResultOut(BaseModel):
     duplicates: int
     failed: int
     error: str | None = None
+
+
+class MailStatusOut(BaseModel):
+    """The IMAP mailbox (app password), the Google-free way to bring purchase emails in."""
+
+    ready: bool  # the server can store passwords (TOKEN_ENCRYPTION_KEY) and a model is set
+    connected: bool
+    address: str | None = None
+    host: str | None = None
+    folder: str | None = None
+    last_sync_at: dt.datetime | None = None  # UTC
+    last_error: str | None = None
+
+
+class MailConnectIn(BaseModel):
+    address: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=200)  # an app password, not the main one
+    host: str | None = Field(default=None, max_length=255)  # empty: guessed from the address
+    folder: str = Field(default="INBOX", max_length=200)

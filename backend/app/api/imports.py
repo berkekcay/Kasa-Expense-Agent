@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
+from app.api.agents import require_agents
+from app.api.integrations import sync_out
 from app.auth import DB, CurrentUser
 from app.config import get_settings
 from app.schemas.imports import ImportResultOut
-from app.services import statements
+from app.schemas.integrations import SyncResultOut
+from app.services import mail_sync, statements
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
@@ -45,3 +48,19 @@ async def upload_statement(file: UploadFile, db: DB, user_id: CurrentUser) -> Im
         skipped=result.skipped,
         errors=result.errors,
     )
+
+
+@router.post("/email", response_model=SyncResultOut, status_code=201, dependencies=[Depends(require_agents)])
+async def upload_email(file: UploadFile, user_id: CurrentUser) -> SyncResultOut:
+    """One email saved as an .eml file (in Gmail: More > Download message) -> an inbox item to
+    review, read by the same parser as synced mail. 413 above settings.mail_max_upload_bytes,
+    415 for other files, 503 while no LLM provider is configured."""
+    filename = (file.filename or "").lower()
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if not filename.endswith(".eml") and content_type != "message/rfc822":
+        raise HTTPException(status_code=415, detail="upload an email saved as an .eml file")
+    limit = get_settings().mail_max_upload_bytes
+    data = await file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(status_code=413, detail=f"file is larger than {limit // 1_000_000} MB")
+    return sync_out(await mail_sync.import_file(user_id, data))
