@@ -31,7 +31,7 @@ from app.api import (
     users,
 )
 from app.config import get_settings
-from app.db.session import init_db
+from app.db.session import get_engine, init_db
 from app.services.errors import DomainError
 
 log = logging.getLogger(__name__)
@@ -72,6 +72,7 @@ def create_app() -> FastAPI:
             "llm_provider": settings.llm_provider,
             "auth": "firebase" if settings.firebase_project_id else settings.auth_mode,
             "google_login": settings.google_login_enabled,
+            "database": get_engine().dialect.name,  # sqlite or mssql
         }
 
     for module in (
