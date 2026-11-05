@@ -154,9 +154,13 @@ def reset(db: Session, people: People) -> None:
         for row in db.scalars(select(model).where(model.user_id.in_(ids))):
             db.delete(row)
     if house_ids:
-        for row in db.scalars(select(HouseMember).where(HouseMember.house_id.in_(house_ids))):
+        # On SQL Server, row-level security shows a house's members only to its members, so
+        # the acting user's own membership goes last, each delete flushed in this order.
+        acting = db.info.get("user_id")
+        members = db.scalars(select(HouseMember).where(HouseMember.house_id.in_(house_ids))).all()
+        for row in sorted(members, key=lambda m: m.user_id == acting):
             db.delete(row)
-        db.flush()
+            db.flush()
         for row in db.scalars(select(House).where(House.id.in_(house_ids))):
             db.delete(row)
     db.commit()
