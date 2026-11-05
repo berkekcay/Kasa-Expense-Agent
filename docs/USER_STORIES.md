@@ -103,6 +103,7 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-GUARD-06 | Kodda ve loglarda gizli bilgi yok | 2 | Bitti | Berke | - |
 | US-GUARD-07 | Kullanıcı başına sohbet sınırı | 4 | Başlanmadı | - | Mustafa (#9) |
 | US-GUARD-08 | Hesabımı ve verilerimi sil | 4 | Başlanmadı | - | Mustafa, Zehra (#13) |
+| US-GUARD-09 | Uygulamanın ağ trafiği şifreli tünelden geçer | 4 | Bitti | Berke | - |
 | US-ACCOUNT-01 | Kayıt ol, e-posta ya da Google ile giriş yap | 4 | Kısmen | Berke | Mustafa: Google OAuth client'ı |
 | US-ACCOUNT-02 | Dev modunda herhangi bir kullanıcı ol | 1 | Bitti | Berke | - |
 | US-ACCOUNT-03 | Görünen adımı değiştir | 4 | Bitti | Berke | - |
@@ -801,6 +802,29 @@ verilerimin kontrolü bende kalır (KVKK).
   ele alınır.
 - Bugün yalnızca Google bağlantısı kaldırılabiliyor (`DELETE /integrations/google`).
 
+### US-GUARD-09 Uygulamanın ağ trafiği şifreli tünelden geçer
+
+Product owner olarak, web uygulamasının her çağrısının HTTPS'in üstüne bir de kendi şifremizle
+gitmesini istiyorum, böylece tarayıcının ağ sekmesi, proxy'ler ve erişim logları adresleri,
+oturum anahtarını ve verileri göremez, yakalanan bir çağrı tekrar gönderilemez.
+
+- Sprint 4 · **Bitti** · Sahip: Backend, Frontend · Yapan: Berke
+- Diyelim ki `API_ENCRYPTION=required`. Tarayıcı ilk çağrıda sunucuyla ECDH P-256 anahtar
+  değişimi yapar (HKDF-SHA256, AES-256-GCM). Sonra her çağrı `POST /secure/tunnel` olarak gider:
+  adres, `Authorization` başlığı ve gövde (dosya yüklemeleri dahil) şifreli zarfın içindedir.
+  Cevaplar 1 KB'tan büyükse önce gzip'lenir, sohbetin canlı adımları parça parça şifreli akar.
+- Diyelim ki biri bir çağrıyı yakalayıp tekrar gönderdi. Sıra numarası kullanılmış olduğu için
+  409 alır. Bir cevap başka bir isteğe ait gibi gösterilemez (her parça istek numarasına bağlı).
+- Diyelim ki sunucu yeniden başladı. İlk çağrı 412 alır, tarayıcı yeniden anahtar değişimi yapıp
+  çağrıyı bir kez tekrarlar; kullanıcı bir şey fark etmez.
+- Kanıt: `app/secure_channel.py`, `frontend/src/lib/api/secure.ts`,
+  `tests/test_secure_channel.py` (handshake, JSON, dosya, gzip, akış, tekrar, kurcalama, zorunlu
+  mod), `secure.test.ts` (Python ile aynı anahtar ve şifreli metin). Canlı: 2026-11-05'te SQL
+  Server ve Ollama ile dashboard, grafikli sohbet ve `.eml` yükleme tünelden çalıştı.
+- Sınır: kullanıcının kendi tarayıcısından bir şey gizlemez (anahtar sayfada), HTTPS'in yerine
+  geçmez. Fikir Berke'nin iş yerindeki bir projeden; kod bizim ve oradaki zayıflıklar (cevabın
+  isteğe bağlı olmaması, kanalın yabancılarca kapatılabilmesi) burada yok.
+
 ## Epik: hesaplar
 
 ### US-ACCOUNT-01 Kayıt ol, e-posta ya da Google ile giriş yap
@@ -942,6 +966,7 @@ yolları `backend/tests/` altında.
 | US-GUARD-06 | Bitti | `/integrations/google/*` | `/settings` | `test_ingest_oauth.py`, `test_categories_crypto.py` |
 | US-GUARD-07 | Başlanmadı | `POST /chat`, `POST /receipts` | yok | yok |
 | US-GUARD-08 | Başlanmadı | yok | yok | yok |
+| US-GUARD-09 | Bitti | `POST /secure/handshake`, `POST /secure/tunnel` | hepsi | `test_secure_channel.py`, `secure.test.ts` |
 | US-ACCOUNT-01 | Kısmen | `/auth/register`, `/auth/login`, `/auth/google/*` | `/login`, `/register` | `test_accounts.py`, `test_foundation_api.py` |
 | US-ACCOUNT-02 | Bitti | her endpoint (`X-User-Id`) | sol menü | `test_api.py` |
 | US-ACCOUNT-03 | Bitti | `GET/PATCH /me` | `/settings` | `test_expenses_api.py` |

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     ollama_reasoning_effort: str = "low"
 
     # --- HTTP -------------------------------------------------------------------------------
+    # Encrypted API channel (app/secure_channel.py): off, optional (the web app uses it, plain
+    # calls still work) or required (plain calls are refused except health and callbacks).
+    api_encryption: Literal["off", "optional", "required"] = "off"
     # Comma-separated list in the env var, e.g. "http://localhost:3000,https://kasa.web.app"
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
     # Where the web UI lives (OAuth callbacks redirect back here).

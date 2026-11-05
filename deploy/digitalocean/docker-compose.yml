@@ -92,6 +92,7 @@ services:
       AUTO_MIGRATE: "false"
       AUTH_MODE: accounts
       AUTH_SECRET: ${AUTH_SECRET}
+      API_ENCRYPTION: ${API_ENCRYPTION:-required}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
       LLM_PROVIDER: gemini
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}

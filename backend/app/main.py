@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app import secure_channel
 from app.api import (
     agents,
     auth,
@@ -32,6 +33,7 @@ from app.api import (
 )
 from app.config import get_settings
 from app.db.session import get_engine, init_db
+from app.secure_channel import SecureTunnelMiddleware
 from app.services.errors import DomainError
 
 log = logging.getLogger(__name__)
@@ -46,12 +48,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="Kasa API", version="0.2.0", lifespan=lifespan)
+    # Added first so CORS (added next) wraps it: the tunnel's answers need the CORS headers too.
+    app.add_middleware(SecureTunnelMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["X-Total-Count"],  # GET /expenses paging
+        # X-Total-Count: GET /expenses paging. x-kasa-channel: "reset" asks for a new handshake.
+        expose_headers=["X-Total-Count", "x-kasa-channel"],
     )
 
     @app.exception_handler(DomainError)
@@ -73,6 +78,7 @@ def create_app() -> FastAPI:
             "auth": "firebase" if settings.firebase_project_id else settings.auth_mode,
             "google_login": settings.google_login_enabled,
             "database": get_engine().dialect.name,  # sqlite or mssql
+            "secure_channel": settings.api_encryption,
         }
 
     for module in (
@@ -94,6 +100,7 @@ def create_app() -> FastAPI:
     ):
         app.include_router(module.router)
     app.include_router(agents.files_router)  # chat files and imports, no LLM needed
+    app.include_router(secure_channel.router)  # handshake of the encrypted API channel
     app.include_router(integrations.mail_router)  # IMAP mailbox with an app password
     return app
 

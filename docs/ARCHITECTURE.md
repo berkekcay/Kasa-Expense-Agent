@@ -263,6 +263,16 @@ bedelini yazıyor.
   kullan ya da kullanıcıya açıkla" notu dönüyor. Beklenmeyen bir araç hatası da cevabı
   düşürmüyor, modele hata sonucu olarak gidiyor. Fikir Berke'nin iş yerindeki bir ajan
   sisteminden; kod bizim.
+- **ADR-16 HTTPS'in üstüne şifreli API kanalı.** Tarayıcı ilk çağrıda ECDH P-256 ile sunucuyla
+  bir anahtar üretiyor (HKDF-SHA256, AES-256-GCM, iki taraf da geçici anahtar kullanıyor).
+  Sonra bütün çağrılar tek bir `POST /secure/tunnel` adresine şifreli zarf olarak gidiyor:
+  gerçek adres, `Authorization` ve gövde içeride. Bir ASGI middleware'i (`app/secure_channel.py`)
+  zarfı açıp isteği normal route'lara veriyor, cevabı çerçeve çerçeve şifreliyor (büyükse önce
+  gzip; sohbet akışı parça parça). Sıra numarası tekrar göndermeyi, istek numarasına bağlı
+  cevap şifresi cevap takasını engelliyor. Ne kazandırıyor: ağ sekmesi, proxy ve erişim logları
+  içeriği göremiyor. Ne kazandırmıyor: kullanıcının kendi tarayıcısına karşı gizlilik, HTTPS'in
+  yerine geçmek. Kanallar bellekte; sunucu yeniden başlarsa 412 ile yeniden anahtar alınıyor.
+  `API_ENCRYPTION=off` ile tamamen kapanıyor.
 
 ### Güvenlik modeli
 
