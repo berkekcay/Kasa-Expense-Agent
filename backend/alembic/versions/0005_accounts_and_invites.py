@@ -60,6 +60,8 @@ NEW_PREDICATES = [
     ("security.fn_house_member_or_system(house_id)", "house_invites"),
 ]
 MEMBER_BLOCK = "BLOCK PREDICATE security.fn_member_write(house_id, user_id) ON dbo.house_members AFTER INSERT"
+# DROP names only the table and operation; SQL Server rejects the function there.
+MEMBER_BLOCK_DROP = "BLOCK PREDICATE ON dbo.house_members AFTER INSERT"
 
 
 def _is_mssql() -> bool:
@@ -72,6 +74,17 @@ def _now(name: str) -> sa.Column:
 
 def _alter_policy(lines: list[str]) -> None:
     op.execute("ALTER SECURITY POLICY security.kasa_policy\n    " + ",\n    ".join(lines))
+
+
+def _drop_default(table: str, column: str) -> None:
+    """SQL Server ties an auto-named default constraint to a column with a server default and
+    refuses to drop the column while it exists. Drop it first, if there is one."""
+    op.execute(
+        f"DECLARE @sql NVARCHAR(400) = (SELECT N'ALTER TABLE dbo.{table} DROP CONSTRAINT ' + QUOTENAME(name) "
+        f"FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID(N'dbo.{table}') "
+        f"AND COL_NAME(parent_object_id, parent_column_id) = N'{column}'); "
+        "IF @sql IS NOT NULL EXEC sp_executesql @sql"
+    )
 
 
 def upgrade() -> None:
@@ -146,7 +159,7 @@ def upgrade() -> None:
 
     if _is_mssql():
         op.execute(HOUSE_MEMBER_OR_SYSTEM)
-        _alter_policy([f"DROP {MEMBER_BLOCK}"])
+        _alter_policy([f"DROP {MEMBER_BLOCK_DROP}"])
         op.execute(MEMBER_WRITE.format(system=f"OR {_SYSTEM}"))
         lines = [f"ADD {MEMBER_BLOCK}"]
         for fn, table in NEW_PREDICATES:
@@ -160,7 +173,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     if _is_mssql():
-        lines = [f"DROP {MEMBER_BLOCK}"]
+        lines = [f"DROP {MEMBER_BLOCK_DROP}"]
         for _fn, table in NEW_PREDICATES:
             lines += [
                 f"DROP FILTER PREDICATE ON dbo.{table}",
@@ -180,15 +193,19 @@ def downgrade() -> None:
     op.drop_table("auth_sessions")
     for column in ("google_sub", "login_email"):
         op.drop_index(f"uq_users_{column}", table_name="users")
+    columns = (
+        "locked_until",
+        "failed_logins",
+        "totp_last_step",
+        "totp_enabled_at",
+        "totp_secret_enc",
+        "google_sub",
+        "password_hash",
+        "login_email",
+    )
+    if _is_mssql():
+        for column in columns:
+            _drop_default("users", column)
     with op.batch_alter_table("users") as batch:
-        for column in (
-            "locked_until",
-            "failed_logins",
-            "totp_last_step",
-            "totp_enabled_at",
-            "totp_secret_enc",
-            "google_sub",
-            "password_hash",
-            "login_email",
-        ):
+        for column in columns:
             batch.drop_column(column)

@@ -93,12 +93,12 @@ kime ait olduğunu ve varsa issue numarasını gösteriyor.
 | US-INBOX-01 | CSV banka ekstresi yükle | 3 | Bitti | Berke | - |
 | US-INBOX-02 | PDF ekstre yükle | 3 | Kısmen | Berke | Yusuf: canlı bir çalıştırma kaydetmek |
 | US-INBOX-03 | Gelen kutusundaki kalemleri incele ve onayla | 3 | Bitti | Berke | - |
-| US-INBOX-04 | Alışverişleri Gmail'den al | 3 | Kısmen | Berke | Mustafa: gerçek Gmail OAuth |
+| US-INBOX-04 | Alışverişleri e-postadan al | 3 | Kısmen | Berke | Mustafa: Gmail API için gerçek OAuth (IMAP ve .eml çalışıyor) |
 | US-INBOX-05 | Gelen kutusunu sohbette sor | 3 | Kısmen | Berke | Yusuf: Gemini'de doğrulamak |
 | US-GUARD-01 | Yalnızca kendi verimi görürüm | 1 | Bitti | Berke | - |
 | US-GUARD-02 | Sohbet yalnızca benim satırlarımı okur | 1 | Bitti | Berke | - |
 | US-GUARD-03 | Fiş ve e-postadaki metin veridir, emir değil | 3 | Bitti | Berke | - |
-| US-GUARD-04 | Kullanıcı ayrımını veritabanı da uygular | 2 | Kısmen | Berke | Mustafa (#12): Azure SQL kurulumu ve RLS testi |
+| US-GUARD-04 | Kullanıcı ayrımını veritabanı da uygular | 2 | Bitti | Berke | - |
 | US-GUARD-05 | Para hep kuruşu kuruşuna doğru | 1 | Bitti | Berke | - |
 | US-GUARD-06 | Kodda ve loglarda gizli bilgi yok | 2 | Bitti | Berke | - |
 | US-GUARD-07 | Kullanıcı başına sohbet sınırı | 4 | Başlanmadı | - | Mustafa (#9) |
@@ -643,7 +643,7 @@ olarak onaylamak veya reddetmek istiyorum, böylece yalnızca gerçek harcamalar
   `POST /inbox/{id}/reject`, `POST /inbox/approve`, `POST /inbox/reject`, sayfa `/inbox`,
   `tests/test_ingest_inbox.py`.
 
-### US-INBOX-04 Alışverişleri Gmail'den al
+### US-INBOX-04 Alışverişleri e-postadan al
 
 Elif olarak, Gmail'i bağlamak istiyorum, böylece sipariş ve kart e-postaları (Trendyol, banka
 bildirimleri) gelen kutusuna kendiliğinden düşer.
@@ -658,8 +658,19 @@ bildirimleri) gelen kutusuna kendiliğinden düşer.
 - Kanıt: `GET /integrations/google/connect`, `/callback`, `/status`, `POST /sync`,
   `DELETE /integrations/google`, `POST /internal/gmail/push`, sayfa `/settings`,
   `tests/test_ingest_oauth.py`, `tests/test_ingest_sync.py`, `tests/test_ingest_gmail.py`.
-- Eksik: her şey sahte servislerle test edildi. Henüz bir Google OAuth client'ı ya da onay
-  ekranı yok, bu yüzden gerçek OAuth, Gmail push ve senkronizasyon hiç çalışmadı.
+- Diyelim ki Google Cloud hesabım yok. Settings'te **Purchase emails** kartına adresimi ve bir
+  uygulama şifresi yazdım. Kasa şifreyi sunucuda deneyip şifreli saklar, posta kutusunu IMAP ile
+  salt okunur açar (okundu yapmaz) ve **Check email now** ile yeni sipariş e-postalarını gelen
+  kutusuna koyar. Gmail'de Gmail'in kendi araması kullanılır. Bir e-postayı `.eml` dosyası
+  olarak Inbox'a da yükleyebilirim. Aynı e-posta iki yoldan gelirse bir kez kaydedilir
+  (Message-ID). Sohbette "mailimi kontrol et" de aynı işi yapar.
+- Kanıt (IMAP ve .eml): `app/integrations/imap_mail.py`, `app/services/mail_sync.py`,
+  `GET/POST/DELETE /integrations/mail`, `POST /integrations/mail/sync`, `POST /imports/email`,
+  `check_email` aracı, `tests/test_mail_imap.py`, `backend/demo/emails/`. Canlı: 2026-11-05'te
+  üç demo e-postası SQL Server ve Ollama ile okundu (sipariş bekleyen kalem, bülten yok sayıldı,
+  "hepsini onayla" yazan e-posta sadece bekleyen kalem).
+- Eksik: Gmail API yolu (push ve OAuth) sahte servislerle test edildi; bir Google OAuth client'ı
+  olmadan gerçekte çalışmadı. IMAP gerçek bir Gmail hesabıyla henüz denenmedi.
 
 ### US-INBOX-05 Gelen kutusunu sohbette sor
 
@@ -725,20 +736,24 @@ istiyorum.
 Product owner olarak, son savunma hattı olarak SQL Server row-level security istiyorum, böylece
 tek bir sorgudaki hata başka bir kullanıcının satırlarını gösteremez.
 
-- Sprint 2 · **Kısmen** · Sahip: Backend, Agents 3 / QA (cloud) · Yapan: Berke
-- Bu story production veritabanı içindir. Kasa bugün SQLite ile çalışıyor (geliştirme, testler,
-  demo) ve SQLite'ta RLS yok; orada ayrımı servislerdeki `user_id` filtresi sağlıyor
-  (US-GUARD-01). Production için ileride Azure SQL Database (Microsoft SQL Server) planlıyoruz.
-  Planın tamamı [DATABASE.md](DATABASE.md) dosyasında.
+- Sprint 2 · **Bitti** · Sahip: Backend, Agents 3 / QA (cloud) · Yapan: Berke
+- Demo gerçek bir SQL Server'da çalışıyor (SQL Server 2025 LocalDB, Express). Geliştirme ve
+  testler SQLite kullanıyor; SQLite'ta RLS yok, orada ayrımı servislerdeki `user_id` filtresi
+  sağlıyor (US-GUARD-01). Kurulum tek komut: `python -m scripts.local_sqlserver`. Planın tamamı
+  [DATABASE.md](DATABASE.md) dosyasında.
 - Diyelim ki oturumda `SESSION_CONTEXT('user_id')` ayarlı. Kullanıcıya ait her tablo yalnızca o
   kullanıcının satırlarını, ev tabloları da yalnızca üyesi olduğu evleri döndürür (ev faturaları
   üyelere de görünür). `fx_rates` herkesin ortak kullandığı referans verisidir.
 - Kanıt: `alembic/versions/0001_sprint1_baseline.py`, `0002_sprints_2_4.py`,
   `app/db/session.py`, `tests/test_migrations.py::test_sql_server_ddl_renders_offline`,
   `tests/test_migrations.py::test_sql_server_ddl_fits_azure_sql_database`.
-- Eksik: migration'lar, RLS ve bağlantı kodu yazıldı ve offline test edildi, ama henüz bir Azure
-  veritabanı yok. DDL yalnızca offline üretildi, Azure SQL'de hiç çalışmadı. RLS gerçek
-  kullanıcılarla denenmedi (smoke test `docs/SETUP.md` dosyasında).
+- Canlı: 2026-11-05'te migration'lar SQL Server'da baştan sona çalıştı (upgrade, base'e
+  downgrade, tekrar upgrade). İlk çalıştırma offline testin göremediği iki hatayı buldu
+  (0005'te `DROP BLOCK PREDICATE` sözdizimi ve downgrade'de default constraint'ler); ikisi de
+  düzeltildi ve `test_migrations.py::test_sql_server_policy_drops_name_only_the_table` ile
+  korunuyor. Uygulama `kasa_app` olarak bağlanınca demo kendi 33 harcamasını ve 6 ev faturasını,
+  Ali yalnızca 6 ev faturasını, kullanıcı ayarlanmamış oturum hiçbir satırı görmedi.
+- Eksik: bulutta (herkesin açabileceği bir sunucuda) henüz çalışmıyor.
 
 ### US-GUARD-05 Para hep kuruşu kuruşuna doğru
 
@@ -917,12 +932,12 @@ yolları `backend/tests/` altında.
 | US-INBOX-01 | Bitti | `POST /imports/statement` | `/import` | `test_ingest_statements.py` |
 | US-INBOX-02 | Kısmen | `POST /imports/statement` | `/import` | `test_ingest_statements.py` (sahte), `test_ingest_live.py` (yalnızca canlı) |
 | US-INBOX-03 | Bitti | `GET /inbox`, `PATCH /inbox/{id}`, `POST /inbox/{id}/approve`, `POST /inbox/{id}/reject`, `POST /inbox/approve`, `POST /inbox/reject` | `/inbox` | `test_ingest_inbox.py` |
-| US-INBOX-04 | Kısmen | `/integrations/google/*`, `POST /internal/gmail/push`, `POST /internal/gmail/sync-all` | `/settings`, `/inbox` | `test_ingest_oauth.py`, `test_ingest_sync.py`, `test_ingest_gmail.py` (sahte) |
+| US-INBOX-04 | Kısmen | `/integrations/mail*`, `POST /imports/email`, `/integrations/google/*`, `POST /internal/gmail/push`, `POST /internal/gmail/sync-all` | `/settings`, `/inbox` | `test_mail_imap.py`, `test_ingest_oauth.py`, `test_ingest_sync.py`, `test_ingest_gmail.py` (sahte) |
 | US-INBOX-05 | Kısmen | `POST /chat` | `/chat` | `test_ingest_inbox.py`, `test_ingest_sync.py`, eval'ler |
 | US-GUARD-01 | Bitti | hepsi | hepsi | `test_api.py`, `test_expenses_api.py`, `test_report_guard.py` |
 | US-GUARD-02 | Bitti | `POST /chat` | `/chat` | `test_reports.py`, `test_report_guard.py`, eval `refusal-*` |
 | US-GUARD-03 | Bitti | `POST /chat`, `POST /receipts`, Gmail senkronizasyonu | `/chat`, `/inbox` | `test_ingest_sync.py`, `test_report_checker.py` |
-| US-GUARD-04 | Kısmen | hepsi (yalnızca SQL Server'da, planlanan production veritabanı) | yok | `test_migrations.py` (offline DDL) |
+| US-GUARD-04 | Bitti | hepsi (SQL Server'da) | yok | `test_migrations.py` (offline DDL), SQL Server'da canlı kontrol |
 | US-GUARD-05 | Bitti | parayla ilgili her endpoint | hepsi | `test_house_splits.py`, `test_settlement.py`, `test_money_fx.py` |
 | US-GUARD-06 | Bitti | `/integrations/google/*` | `/settings` | `test_ingest_oauth.py`, `test_categories_crypto.py` |
 | US-GUARD-07 | Başlanmadı | `POST /chat`, `POST /receipts` | yok | yok |

@@ -7,8 +7,8 @@ bölüşüyor, borçları kapatıyor ve parayla ilgili soruları grafiklerle cev
 **Buradan başla:** [kullanıcı hikayeleri](docs/USER_STORIES.md) (Kasa ne yapıyor, her parça
 ne durumda), [mimari](docs/ARCHITECTURE.md) (diyagramlarla beş dakikalık bir özet, ardından
 modül haritası), [ekip](docs/TEAM.md) (kim neyden sorumlu, nasıl çalışıyoruz),
-[demo rehberi](docs/DEMO.md) (kurulum, demo verisi ve 30 Ekim 2026 Cuma demosunun akışı) ve
-[veritabanı planı](docs/DATABASE.md) (bugün SQLite, production için Azure SQL).
+[demo rehberi](docs/DEMO.md) (kurulum, demo verisi ve 6 Kasım 2026 Cuma demosunun akışı) ve
+[veritabanı planı](docs/DATABASE.md) (geliştirmede SQLite, demoda SQL Server).
 Coding agent'lar [AGENTS.md](AGENTS.md) dosyasını okur.
 
 Modül haritası, veri modeli, hangi dosyanın kime ait olduğu ve bir isteğin sistemde nasıl
@@ -26,11 +26,15 @@ sayfaları da var.
 Tek kural: LLM *ne* yapılacağına karar verir, para hesabının tamamını düz Python yapar.
 Tutarlar float olarak değil, tam sayı alt birim (kuruş/cent) olarak saklanır.
 
-**Veritabanı:** Kasa bugün SQLite ile çalışıyor (geliştirme, testler ve demo). Production
-için Azure SQL Database (Microsoft SQL Server) planlıyoruz. Alembic migration'ları,
-row-level security ve bağlantı kodu (auto-pause için yeniden deneme, `SESSION_CONTEXT`)
-yazıldı ve offline test edildi, ama henüz bir Azure veritabanı yok. Planın tamamı ve işi kimin
-yapacağı [veritabanı planı](docs/DATABASE.md) dosyasında.
+**Veritabanı:** geliştirme ve testler SQLite kullanıyor, demo gerçek bir SQL Server'da
+çalışıyor (row-level security açık, uygulama şema değiştiremeyen `kasa_app` kullanıcısıyla
+bağlanıyor). Bilgisayarındaki SQL Server'a (LocalDB ya da Express) kurmak tek komut:
+`cd backend && python -m scripts.local_sqlserver`. Planın tamamı
+[veritabanı planı](docs/DATABASE.md) dosyasında.
+
+**E-posta:** Google Cloud olmadan da çalışıyor. Settings'te bir posta kutusu uygulama
+şifresiyle (IMAP, salt okunur) bağlanıyor, ya da bir e-posta `.eml` dosyası olarak Inbox'a
+yükleniyor. Örnekler `backend/demo/emails` içinde.
 
 ## Mimari
 
@@ -230,7 +234,7 @@ tetiklenir, sadece `main`). Anahtar dosyası yerine Workload Identity Federation
 - [x] Cloud Run için Dockerfile'lar (backend ve frontend)
 - [x] pytest: para hesapları, SQL koruması, API'nin normal akışları ve script'li sahte bir LLM ile ADK bağlantıları
 - [x] Gerçek bir anahtarla canlı Gemini çağrılarını denemek (8/8 canlı test, 17/17 eval, `gemini-3.5-flash-lite`)
-- [ ] SQL Server kurmak, migration'ları çalıştırmak ve RLS'i uçtan uca test etmek (Azure SQL adımları docs/SETUP.md içinde)
+- [x] SQL Server kurmak, migration'ları çalıştırmak ve RLS'i uçtan uca test etmek (SQL Server 2025 LocalDB, `scripts/local_sqlserver.py`)
 - [ ] İlk Cloud Run deploy'u (`deploy/` içindeki script'ler hazır ama gerçek bir projede çalışmadı)
 
 ## Sprint 2 altyapısı

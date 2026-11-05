@@ -249,6 +249,20 @@ bedelini yazıyor.
   aynı kullanıcıya özel tablolar, ama kontrol ajanı yok (SQL kaydedilirken onaylanmıştı).
   Toplamları model değil araç veriyor (`column_totals`), çünkü lokal model satırları kendi
   toplayıp yanlış sayı söyleyebiliyordu. Bedeli: SQL'de yazılı ay ("2026-10") sabit kalıyor.
+- **ADR-14 E-posta Google Cloud olmadan: IMAP ve uygulama şifresi.** Gmail API bir OAuth client
+  ve onay ekranı istiyor, öğrenci ekibinde yok. IMAP her posta sağlayıcısında var ve Gmail iki
+  adımlı doğrulamayla "uygulama şifresi" veriyor. Kasa klasörü salt okunur açıyor (EXAMINE,
+  BODY.PEEK), sadece 993 portuna ve genel internetteki sunuculara bağlanıyor (kullanıcının
+  yazdığı adres yerel ağa yönlendirilemiyor), şifreyi Fernet ile şifreli saklıyor. Okuma ve
+  kayıt Gmail API yoluyla aynı: e-posta ayrıştırma ajanı, sonra onay bekleyen gelen kutusu.
+  `.eml` yükleme de aynı yoldan geçiyor. Bedeli: push yok, kullanıcı "kontrol et" diyor.
+- **ADR-15 Her runner'da döngü koruması.** Küçük modeller aynı aracı aynı argümanlarla tekrar
+  tekrar çağırabiliyor ya da hata veren bir aracı bırakmıyor; her çağrı bir model turu ve sonunda
+  cevap zaman aşımına düşüyor. Bir ADK plugin'i (`app/agents/guard.py`) tur başına sayıyor:
+  aynı çağrının dördüncüsü ve üç kez hata veren bir araç çalışmıyor, modele "elindeki sonucu
+  kullan ya da kullanıcıya açıkla" notu dönüyor. Beklenmeyen bir araç hatası da cevabı
+  düşürmüyor, modele hata sonucu olarak gidiyor. Fikir Berke'nin iş yerindeki bir ajan
+  sisteminden; kod bizim.
 
 ### Güvenlik modeli
 
@@ -270,14 +284,14 @@ kullanıcı başına istek sınırı yok. Evin herhangi bir üyesi herhangi bir 
 (henüz davet linki yok). Azure SQL veritabanı henüz kurulmadı, RLS gerçek bir sunucuda hiç
 çalışmadı. Firebase yapılandırılmadı. Sohbet session'ları tek bir instance'ın belleğinde duruyor.
 
-## Veritabanı: şimdi SQLite, sonra Azure SQL
+## Veritabanı: geliştirmede SQLite, demoda SQL Server
 
-Kasa bugün SQLite üzerinde çalışıyor. Geliştirme, testler ve demo hep SQLite kullanıyor.
-Production için planımız, ileride Azure SQL Database'e (Microsoft SQL Server) geçmek. Bunun
-kodu hazır: Alembic migration'ları, row-level security policy'si ve `session_for(user_id)`
-içinde `SESSION_CONTEXT` ayarlayan bağlantı kodu yazıldı ve sunucu olmadan test edildi. Henüz
-bir Azure veritabanı yok, yani canlıda çalışan bir production ortamı da yok. Veritabanının
-kurulması ve RLS smoke testi US-GUARD-04 kapsamında yapılacak. Planın tamamı
+Geliştirme ve testler SQLite kullanıyor. Demo gerçek bir SQL Server'da çalışıyor (SQL Server
+2025 LocalDB, Express): Alembic migration'ları şemayı ve row-level security policy'sini kuruyor,
+uygulama şema değiştiremeyen `kasa_app` kullanıcısıyla bağlanıyor ve `session_for(user_id)`
+her transaction'da `SESSION_CONTEXT` ayarlıyor. Kurulum tek komut:
+`python -m scripts.local_sqlserver`. Bulut için aynı düzen `deploy/digitalocean` içinde hazır
+(tek sunucuda Docker, SQL Server 2022 Express ve HTTPS). Planın tamamı
 [DATABASE.md](DATABASE.md) dosyasında.
 
 ## Modüller

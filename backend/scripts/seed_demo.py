@@ -44,7 +44,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from sqlalchemy import func, select
-from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -155,9 +154,13 @@ def reset(db: Session, people: People) -> None:
         for row in db.scalars(select(model).where(model.user_id.in_(ids))):
             db.delete(row)
     if house_ids:
-        for row in db.scalars(select(HouseMember).where(HouseMember.house_id.in_(house_ids))):
+        # On SQL Server, row-level security shows a house's members only to its members, so
+        # the acting user's own membership goes last, each delete flushed in this order.
+        acting = db.info.get("user_id")
+        members = db.scalars(select(HouseMember).where(HouseMember.house_id.in_(house_ids))).all()
+        for row in sorted(members, key=lambda m: m.user_id == acting):
             db.delete(row)
-        db.flush()
+            db.flush()
         for row in db.scalars(select(House).where(House.id.in_(house_ids))):
             db.delete(row)
     db.commit()
@@ -420,7 +423,7 @@ def print_logins(logins: list[DemoLogin]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from app.db.session import init_db, session_for
+    from app.db.session import describe_database, init_db, session_for
 
     parser = argparse.ArgumentParser(prog="python -m scripts.seed_demo", description=__doc__.split("\n")[0])
     parser.add_argument("--user", default="demo", help="dev user id to seed (default: demo)")
@@ -435,8 +438,7 @@ def main(argv: list[str] | None = None) -> int:
     user_id = args.user.strip()
     if not user_id:
         parser.error("--user must not be empty")
-    target = make_url(get_settings().database_url).render_as_string(hide_password=True)
-    print(f"Database: {target}")
+    print(f"Database: {describe_database(get_settings().database_url)}")
     init_db()
     can_login = bool(get_settings().token_encryption_key)
     if args.login_only:

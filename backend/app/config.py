@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # How long Ollama keeps a model in memory after our last call. Explicit so a shared
     # server is not left holding our models forever.
     ollama_keep_alive: str = "10m"
+    # Comma-separated Ollama servers for `python -m scripts.pick_ollama`, which writes the
+    # fastest one to OLLAMA_BASE_URL. Not read by the app itself.
+    ollama_candidates: str = ""
     # Text model only, passed as LiteLLM reasoning_effort ("low" = Ollama think=low for
     # gpt-oss, think on for other thinking models; "none" = off; empty = model default).
     ollama_reasoning_effort: str = "low"
@@ -83,6 +86,14 @@ class Settings(BaseSettings):
         ' OR makbuz OR receipt OR dekont OR harcama OR "kartınızdan" OR "e-arşiv" OR ödeme)'
     )
     gmail_sync_max_messages: int = 50
+    # --- Mail over IMAP (app password, no Google Cloud client needed) -------------------------
+    # How far back the first sync looks, and how many messages one sync parses at most (each
+    # one is a model call). Private or loopback mail servers are refused unless this is on.
+    mail_sync_days: int = 30
+    mail_sync_max_messages: int = 10
+    mail_allow_private_hosts: bool = False
+    # Largest .eml file the inbox accepts as an upload.
+    mail_max_upload_bytes: int = 2_000_000
     # Pub/Sub topic Gmail publishes to (projects/<project>/topics/<topic>) and the push
     # subscription's OIDC settings, checked on POST /internal/gmail/push.
     pubsub_topic: str = ""

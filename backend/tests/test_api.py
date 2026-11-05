@@ -11,6 +11,7 @@ def test_health(client):
         "llm_provider": "gemini",
         "auth": "dev",
         "google_login": False,
+        "database": "sqlite",
     }
 
 

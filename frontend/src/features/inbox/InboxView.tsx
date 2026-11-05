@@ -29,6 +29,7 @@ import {
   cardLinkClass,
   errorMessage,
 } from "@/components/ui";
+import { EmailActions } from "./EmailActions";
 import { messages } from "./messages";
 
 const FILTERS: InboxFilter[] = ["pending", "approved", "rejected", "ignored", "failed", "all"];
@@ -105,12 +106,15 @@ export function InboxView() {
         title={t("title")}
         subtitle={t("subtitle")}
         actions={
-          <Link
-            href="/import"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-card hover:border-border-strong hover:bg-card-hover"
-          >
-            <FileUp aria-hidden className="size-4" /> {t("importStatement")}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <EmailActions />
+            <Link
+              href="/import"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-card hover:border-border-strong hover:bg-card-hover"
+            >
+              <FileUp aria-hidden className="size-4" /> {t("importStatement")}
+            </Link>
+          </div>
         }
       />
 

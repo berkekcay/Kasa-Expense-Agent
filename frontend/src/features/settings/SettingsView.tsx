@@ -26,6 +26,7 @@ import {
   Spinner,
   errorMessage,
 } from "@/components/ui";
+import { MailCard } from "./MailCard";
 import { messages } from "./messages";
 import { SecurityCard } from "./SecurityCard";
 
@@ -44,6 +45,7 @@ export function SettingsView() {
       <ProfileCard />
       <AccountCard />
       <SecuritySection />
+      <MailCard />
       <GoogleCard />
       <DataCard />
     </div>

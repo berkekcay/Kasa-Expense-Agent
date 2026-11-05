@@ -24,6 +24,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
+from app.agents.guard import LoopGuardPlugin
 from app.config import get_settings
 from app.db.session import get_engine
 
@@ -100,7 +101,12 @@ def _runner(kind: str) -> Runner:
         raise ValueError(f"unknown runner kind {kind!r}; known: {', '.join(RUNNERS)}")
     build, _keep = RUNNERS[kind]
     dialect = "tsql" if get_engine().dialect.name == "mssql" else "sqlite"
-    return Runner(app_name=f"{APP_NAME}-{kind}", agent=build(dialect), session_service=_session_service())
+    return Runner(
+        app_name=f"{APP_NAME}-{kind}",
+        agent=build(dialect),
+        session_service=_session_service(),
+        plugins=[LoopGuardPlugin()],
+    )
 
 
 def ensure_available() -> None:

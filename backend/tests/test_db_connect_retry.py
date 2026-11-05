@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, event
 from app.db.session import (
     CONNECT_RETRY_DELAYS,
     connect_with_retry,
+    describe_database,
     install_connect_retry,
     is_transient_connect_error,
 )
@@ -75,3 +76,24 @@ def test_install_hooks_do_connect():
     with engine.connect():  # the hook calls the dialect's normal connect
         pass
     engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("url", "shown", "hidden"),
+    [
+        ("mssql+pyodbc://kasa_app:s3cret@db:1433/kasa?driver=ODBC+Driver+18", "kasa_app:***@db", "s3cret"),
+        (
+            (
+                "mssql+pyodbc:///?odbc_connect=DRIVER%3D%7BODBC%7D%3BSERVER%3D%28localdb%29%5CMSSQLLocalDB"
+                "%3BDATABASE%3Dkasa%3BUID%3Dkasa_app%3BPWD%3Ds3cret"
+            ),
+            r"server=(localdb)\MSSQLLocalDB database=kasa",
+            "s3cret",
+        ),
+        ("sqlite:///./kasa.db", "sqlite:///./kasa.db", "***"),
+    ],
+)
+def test_describe_database_never_shows_the_password(url, shown, hidden):
+    text = describe_database(url)
+    assert shown in text
+    assert hidden not in text
