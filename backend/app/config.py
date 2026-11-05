@@ -86,12 +86,17 @@ class Settings(BaseSettings):
         ' OR makbuz OR receipt OR dekont OR harcama OR "kartınızdan" OR "e-arşiv" OR ödeme)'
     )
     gmail_sync_max_messages: int = 50
+    # Emails read by the parser at the same time (one model call each). Ollama serves a few
+    # requests in parallel; 1 = one by one.
+    email_parse_parallel: int = 3
     # --- Mail over IMAP (app password, no Google Cloud client needed) -------------------------
     # How far back the first sync looks, and how many messages one sync parses at most (each
     # one is a model call). Private or loopback mail servers are refused unless this is on.
     mail_sync_days: int = 30
     mail_sync_max_messages: int = 10
     mail_allow_private_hosts: bool = False
+    # Opening the app checks the mailbox when the last check is older than this.
+    mail_auto_sync_minutes: int = 15
     # Largest .eml file the inbox accepts as an upload.
     mail_max_upload_bytes: int = 2_000_000
     # Pub/Sub topic Gmail publishes to (projects/<project>/topics/<topic>) and the push

@@ -163,6 +163,21 @@ async def sync_user(user_id: str, *, max_messages: int | None = None) -> gmail_s
     return result
 
 
+async def sync_if_due(user_id: str) -> gmail_sync.SyncResult | None:
+    """The check that runs when the user opens Kasa: only with a mailbox connected and when
+    the last check is older than settings.mail_auto_sync_minutes. None = nothing to do."""
+    minutes = get_settings().mail_auto_sync_minutes
+    with session_for(user_id) as db:
+        account = get_account(db, user_id)
+        if account is None:
+            return None
+        last = account.last_sync_at
+    now = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+    if last is not None and now - last < dt.timedelta(minutes=minutes):
+        return None
+    return await sync_user(user_id)
+
+
 def _remember(
     user_id: str, *, uid_validity: str | None = None, newest_uid: int | None = None, error: str | None
 ) -> None:

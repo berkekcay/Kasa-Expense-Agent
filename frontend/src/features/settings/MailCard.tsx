@@ -184,7 +184,10 @@ function Connected({ status, onChange }: { status: MailStatus; onChange: () => v
           <span className="text-muted">({status.host})</span>
         </dd>
         <dt className="text-muted">{t("lastCheck")}</dt>
-        <dd>{status.last_sync_at ? formatDateTime(status.last_sync_at) : t("never")}</dd>
+        <dd>
+          {status.last_sync_at ? formatDateTime(status.last_sync_at) : t("never")}
+          <span className="mt-0.5 block text-xs text-muted">{t("autoNote")}</span>
+        </dd>
       </dl>
       {status.last_error && !result && <Alert tone="warning">{status.last_error}</Alert>}
       <div className="flex flex-wrap gap-2 border-t border-border pt-4">

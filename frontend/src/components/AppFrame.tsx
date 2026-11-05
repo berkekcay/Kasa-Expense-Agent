@@ -12,7 +12,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { useAuthMode } from "@/lib/authMode";
 import { useT } from "@/lib/i18n";
-import { useSession } from "@/lib/user";
+import { useSession, useUserId } from "@/lib/user";
+import { useAutoMailCheck } from "@/features/inbox/useAutoMailCheck";
 import { Footer } from "./Footer";
 import { Logo } from "./Logo";
 import { LanguageSwitch, Nav } from "./Nav";
@@ -47,6 +48,8 @@ export function AppFrame({ children }: { children: ReactNode }) {
   }, [needsLogin, pathname, router]);
 
   const showNav = !bare && !blocked;
+  const userId = useUserId();
+  useAutoMailCheck(showNav && (session || auth.mode !== "accounts") ? userId : null);
 
   // The same element tree in every frame, so moving between pages only changes classes and
   // the page itself is not remounted.
